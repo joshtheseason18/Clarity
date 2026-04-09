@@ -107,27 +107,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
    HEADER
 ══════════════════════════════════════════ */
 header{
-  height:62px;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100;
+  height:54px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;z-index:100;
   transition:background .3s,border-color .3s;
 }
+.hdr-center{display:flex;align-items:center;gap:6px;flex:1;justify-content:center}
+.hdr-right{display:flex;align-items:center;gap:6px;margin-left:auto}
 
+/* Hide old nav-tabs — replaced by bottom nav */
+.nav-tabs{display:none}
+.nav-tab{display:none}
 
-.nav-tabs{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:3px}
-.nav-tab{
-  padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;color:var(--text2);
-  cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;transition:all .15s;
-}
-.nav-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px var(--shadow-color)}
-.nav-tab:hover:not(.active){color:var(--text)}
-.hdr-right{display:flex;align-items:center;gap:8px;margin-left:auto}
 .nav-arrow{
-  width:28px;height:28px;border:1px solid var(--border);border-radius:7px;background:var(--surface);
+  width:26px;height:26px;border:1px solid var(--border);border-radius:7px;background:var(--surface);
   cursor:pointer;display:flex;align-items:center;justify-content:center;
-  color:var(--text2);font-size:13px;transition:all .15s;flex-shrink:0;
+  color:var(--text2);font-size:12px;transition:all .15s;flex-shrink:0;
 }
 .nav-arrow:hover{border-color:var(--accent);color:var(--accent)}
-.cur-label{font-size:13px;font-weight:500;min-width:150px;text-align:center}
+.cur-label{font-size:13px;font-weight:500;min-width:130px;text-align:center}
 .hdr-btn{
   padding:5px 11px;border:1px solid var(--border);border-radius:7px;background:var(--surface);
   font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;
@@ -136,6 +133,62 @@ header{
 .hdr-btn:hover{border-color:var(--accent);color:var(--accent)}
 .hdr-btn.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
 .hdr-btn.accent:hover{background:var(--accent-dim);border-color:var(--accent-dim);color:#fff}
+
+/* ══ SIDEBAR TOGGLE BUTTON ═══════════════════ */
+.sidebar-toggle-btn{
+  width:32px;height:32px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;color:var(--text2);transition:all .15s;flex-shrink:0;
+}
+.sidebar-toggle-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ══ MORE MENU ═══════════════════════════════ */
+.more-wrap{position:relative}
+.more-menu{
+  position:absolute;top:100%;right:0;margin-top:6px;
+  min-width:190px;background:var(--surface);border:1px solid var(--border);
+  border-radius:11px;box-shadow:0 8px 32px var(--shadow-color);
+  z-index:500;display:none;flex-direction:column;padding:5px;
+  animation:moreDrop .15s cubic-bezier(.34,1.56,.64,1);
+}
+.more-menu.open{display:flex}
+@keyframes moreDrop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.more-item{
+  padding:8px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;
+  color:var(--text);transition:background .12s;display:flex;align-items:center;gap:8px;
+}
+.more-item:hover{background:var(--surface2)}
+.more-icon{font-size:14px;width:18px;text-align:center;color:var(--text2)}
+.more-sep{height:1px;background:var(--border);margin:3px 0}
+
+/* ══ BOTTOM NAVIGATION ═══════════════════════ */
+.bottom-nav{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;background:var(--surface);border-top:1px solid var(--border);
+  flex-shrink:0;z-index:100;transition:background .3s,border-color .3s;
+}
+.bnav-tab{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:4px 12px;border:none;background:none;cursor:pointer;
+  color:var(--text3);font-family:'DM Sans',sans-serif;transition:color .15s;
+  border-radius:8px;
+}
+.bnav-tab span{font-size:9px;font-weight:600;letter-spacing:.2px}
+.bnav-tab svg{transition:color .15s}
+.bnav-tab:hover{color:var(--text)}
+.bnav-tab.active{color:var(--accent)}
+
+/* ══ SEARCH BAR (now below header) ═══════════ */
+.search-bar{
+  position:absolute;top:54px;left:50%;transform:translateX(-50%);
+  width:380px;max-width:calc(100% - 24px);background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 32px var(--shadow-color);
+  z-index:500;display:none;flex-direction:column;overflow:hidden;
+}
+.search-bar.open{display:flex}
+.search-wrap{display:none}
+.search-toggle{display:none}
 
 /* ══════════════════════════════════════════
    LEFT DRAWER (Settings)
@@ -216,7 +269,7 @@ header{
    APP LAYOUT
 ══════════════════════════════════════════ */
 .app-body{display:flex;flex:1;overflow:hidden}
-.main-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.main-area{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
 .view{display:none;flex-direction:column;flex:1;overflow:hidden}
 .view.active{display:flex}
 
@@ -435,12 +488,19 @@ header{
 /* ══════════════════════════════════════════
    RIGHT SIDEBAR (Brain Dump)
 ══════════════════════════════════════════ */
-.sidebar{width:340px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:width .28s cubic-bezier(.4,0,.2,1),opacity .22s,background .3s,border-color .3s;overflow:hidden}
+.sidebar{width:320px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:width .28s cubic-bezier(.4,0,.2,1),opacity .22s,background .3s,border-color .3s;overflow:hidden}
 .sidebar.collapsed{width:0;opacity:0}
-.side-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
-.side-tab{flex:1;padding:10px 5px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);cursor:pointer;text-align:center;border-bottom:2px solid transparent;transition:all .15s;background:none;border-left:none;border-right:none;border-top:none;font-family:'DM Sans',sans-serif}
-.side-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-.side-tab:hover:not(.active){color:var(--text)}
+.side-tabs{display:flex;gap:2px;padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.side-tab{
+  flex:1;padding:8px 4px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text3);cursor:pointer;
+  border:none;background:none;
+  font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.side-tab.active{color:var(--accent);background:var(--accent-pale)}
+[data-dark="true"] .side-tab.active{background:rgba(var(--accent-rgb),.15)}
+.side-tab:hover:not(.active){color:var(--text);background:var(--surface2)}
 .side-panel{display:none;flex-direction:column;flex:1;overflow:hidden}
 .side-panel.active{display:flex}
 
@@ -1160,20 +1220,22 @@ body{zoom:1.32}
    RESPONSIVE — MOBILE (≤640px)
 ══════════════════════════════════════════ */
 @media(max-width:640px){
-  /* ── Header: two-row stacked layout ── */
-  header{
-    height:auto;flex-wrap:wrap;padding:8px 10px;gap:6px;
-  }
+  /* ── Header ── */
+  header{height:48px;padding:0 10px;gap:6px}
   .logo-btn{padding:4px 6px;gap:5px}
   .logo-text{font-size:13px}
-  .nav-tabs{order:10;width:100%;justify-content:center;padding:2px}
-  .nav-tab{padding:5px 8px;font-size:10px}
-  .hdr-right{gap:5px;flex-wrap:wrap}
-  .hdr-btn{padding:4px 8px;font-size:10px}
-  .nav-arrow{width:24px;height:24px;font-size:11px}
-  .cur-label{min-width:0;font-size:11px;flex:1;order:-1}
-  .search-toggle{padding:4px 7px;font-size:12px}
-  .search-bar{width:calc(100vw - 24px);right:-60px}
+  .hdr-right{gap:4px}
+  .hdr-btn{padding:4px 8px;font-size:9px}
+  .nav-arrow{width:22px;height:22px;font-size:10px}
+  .cur-label{min-width:0;font-size:11px}
+  .search-bar{width:calc(100vw - 16px);top:48px}
+  .sidebar-toggle-btn{width:28px;height:28px}
+
+  /* ── Bottom nav adjusts for mobile ── */
+  .bottom-nav{height:56px}
+  .bnav-tab{padding:6px 8px}
+  .bnav-tab span{font-size:8px}
+  .tip-bar{bottom:64px}
 
   /* ── Sidebar backdrop ── */
   #sidebarBackdrop{
@@ -1184,7 +1246,7 @@ body{zoom:1.32}
 
   /* ── Sidebar: full-width bottom sheet ── */
   .sidebar{
-    position:fixed;bottom:0;left:0;right:0;top:auto;
+    position:fixed;bottom:56px;left:0;right:0;top:auto;
     width:100%!important;height:55vh;
     border-left:none;border-top:1px solid var(--border);
     border-radius:16px 16px 0 0;
@@ -1205,7 +1267,6 @@ body{zoom:1.32}
   .side-panel.active{overflow-y:auto!important}
   .bd-list{max-height:none;overflow-y:auto}
   .side-tabs{padding-top:6px}
-  /* Grab handle indicator */
   .side-tabs::before{
     content:'';display:block;width:36px;height:4px;border-radius:99px;
     background:var(--border2);margin:0 auto 6px;
@@ -1257,15 +1318,9 @@ body{zoom:1.32}
   #quickAddBar{left:8px;right:8px;width:auto}
   .qa-row{grid-template-columns:1fr 1fr}
 
-  /* ── Tip bar ── */
-  .tip-bar{width:calc(100% - 20px);bottom:12px;padding:10px 12px;border-radius:12px}
-
   /* ── Drawer ── */
   .drawer{width:100%}
-
-  /* ── Brain Dump ── */
   .bd-ta{min-height:44px;font-size:13px}
-  .bd-ctrls{flex-wrap:wrap}
 }
 
 /* ══════════════════════════════════════════

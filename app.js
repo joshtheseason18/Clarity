@@ -51,6 +51,26 @@ applyTheme(currentTheme);
 applyDark(isDark);
 // Time format button state applied after DOM ready
 
+// ══ MORE MENU ════════════════════════════════
+let _moreOpen=false;
+function toggleMoreMenu(){
+  _moreOpen=!_moreOpen;
+  document.getElementById('moreMenu').classList.toggle('open',_moreOpen);
+}
+function closeMoreMenu(){
+  _moreOpen=false;
+  document.getElementById('moreMenu').classList.remove('open');
+}
+document.addEventListener('click',function(e){
+  if(_moreOpen&&!e.target.closest('.more-wrap'))closeMoreMenu();
+});
+
+// ══ BOTTOM NAV SYNC ═════════════════════════
+function syncBottomNav(view){
+  const map={day:0,week:1,month:2,year:3,categories:4};
+  document.querySelectorAll('.bnav-tab').forEach((b,i)=>b.classList.toggle('active',i===map[view]));
+}
+
 // ══ DRAWER ══════════════════════════════════
 function openDrawer(){
   document.getElementById('drawer').classList.add('open');
@@ -114,7 +134,7 @@ const DLONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturd
 const CAT_COLORS=['#3b82f6','#8b5cf6','#10b981','#ec4899','#14b8a6','#f59e0b','#ef4444','#f97316','#06b6d4','#84cc16','#a855f7','#64748b'];
 
 // ══ STATE ═══════════════════════════════════
-let curView='month';
+let curView='day';
 let curYear=new Date().getFullYear();
 let cursor=new Date();cursor.setDate(1);cursor.setHours(0,0,0,0);
 let selDate=new Date();
@@ -281,10 +301,9 @@ function buildAllCatSelects(val){buildCatOptions('fCat',val)}
 function switchView(v){
   const wasView=curView;
   curView=v;
-  const tabs=['year','month','week','day','categories'];
-  document.querySelectorAll('.nav-tab').forEach((b,i)=>b.classList.toggle('active',tabs[i]===v));
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
+  syncBottomNav(v);
   renderAll();
   if((v==='week'||v==='day')&&wasView!==v){setTimeout(scrollToNow,80);}
 }
