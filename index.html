@@ -39,7 +39,7 @@
 
     <div class="drawer-section">
       <div class="drawer-section-title">📅 My Routine</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Tell Clarity when you're busy or free. AI scheduling plans around these blocks.</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Tell Clarity when you're busy or free. AI scheduling plans around these blocks.<br><strong>Tip:</strong> Split blocks for breaks — e.g. Work 9–12, Meals 12–1, Work 1–5.</div>
       <div id="routineList"></div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px;background:var(--surface2);border-radius:9px">
         <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:11px;padding:6px 9px">
@@ -766,6 +766,7 @@
       <option value="low">🟢 Low</option>
     </select>
   </div>
+  <div class="qa-dur-row" id="qaDurRow"></div>
   <div class="qa-acts">
     <button class="btn-c" onclick="closeQuickAdd()">Cancel</button>
     <button class="btn-s" onclick="saveQuickAdd()">Save</button>

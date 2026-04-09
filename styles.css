@@ -733,6 +733,8 @@ header{
   outline:none;transition:border-color .15s}
 .qa-fi:focus{border-color:var(--accent)}
 .qa-acts{display:flex;gap:7px;justify-content:flex-end}
+.qa-dur-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.qa-dur-row .dur-opt{padding:3px 8px;font-size:10px}
 
 /* ══ IDEA TIP MODAL ══════════════════════════════════ */
 

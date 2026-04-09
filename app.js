@@ -1505,7 +1505,8 @@ Rules:
 - Don't overlap with existing tasks or routine blocks
 - Leave reasonable gaps (meals, breaks)
 - Put time-specific requests where asked ("at noon", "in the morning")
-- Estimate realistic durations
+- Estimate realistic durations: quick tasks (emails, calls) ~15m, medium tasks ~30-45m, deep work ~60-120m
+- If the user specifies a duration (e.g. "~15m", "1 hour"), use that exact duration
 - Order by logical flow of the day
 
 Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
@@ -3035,11 +3036,12 @@ function goOverdue(){
 // ══ QUICK-ADD BAR ════════════════════════════════════════════════════════════
 let _qaOpen=false;
 
+let _qaDur=30;
 function openQuickAdd(){
   if(_qaOpen)return;
   _qaOpen=true;
+  _qaDur=30;
   const bar=document.getElementById('quickAddBar');
-  // Pre-fill date/time to now
   const now=new Date();
   document.getElementById('qaDate').value=dk(now);
   const h=String(now.getHours()).padStart(2,'0');
@@ -3047,9 +3049,20 @@ function openQuickAdd(){
   document.getElementById('qaTime').value=h+':'+m;
   document.getElementById('qaPri').value='none';
   document.getElementById('qaName').value='';
+  // Duration chips
+  const QA_DURS=[15,30,45,60,90,120];
+  document.getElementById('qaDurRow').innerHTML=QA_DURS.map(d=>
+    `<div class="dur-opt${d===_qaDur?' selected':''}" onclick="pickQaDur(${d})">${durLabel(d)}</div>`
+  ).join('');
   bar.classList.add('open');
   const bd=document.getElementById('quickAddBackdrop');if(bd)bd.style.display='block';
   setTimeout(()=>document.getElementById('qaName').focus(),80);
+}
+function pickQaDur(v){
+  _qaDur=v;
+  document.querySelectorAll('#qaDurRow .dur-opt').forEach(el=>{
+    el.classList.toggle('selected',durToMin(el.textContent)===v);
+  });
 }
 
 function closeQuickAdd(){
@@ -3066,7 +3079,7 @@ function saveQuickAdd(){
   const priority=document.getElementById('qaPri').value;
   tasks.push({
     id:genId(),name,priority,category:'none',notes:'',
-    date:dateVal,time:timeVal,scheduled:true,done:false,
+    date:dateVal,time:timeVal,duration:_qaDur,scheduled:true,done:false,
     recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
   });
   save();renderAll();closeQuickAdd();
