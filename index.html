@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="emerald" data-dark="false">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Clarity">
+<meta name="theme-color" content="#10b981">
+<title>Clarity v19 — Your Day, Simplified</title>
+<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkNsYXJpdHkiLAogICJzaG9ydF9uYW1lIjogIkNsYXJpdHkiLAogICJkZXNjcmlwdGlvbiI6ICJZb3VyIHBlcnNvbmFsIHNjaGVkdWxlciIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmFmYWY5IiwKICAidGhlbWVfY29sb3IiOiAiIzEwYjk4MSIsCiAgImljb25zIjogW3sKICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLDxzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgMzIgMzInPjxjaXJjbGUgY3g9JzE2JyBjeT0nMTYnIHI9JzEyJyBmaWxsPSclMjMxMGI5ODEnLz48L3N2Zz4iLAogICAgInNpemVzIjogImFueSIsCiAgICAidHlwZSI6ICJpbWFnZS9zdmcreG1sIgogIH1dCn0=">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%2310b981'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%2310b981'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ══ SPLASH ══ -->
+<div id="splash">
+  <div class="splash-logo-wrap" style="animation:splashLogoIn .6s cubic-bezier(.34,1.56,.64,1) .3s both">
+    <div class="splash-logo-dot"></div>
+    <div class="splash-logo-text">Clarity</div>
+  </div>
+  <div class="splash-tagline">Your personal scheduler</div>
+  <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:32px">Open Clarity →</button>
+</div>
+
+<!-- ══ DRAWER BACKDROP ══ -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+
+<!-- ══ LEFT DRAWER ══ -->
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="drawer-title">Settings</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Appearance</div>
+      <div class="toggle-row">
+        <span class="toggle-label"><span class="toggle-icon" id="modeIcon">🌙</span> Dark Mode</span>
+        <button class="toggle-track" id="darkToggle" onclick="toggleDark()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Theme Color</div>
+      <div class="theme-grid">
+        <div class="theme-swatch active" id="sw-emerald" onclick="setTheme('emerald')">
+          <div class="theme-swatch-dot" style="background:#10b981"></div>
+          <div class="theme-swatch-name">Emerald</div>
+        </div>
+        <div class="theme-swatch" id="sw-rose" onclick="setTheme('rose')">
+          <div class="theme-swatch-dot" style="background:#f43f5e"></div>
+          <div class="theme-swatch-name">Rose Pink</div>
+        </div>
+        <div class="theme-swatch" id="sw-slate" onclick="setTheme('slate')">
+          <div class="theme-swatch-dot" style="background:#6366f1"></div>
+          <div class="theme-swatch-name">Slate Blue</div>
+        </div>
+        <div class="theme-swatch" id="sw-amber" onclick="setTheme('amber')">
+          <div class="theme-swatch-dot" style="background:#f59e0b"></div>
+          <div class="theme-swatch-name">Amber Dusk</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Time Format</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Choose how times appear across the app</div>
+      <div class="tf-toggle-row">
+        <button class="tf-btn active" id="tfBtn12" onclick="setTimeFormat(false)">12h &nbsp;· &nbsp;2:30 PM</button>
+        <button class="tf-btn" id="tfBtn24" onclick="setTimeFormat(true)">24h &nbsp;· &nbsp;14:30</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Sidebar</div>
+      <div class="toggle-row" id="suggToggleRow">
+        <span class="toggle-label"><span class="toggle-icon">💡</span> Show Ideas Tab</span>
+        <button class="toggle-track on" id="suggToggle" onclick="toggleSuggTab()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Help</div>
+      <div class="toggle-row">
+        <span class="toggle-label"><span class="toggle-icon">📖</span> Show Tips</span>
+        <button class="toggle-track" id="tipsToggle" onclick="toggleTips()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5">Quick tips to help you get the most out of Clarity. Great for new users.</div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">📅 My Routine</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Tell Clarity when you're busy or free. AI scheduling plans around these blocks.</div>
+      <div id="routineList"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px;background:var(--surface2);border-radius:9px">
+        <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:11px;padding:6px 9px">
+          <option value="work">W · Work</option>
+          <option value="class">C · Class</option>
+          <option value="gym">G · Gym / Exercise</option>
+          <option value="meals">M · Meals</option>
+          <option value="sleep">Z · Sleep</option>
+          <option value="commute">D · Commute</option>
+          <option value="church">+ · Church</option>
+          <option value="family">F · Family Time</option>
+          <option value="free">· · Free Time</option>
+          <option value="focus">! · Focus / Deep Work</option>
+          <option value="selfcare">S · Self-Care</option>
+          <option value="custom">? · Custom…</option>
+        </select>
+        <input class="fi" id="routineName" placeholder="Custom label" style="font-size:11px;padding:6px 9px;display:none">
+        <div style="display:flex;gap:6px">
+          <input class="fi" type="time" id="routineStart" value="09:00" style="flex:1;font-size:11px;padding:6px 9px">
+          <span style="color:var(--text3);font-size:11px;align-self:center">to</span>
+          <input class="fi" type="time" id="routineEnd" value="17:00" style="flex:1;font-size:11px;padding:6px 9px">
+        </div>
+        <div class="routine-days" id="routineDays">
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,0)">S</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,1)">M</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,2)">T</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,3)">W</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,4)">T</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,5)">F</button>
+          <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
+        </div>
+        <button class="drawer-btn" onclick="addRoutineBlock()" style="margin-top:2px">+ Add Block</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">Your Data</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.5">Export your tasks, habits, journal, and settings as a backup file. Import to restore.</div>
+      <div class="drawer-btn-row">
+        <button class="drawer-btn" onclick="exportData()">📥 Export</button>
+        <button class="drawer-btn" onclick="document.getElementById('importFile').click()">📤 Import</button>
+        <input type="file" id="importFile" class="drawer-file-input" accept=".json" onchange="importData(event)">
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">📚 Import from Canvas</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;line-height:1.5">Paste your assignments from Canvas LMS. One per line: "Assignment Name — Due Apr 15 at 11:59pm"</div>
+      <textarea class="fi" id="canvasInput" placeholder="Paste assignments here…" rows="3" style="font-size:11px;line-height:1.5;min-height:60px;resize:vertical"></textarea>
+      <button class="drawer-btn" onclick="importCanvas()" style="margin-top:4px">Import Assignments</button>
+    </div>
+
+  </div>
+  <div class="drawer-footer">Clarity v19 · Your personal scheduler</div>
+</div>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <button class="logo-btn" onclick="openDrawer()" title="Settings">
+    <div class="logo-dot-icon"></div>
+    <span class="logo-text">Clarity</span>
+  </button>
+
+  <div class="nav-tabs">
+    <button class="nav-tab" onclick="switchView('year')">Year</button>
+    <button class="nav-tab active" onclick="switchView('month')">Month</button>
+    <button class="nav-tab" onclick="switchView('week')">Week</button>
+    <button class="nav-tab" onclick="switchView('day')">Day</button>
+    <button class="nav-tab" onclick="switchView('categories')">Categories</button>
+  </div>
+
+  <div class="hdr-right">
+    <button class="nav-arrow" onclick="navPrev()">&#8592;</button>
+    <div class="cur-label" id="curLabel"></div>
+    <button class="nav-arrow" onclick="navNext()">&#8594;</button>
+    <button class="hdr-btn" onclick="goToday()">Today</button>
+    <div class="search-wrap">
+      <button class="search-toggle" onclick="toggleSearch()" title="Search tasks">🔍</button>
+      <div class="search-bar" id="searchBar">
+        <input class="search-input" id="searchInput" placeholder="Search tasks…" oninput="onSearch()" autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+    <button class="overdue-badge hidden" id="overdueBadge" onclick="goOverdue()">Overdue 0</button>
+    <button class="hdr-btn" onclick="openClearModal()" title="Clear tasks from this day, week, or all time">Clear ▾</button>
+    <button class="hdr-btn" onclick="openWrapup()" title="Weekly review">📊</button>
+    <button class="hdr-btn" onclick="openWeekPlan()" title="Plan your week">📅</button>
+    <button class="hdr-btn" onclick="shareMyDay()" title="Share my day as image">📤</button>
+    <button class="hdr-btn" onclick="openAISchedule()" title="Let Clarity plan your day" style="background:var(--accent);color:#fff;border-color:var(--accent)">Plan My Day ✨</button>
+    <button class="hdr-btn accent" onclick="toggleSidebar()">Brain Dump</button>
+  </div>
+</header>
+
+<!-- ══ APP BODY ══ -->
+<div id="sidebarBackdrop" style="display:none" onclick="toggleSidebar()"></div>
+<div class="app-body">
+  <div class="main-area">
+
+    <!-- YEAR -->
+    <div class="view" id="view-year">
+      <div class="year-wrap"><div class="year-grid" id="yearGrid"></div></div>
+    </div>
+
+    <!-- MONTH -->
+    <div class="view active" id="view-month">
+      <div class="month-wrap" id="monthGrid"></div>
+    </div>
+
+    <!-- WEEK -->
+    <div class="view" id="view-week">
+      <div class="week-view">
+        <div class="week-hdr-row" id="weekHdr"></div>
+        <div class="week-scroll"><div class="week-grid" id="weekGrid"></div></div>
+      </div>
+    </div>
+
+    <!-- DAY -->
+    <div class="view" id="view-day">
+      <div class="day-view">
+        <div class="day-hdr">
+          <div class="day-title" id="dayTitle"></div>
+          <div class="day-sub" id="daySub"></div>
+        </div>
+        <div class="day-scroll"><div class="day-timeline" id="dayTimeline"></div></div>
+      </div>
+    </div>
+
+    <!-- CATEGORIES -->
+    <div class="view" id="view-categories">
+      <div class="cat-view">
+        <div class="cat-view-hdr">
+          <div class="cat-view-title">Tasks</div>
+          <div class="cat-chips" id="catChips"></div>
+          <button class="add-cat-btn" onclick="openAddCatModal()">+ Category</button>
+          <button class="show-done-btn" id="sdBtn" onclick="toggleSD()">Show Completed</button>
+        </div>
+        <div class="cat-scroll" id="catContent"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="side-tabs" id="sideTabs">
+      <button class="side-tab active" onclick="switchSide('braindump')">Brain Dump</button>
+      <button class="side-tab" onclick="switchSide('priority')">Priorities</button>
+      <button class="side-tab" onclick="switchSide('focus')">Focus</button>
+      <button class="side-tab" id="suggTab" onclick="switchSide('suggestions')">Ideas</button>
+      <button class="side-tab" onclick="switchSide('journal')">Journal</button>
+    </div>
+    <div class="side-panel active" id="panel-braindump">
+      <div class="bd-wrap">
+        <textarea class="bd-ta" id="bdInput" placeholder="Dump your thoughts…&#10;Ctrl+Enter to add" rows="2" oninput="autoExpand(this)" onfocus="autoExpand(this)"></textarea>
+        <div class="bd-ctrls">
+          <select class="bd-sel" id="bdPri">
+            <option value="none">— Priority</option>
+            <option value="high">🔴 High</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="low">🟢 Low</option>
+          </select>
+          <select class="bd-sel" id="bdCat"></select>
+          <button class="bd-add" onclick="addBD()">+ Add</button>
+        </div>
+      </div>
+      <div class="bd-list" id="bdList"></div>
+    </div>
+    <div class="side-panel" id="panel-priority">
+      <div class="pri-board" id="priBoard"></div>
+    </div>
+    <div class="side-panel" id="panel-focus">
+      <div class="focus-wrap">
+        <!-- No task selected state -->
+        <div id="focusEmpty" class="focus-empty">
+          <div style="font-size:32px;margin-bottom:8px">🎯</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">Start a Focus Session</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.6">Click any task in Day view, then come here to start a timed focus session.</div>
+          <div style="margin-top:12px">
+            <div class="flbl" style="margin-bottom:6px">Or pick a task:</div>
+            <select class="fi" id="focusTaskPicker" onchange="onFocusPickTask(this.value)" style="font-size:12px;width:100%">
+              <option value="">— Select a task —</option>
+            </select>
+          </div>
+        </div>
+        <!-- Active timer state -->
+        <div id="focusActive" style="display:none">
+          <div class="focus-task-name" id="focusTaskName"></div>
+          <div class="focus-task-meta" id="focusTaskMeta"></div>
+          <div class="focus-ring-wrap">
+            <svg class="focus-ring" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="6"/>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="6"
+                stroke-dasharray="326.73" stroke-dashoffset="0" stroke-linecap="round"
+                id="focusArc" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .5s"/>
+            </svg>
+            <div class="focus-time-display" id="focusTimeDisplay">25:00</div>
+          </div>
+          <div class="focus-duration-row" id="focusDurRow">
+            <button class="dur-opt" onclick="setFocusDur(15)">15m</button>
+            <button class="dur-opt" onclick="setFocusDur(25)">25m</button>
+            <button class="dur-opt selected" onclick="setFocusDur(30)">30m</button>
+            <button class="dur-opt" onclick="setFocusDur(45)">45m</button>
+            <button class="dur-opt" onclick="setFocusDur(60)">1h</button>
+            <button class="dur-opt" onclick="setFocusDur(90)">1.5h</button>
+          </div>
+          <div class="focus-controls">
+            <button class="focus-btn secondary" onclick="addFocusTime()" id="focusAddBtn" title="Add 15 min">+15m</button>
+            <button class="focus-btn primary" onclick="toggleFocusTimer()" id="focusPlayBtn">Start</button>
+            <button class="focus-btn secondary" onclick="resetFocusTimer()" title="Reset timer">Reset</button>
+            <button class="focus-btn secondary" onclick="endFocusSession()" title="End and leave" style="color:var(--red)">End</button>
+          </div>
+          <div class="focus-session-count" id="focusSessionCount"></div>
+        </div>
+      </div>
+    </div>
+    <div class="side-panel" id="panel-suggestions" style="overflow:hidden">
+      <div id="suggestionsPanel" style="flex:1;overflow-y:auto;display:flex;flex-direction:column"></div>
+    </div>
+
+    <div class="side-panel" id="panel-journal">
+      <div class="journal-wrap">
+        <div class="journal-date-bar">
+          <div class="journal-date-label" id="journalDateLabel">Today</div>
+          <div class="journal-date-sub" id="journalDateSub">How did your day go?</div>
+          <div class="mood-label">How are you feeling?</div>
+          <div class="mood-row" id="moodRow">
+            <button class="mood-btn" onclick="setMood('😔')" title="Rough day" id="mood-0">😔</button>
+            <button class="mood-btn" onclick="setMood('😐')" title="Meh"        id="mood-1">😐</button>
+            <button class="mood-btn" onclick="setMood('🙂')" title="Pretty good" id="mood-2">🙂</button>
+            <button class="mood-btn" onclick="setMood('😊')" title="Good day"   id="mood-3">😊</button>
+            <button class="mood-btn" onclick="setMood('🌟')" title="Amazing!"   id="mood-4">🌟</button>
+          </div>
+        </div>
+        <div class="journal-body">
+          <div class="journal-entry-wrap">
+            <textarea class="journal-ta" id="journalTa"
+              placeholder="Write anything — what happened today, how you're feeling, something you're grateful for, or a thought you want to hold onto…"
+              oninput="onJournalInput()"></textarea>
+            <div class="journal-save-row">
+              <span class="journal-saved-hint" id="journalSavedHint">✓ Saved</span>
+              <button class="journal-save-btn" onclick="saveJournalEntry()">Save Entry</button>
+            </div>
+          </div>
+          <div id="journalPastEntries"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TASK MODAL -->
+<div class="modal-overlay" id="mOverlay" onclick="handleMBg(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div><div class="modal-title" id="mTitle">New Task</div><div class="modal-sub" id="mSub"></div></div>
+    <div class="fg"><label class="flbl">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div class="frow">
+      <div class="fg"><label class="flbl">Priority</label>
+        <select class="fi" id="fPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
+      </div>
+      <div class="fg"><label class="flbl">Category</label><select class="fi" id="fCat"></select></div>
+    </div>
+    <div class="fg"><label class="flbl">Duration</label><div class="dur-select" id="fDurSelect"></div></div>
+    <div class="recur-box">
+      <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring task</label>
+      <div class="recur-opts" id="recurOpts" style="display:none">
+        <span style="font-size:12px;color:var(--text2)">Every</span>
+        <input class="fi" id="fRecurN" type="number" min="1" max="99" value="1" style="width:50px;padding:4px 7px;font-size:12px">
+        <select class="fi" id="fRecurU" style="font-size:12px;padding:4px 7px">
+          <option value="day">Day(s)</option><option value="week">Week(s)</option><option value="month">Month(s)</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div class="modal-acts">
+      <button class="btn-d" id="btnDel" onclick="startDelete()" style="display:none">Delete</button>
+      <button class="btn-c" onclick="closeModal()">Cancel</button>
+      <button class="btn-s" onclick="saveTask()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE RECUR MODAL -->
+<div class="modal-overlay" id="delOverlay" onclick="if(event.target===this)closeDelModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+    <div class="modal-title">Delete recurring task</div>
+    <div class="modal-sub">How would you like to delete this?</div>
+    <div class="recur-del-opts">
+      <div class="recur-del-opt" onclick="doDelete('this')">Delete this occurrence only<div class="opt-sub">Only removes this date. Future repeats stay.</div></div>
+      <div class="recur-del-opt" onclick="doDelete('all')">Delete all occurrences<div class="opt-sub">Removes the task and all its future repetitions.</div></div>
+    </div>
+    <div class="modal-acts"><button class="btn-c" onclick="closeDelModal()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- BRAIN DUMP DETAIL MODAL -->
+<div class="modal-overlay" id="bdDetailOverlay" onclick="if(event.target===this)closeBDDetail()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div><div class="modal-title" id="bdDetailTitle">Edit Brain Dump</div><div class="modal-sub">Unscheduled · Brain Dump</div></div>
+    <div class="fg"><label class="flbl">Task</label><textarea class="fi auto-expand" id="bdDetailName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div class="frow">
+      <div class="fg"><label class="flbl">Priority</label>
+        <select class="fi" id="bdDetailPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
+      </div>
+      <div class="fg"><label class="flbl">Category</label><select class="fi" id="bdDetailCat"></select></div>
+    </div>
+    <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="bdDetailNotes" placeholder="Add notes, context, or details…" rows="2" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div class="fg">
+      <label class="flbl">Schedule it now</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fi" type="date" id="bdDetailDate" style="flex:1;font-size:12px;padding:6px 9px">
+        <input class="fi" type="time" id="bdDetailTime" style="flex:1;font-size:12px;padding:6px 9px">
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">optional</span>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-d" onclick="deleteBDFromModal()">Remove</button>
+      <button class="btn-c" onclick="closeBDDetail()">Cancel</button>
+      <button class="btn-s" onclick="saveBDDetail()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal-overlay" id="addCatOverlay" onclick="if(event.target===this)closeAddCatModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:360px">
+    <div class="modal-title">New Category</div>
+    <div class="fg"><label class="flbl">Name</label><input class="fi" id="catNameInput" placeholder="e.g. Side Projects" maxlength="24"/></div>
+    <div class="fg"><label class="flbl">Color</label><div class="cat-color-grid" id="colorGrid"></div></div>
+    <div class="modal-acts"><button class="btn-c" onclick="closeAddCatModal()">Cancel</button><button class="btn-s" onclick="saveNewCat()">Add Category</button></div>
+  </div>
+</div>
+
+<!-- TIP BAR -->
+<div class="tip-bar" id="tipBar">
+  <div class="tip-icon" id="tipIcon"></div>
+  <div class="tip-content">
+    <div class="tip-title" id="tipTitle"></div>
+    <div class="tip-body" id="tipBody"></div>
+    <div class="tip-nav">
+      <button class="tip-nav-btn" onclick="prevTip()">←</button>
+      <span class="tip-counter" id="tipCounter"></span>
+      <button class="tip-nav-btn" onclick="nextTip()">→</button>
+    </div>
+  </div>
+  <button class="tip-close" onclick="toggleTips()" title="Close tips">✕</button>
+</div>
+
+
+<!-- ADD IDEA MODAL -->
+<div class="modal-overlay" id="ideaModalOverlay" onclick="if(event.target===this)closeIdeaModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <div class="idea-modal-header">
+      <div class="idea-modal-color-bar" id="ideaColorBar"></div>
+      <div style="flex:1;min-width:0">
+        <div class="idea-modal-name" id="ideaModalName"></div>
+        <div class="idea-modal-sub" id="ideaModalSub"></div>
+      </div>
+    </div>
+
+    <div class="fg">
+      <label class="idea-section-label">When do you want to start?</label>
+      <div class="idea-date-row">
+        <input class="fi" type="date" id="ideaDate" style="font-size:12px;padding:7px 10px">
+        <input class="fi" type="time" id="ideaTime" style="font-size:12px;padding:7px 10px">
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Leave blank to save without scheduling</div>
+    </div>
+
+    <div class="fg" style="gap:6px">
+      <label class="idea-section-label">Recurring?</label>
+      <div class="idea-recur-toggle" onclick="toggleIdeaRecur()">
+        <input type="checkbox" class="rcb" id="ideaRecurOn" onchange="toggleIdeaRecur()">
+        <label for="ideaRecurOn">Make this a recurring habit</label>
+      </div>
+      <div class="idea-recur-opts" id="ideaRecurOpts" style="display:none">
+        <span>Every</span>
+        <input class="fi" id="ideaRecurN" type="number" min="1" max="99" value="1" style="width:52px;padding:4px 7px;font-size:12px">
+        <select class="fi" id="ideaRecurU" style="font-size:12px;padding:4px 7px">
+          <option value="day">Day(s)</option>
+          <option value="week">Week(s)</option>
+          <option value="month">Month(s)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="fg">
+      <label class="idea-section-label">Priority</label>
+      <div class="idea-pri-grid">
+        <button class="idea-pri-btn active-none" id="ipri-none"  onclick="setIdeaPri('none')"  >None</button>
+        <button class="idea-pri-btn"             id="ipri-low"   onclick="setIdeaPri('low')"   >🟢 Low</button>
+        <button class="idea-pri-btn"             id="ipri-medium"onclick="setIdeaPri('medium')">🟡 Medium</button>
+        <button class="idea-pri-btn"             id="ipri-high"  onclick="setIdeaPri('high')"  >🔴 High</button>
+      </div>
+    </div>
+
+    <div class="fg">
+      <label class="idea-section-label">Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">(optional)</span></label>
+      <textarea class="fi auto-expand" id="ideaNotes" rows="2" placeholder="Add context, reminders, or details…" oninput="autoExpand(this)" style="line-height:1.5;font-size:12px"></textarea>
+    </div>
+
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeIdeaModal()">Cancel</button>
+      <button class="btn-s" onclick="saveIdea()">Add to Schedule</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- RECUR RESCHEDULE DIALOG -->
+<div class="modal-overlay" id="recurRescheduleOverlay" onclick="if(event.target===this)closeRecurReschedule()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div>
+      <div class="modal-title">Move recurring task</div>
+      <div class="modal-sub" id="recurRescheduleSub"></div>
+    </div>
+    <div class="reschedule-opts">
+      <div class="reschedule-opt" onclick="doRecurReschedule('this')">
+        <div class="reschedule-opt-title">This occurrence only</div>
+        <div class="reschedule-opt-sub">Moves just this one instance. All past and future repeats stay where they are.</div>
+      </div>
+      <div class="reschedule-opt" onclick="doRecurReschedule('all')">
+        <div class="reschedule-opt-title">This and all future occurrences</div>
+        <div class="reschedule-opt-sub">Moves this and all future repeats to the new time/day. Past occurrences stay exactly where they were.</div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeRecurReschedule()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLEAR SCOPE MODAL -->
+<div class="modal-overlay" id="clearScopeOverlay" onclick="if(event.target===this)closeClearModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div>
+      <div class="modal-title">Clear Schedule</div>
+      <div class="modal-sub" id="clearScopeSub">Choose what to erase</div>
+    </div>
+    <div class="clear-scope-opts">
+      <div class="reschedule-opt" onclick="chooseClearScope('day')">
+        <div class="reschedule-opt-title">Clear this day</div>
+        <div class="reschedule-opt-sub" id="clearDayLabel">Remove all tasks from today</div>
+      </div>
+      <div class="reschedule-opt" onclick="chooseClearScope('week')">
+        <div class="reschedule-opt-title">Clear this week</div>
+        <div class="reschedule-opt-sub" id="clearWeekLabel">Remove all tasks from the current week</div>
+      </div>
+      <div class="reschedule-opt" onclick="chooseClearScope('all')" style="border-color:var(--red)">
+        <div class="reschedule-opt-title" style="color:var(--red)">Clear all time</div>
+        <div class="reschedule-opt-sub">Remove everything from the entire calendar</div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeClearModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLEAR CONFIRM (habit choice) MODAL -->
+<div class="modal-overlay" id="clearConfirmOverlay" onclick="if(event.target===this)closeClearConfirm()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div>
+      <div class="modal-title" id="clearConfirmTitle">Clear this day?</div>
+      <div class="modal-sub">What should happen to your recurring habits?</div>
+    </div>
+    <div class="clear-scope-opts">
+      <div class="reschedule-opt" onclick="executeClear(false)">
+        <div class="reschedule-opt-title">Keep habits</div>
+        <div class="reschedule-opt-sub">Remove one-time tasks only. Recurring habits stay on the calendar.</div>
+      </div>
+      <div class="reschedule-opt" onclick="executeClear(true)" style="border-color:var(--red)">
+        <div class="reschedule-opt-title" style="color:var(--red)">Remove everything including habits</div>
+        <div class="reschedule-opt-sub">Clears all tasks and recurring habits in scope. This cannot be undone.</div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeClearConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUGG ALREADY-ADDED CONFIRM MODAL -->
+<div class="modal-overlay" id="suggAlreadyOverlay" onclick="if(event.target===this)closeSuggAlready()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px">
+    <div>
+      <div class="modal-title">Habit already added</div>
+      <div class="modal-sub">This habit is already in your schedule or Brain Dump</div>
+    </div>
+    <div class="sugg-already-preview">
+      <div class="sugg-already-icon">⚠️</div>
+      <div class="sugg-already-details">
+        <div class="sugg-already-name" id="suggAlreadyName"></div>
+        <div class="sugg-already-note">Already exists — adding again will create a separate one-time task</div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeSuggAlready()">Cancel</button>
+      <button class="btn-s" onclick="confirmSuggAlready()">Add as one-time task anyway</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- WEEKLY PLANNING MODAL -->
+<div class="modal-overlay" id="weekPlanOverlay" onclick="if(event.target===this)closeWeekPlan()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:720px">
+    <div>
+      <div class="modal-title">Plan Your Week</div>
+      <div class="modal-sub" id="wpDateRange"></div>
+    </div>
+    <div class="fg">
+      <label class="flbl">Weekly Intention</label>
+      <input class="wp-intention" id="wpIntention" placeholder="What's the #1 thing you want to accomplish this week?" maxlength="120">
+    </div>
+    <div class="wp-grid" id="wpGrid"></div>
+    <div style="font-size:10px;color:var(--text3);text-align:center">Click a day to jump to it and schedule tasks</div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeWeekPlan()">Close</button>
+      <button class="btn-s" onclick="saveWeekIntention()">Save Intention</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY WRAP-UP MODAL -->
+<div class="modal-overlay" id="wrapupOverlay" onclick="if(event.target===this)closeWrapup()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <div style="text-align:center">
+      <div class="modal-title" id="wrapupTitle">Your Week in Review</div>
+      <div class="modal-sub" id="wrapupDateRange"></div>
+    </div>
+    <div class="wrapup-card" id="wrapupContent"></div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeWrapup()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- REFLOW MODAL -->
+<div class="modal-overlay" id="reflowOverlay" onclick="if(event.target===this)closeReflow()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <div>
+      <div class="modal-title">⏱ Session ran over</div>
+      <div class="modal-sub" id="reflowSub"></div>
+    </div>
+    <div id="reflowPreview" style="margin:4px 0"></div>
+    <div class="reschedule-opts" id="reflowOpts">
+      <div class="reschedule-opt" onclick="doReflow('push')">
+        <div class="reschedule-opt-title">Push everything back</div>
+        <div class="reschedule-opt-sub">Shift all remaining tasks by the overflow time</div>
+      </div>
+      <div class="reschedule-opt" onclick="doReflow('trim')">
+        <div class="reschedule-opt-title">Trim the next task</div>
+        <div class="reschedule-opt-sub">Steal time from the next task to stay on schedule</div>
+      </div>
+      <div class="reschedule-opt" onclick="doReflow('skip')">
+        <div class="reschedule-opt-title">I'll handle it myself</div>
+        <div class="reschedule-opt-sub">Keep schedule as-is, I'll adjust manually</div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeReflow()">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI SCHEDULE MODAL -->
+<div class="modal-overlay" id="aiScheduleOverlay" onclick="if(event.target===this)closeAISchedule()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+    <div>
+      <div class="modal-title">Let Clarity Plan Your Day ✨</div>
+      <div class="modal-sub">Tell me everything you need to do — I'll build your schedule</div>
+    </div>
+    <div class="fg">
+      <label class="flbl">What's on your plate?</label>
+      <textarea class="fi auto-expand" id="aiInput" placeholder="• Study for bio exam 2 hours&#10;• Gym in the afternoon&#10;• Call mom&#10;• Grocery run&#10;• Work on project for 3 hours" rows="5" oninput="autoExpand(this)" style="line-height:1.6;min-height:120px"></textarea>
+      <button onclick="fillAIFromBD()" style="margin-top:4px;background:none;border:1px dashed var(--border2);border-radius:7px;padding:5px 10px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text2);cursor:pointer;transition:all .15s;width:fit-content" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📋 Pull from Brain Dump</button>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="flbl">Schedule for</label>
+        <input class="fi" type="date" id="aiDate" style="font-size:12px">
+      </div>
+      <div class="fg">
+        <label class="flbl">Day starts at</label>
+        <input class="fi" type="time" id="aiStartTime" value="08:00" style="font-size:12px">
+      </div>
+    </div>
+    <div class="fg" id="aiPreviewWrap" style="display:none">
+      <label class="flbl">Preview</label>
+      <div id="aiPreview" style="background:var(--surface2);border-radius:10px;padding:10px 12px;max-height:200px;overflow-y:auto;font-size:12px;line-height:1.7"></div>
+    </div>
+    <div id="aiError" style="display:none;font-size:12px;color:var(--red);padding:6px 10px;background:var(--red-pale);border-radius:8px"></div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeAISchedule()">Cancel</button>
+      <button class="btn-s" id="aiGenBtn" onclick="generateAISchedule()">
+        <span id="aiGenLabel">Generate Schedule</span>
+        <span id="aiSpinner" style="display:none">Thinking…</span>
+      </button>
+      <button class="btn-s" id="aiAcceptBtn" onclick="acceptAISchedule()" style="display:none;background:var(--accent-dim)">Add to Calendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK-ADD BAR -->
+<div id="quickAddBackdrop" onclick="closeQuickAdd()" style="display:none;position:fixed;inset:0;z-index:799"></div>
+<div id="quickAddBar" role="dialog" aria-label="Quick add task">
+  <div class="qa-title">Quick Add</div>
+  <input class="qa-input" id="qaName" placeholder="Task name…" autocomplete="off">
+  <div class="qa-row">
+    <input class="qa-fi" type="date" id="qaDate">
+    <input class="qa-fi" type="time" id="qaTime">
+    <select class="qa-fi" id="qaPri">
+      <option value="none">— Priority</option>
+      <option value="high">🔴 High</option>
+      <option value="medium">🟡 Medium</option>
+      <option value="low">🟢 Low</option>
+    </select>
+  </div>
+  <div class="qa-acts">
+    <button class="btn-c" onclick="closeQuickAdd()">Cancel</button>
+    <button class="btn-s" onclick="saveQuickAdd()">Save</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
