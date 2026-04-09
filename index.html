@@ -117,6 +117,15 @@
     </div>
 
     <div class="drawer-section">
+      <div class="drawer-section-title">Week Starts On</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Choose which day your week begins</div>
+      <div class="tf-toggle-row">
+        <button class="tf-btn active" id="wkStartSun" onclick="setWeekStart(0)">Sunday</button>
+        <button class="tf-btn" id="wkStartMon" onclick="setWeekStart(1)">Monday</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
       <div class="drawer-section-title">Sidebar Tabs</div>
       <div class="toggle-row" id="suggToggleRow" style="margin-bottom:6px">
         <span class="toggle-label"><span class="toggle-icon">💡</span> Show Ideas Tab</span>
