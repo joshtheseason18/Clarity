@@ -1,0 +1,2 @@
+# Clarity
+Clarity Scheduler App
