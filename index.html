@@ -423,7 +423,18 @@
       </div>
       <div class="fg"><label class="flbl">Category</label><select class="fi" id="fCat"></select></div>
     </div>
-    <div class="fg"><label class="flbl">Duration</label><div class="dur-select" id="fDurSelect"></div></div>
+    <div class="fg"><label class="flbl">Duration</label>
+      <div class="dur-spinner-row">
+        <div class="dur-spinner">
+          <input type="number" class="dur-spinner-input" id="fDurHr" min="0" max="12" value="0" onchange="onDurSpinnerChange()">
+          <span class="dur-spinner-label">hr</span>
+        </div>
+        <div class="dur-spinner">
+          <input type="number" class="dur-spinner-input" id="fDurMin" min="0" max="45" step="15" value="30" onchange="onDurSpinnerChange()">
+          <span class="dur-spinner-label">min</span>
+        </div>
+      </div>
+    </div>
     <div class="recur-box">
       <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring <span id="fRecurLabel">task</span></label>
       <div class="recur-opts" id="recurOpts" style="display:none">
@@ -434,17 +445,27 @@
         </select>
       </div>
     </div>
-    <!-- Link -->
-    <div class="fg"><label class="flbl">Link <span style="font-weight:400;color:var(--text3)">(optional)</span></label><input class="fi" id="fLink" placeholder="https://…" type="url" style="font-size:12px"></div>
+    <!-- Attachments -->
+    <div class="fg">
+      <label class="flbl">Attachments</label>
+      <div class="attach-list" id="fAttachList"></div>
+      <div class="attach-add-row">
+        <input class="fi attach-add-input" id="fAttachInput" placeholder="Paste a link…" onkeydown="if(event.key==='Enter'){event.preventDefault();addAttachment()}">
+        <button class="attach-add-btn" onclick="addAttachment()" title="Add link">+</button>
+        <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)">📎</button>
+      </div>
+    </div>
     <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
     <!-- Subtasks (tasks only) -->
     <div class="fg" id="fSubtasksWrap">
       <label class="flbl">Subtasks</label>
       <div class="subtask-list" id="fSubtaskList"></div>
       <div class="subtask-add-row">
-        <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="+ Add a subtask" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
-        <button class="subtask-gen-btn" onclick="generateSubtasks()" title="AI generate subtasks">✨</button>
+        <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
+        <input class="fi" id="fSubtaskDur" type="number" min="0" max="480" placeholder="min" style="width:52px;font-size:11px;padding:7px 6px;text-align:center">
+        <button class="subtask-add-btn" onclick="addSubtaskFromModal()">+</button>
       </div>
+      <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="AI generate subtasks">✨ Generate with AI</button>
     </div>
     <div class="modal-acts">
       <button class="btn-d" id="btnDel" onclick="startDelete()" style="display:none">Delete</button>

@@ -652,8 +652,12 @@ function renderMonth(){
   cells.forEach(({date,cur})=>{
     const key=dk(date),isTod=key===todayKey;
     const dt=tasksOn(key),shown=dt.slice(0,3);
+    const events=dt.filter(t=>(t.type||'task')==='event');
+    const eventCount=events.length;
     let cls='month-cell'+((!cur)?' other-month':'')+(isTod?' today':'');
-    let chips=shown.map(t=>{
+    // Show events first, then tasks
+    const sorted=[...dt.filter(t=>(t.type||'task')==='event'),...dt.filter(t=>(t.type||'task')!=='event')].slice(0,3);
+    let chips=sorted.map(t=>{
       const cc=catColor(t.category);
       const isEvent=(t.type||'task')==='event';
       let c='m-chip'+(t.done?' done':'')+(isEvent?' m-chip-event':'');
@@ -662,8 +666,9 @@ function renderMonth(){
         ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||key}')" ondragend="onTaskDragEnd(event)"
         onclick="openEdit('${t.id}','${t._instanceDate||key}',event)">${esc(t.name)}${t.recur?' ↻':''}</span>`;
     }).join('')+(dt.length>3?`<span class="more-chip">+${dt.length-3}</span>`:'');
+    const eventDot=eventCount?`<span class="cell-event-dot" title="${eventCount} event${eventCount>1?'s':''}"></span>`:'';
     html+=`<div class="${cls}" onclick="onMCell('${key}')" ondragover="onDO(event,'${key}')" ondragleave="onDL(event)" ondrop="onDropDate(event,'${key}')">
-      <div><span class="cell-num-circle">${date.getDate()}</span></div>${chips}</div>`;
+      <div class="cell-num-row"><span class="cell-num-circle">${date.getDate()}</span>${eventDot}</div>${chips}</div>`;
   });
   document.getElementById('monthGrid').innerHTML=html+'</div>';
 }
@@ -676,7 +681,7 @@ function renderWeek(){
   days.forEach(d=>{const k=dk(d);hdr+=`<div class="wk-day-head${k===todayKey?' today':''}" onclick="onWkDay('${k}')"><div class="wdh-name">${DAYS_S[d.getDay()]}</div><div class="wdh-num">${d.getDate()}</div></div>`;});
   document.getElementById('weekHdr').innerHTML=hdr;
   const sl=slots();
-  const WK_SLOT_H=42;
+  const WK_SLOT_H=48;
   let g=`<div class="wk-time-col">${sl.map(s=>`<div class="time-lbl">${s.m===0?fmtT(sk(s.h,s.m)):''}</div>`).join('')}</div>`;
   days.forEach(d=>{
     const k=dk(d);
@@ -722,7 +727,7 @@ function renderWeek(){
       </div>`;
     }).join('');
     // Routine bands for this day
-    const WK_SLOT_H_R=42;
+    const WK_SLOT_H_R=48;
     let routineBandsHtml='';
     getRoutineForDay(k).forEach(b=>{
       const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
@@ -751,7 +756,7 @@ function renderDay(){
   const _dayProgress=_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'';
   document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+_dayProgress;
   const sl=slots();
-  const DAY_SLOT_H=64;
+  const DAY_SLOT_H=76;
   // Slots grid (just for click-to-add, no tasks inside)
   let html=sl.map(s=>{
     const sk2=sk(s.h,s.m);
@@ -780,7 +785,7 @@ function renderDay(){
         onclick="openEdit('${t.id}','${idate}',event)">
         <span class="day-task-block-name">${esc(t.name)}</span>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
-        ${t.link?`<a class="task-link" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 ${esc(t.link.replace(/^https?:\/\//,'').slice(0,30))}</a>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
       </div>`;
     }
@@ -795,7 +800,7 @@ function renderDay(){
         ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
-      ${t.link?`<a class="task-link" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 ${esc(t.link.replace(/^https?:\/\//,'').slice(0,30))}</a>`:''}
+      ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
       ${subsTotal?`<div class="subtask-progress"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${Math.round(subsDone/subsTotal*100)}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
@@ -1825,7 +1830,7 @@ function acceptAISchedule(){
       priority:t.priority||'none',
       category:t.category||'none',
       location:t.location||'',
-      link:'',
+      attachments:[],
       notes:'',
       subtasks:subs,
       scheduled:true,
@@ -2321,9 +2326,28 @@ function buildDurSelect(val){
 }
 function pickDur(v){
   _selDur=v;
-  document.querySelectorAll('.dur-opt').forEach(el=>el.classList.toggle('selected',parseInt(el.textContent)||durToMin(el.textContent)===v));
-  // re-render cleanly
   buildDurSelect(v);
+}
+
+// Duration spinner for task modal
+function setDurSpinner(totalMin){
+  _selDur=totalMin||30;
+  const hr=Math.floor(_selDur/60);
+  const mn=_selDur%60;
+  const hrEl=document.getElementById('fDurHr');
+  const mnEl=document.getElementById('fDurMin');
+  if(hrEl)hrEl.value=hr;
+  if(mnEl)mnEl.value=mn;
+}
+function onDurSpinnerChange(){
+  const hr=parseInt(document.getElementById('fDurHr').value)||0;
+  let mn=parseInt(document.getElementById('fDurMin').value)||0;
+  // Snap minutes to 15-min increments
+  mn=Math.round(mn/15)*15;
+  if(mn>=60){mn=45;}
+  document.getElementById('fDurMin').value=mn;
+  _selDur=hr*60+mn;
+  if(_selDur<15)_selDur=15; // minimum 15 min
 }
 function durToMin(lbl){
   // parse "1h 30m" or "45m" or "2h" back to minutes (for internal use)
@@ -2372,6 +2396,7 @@ function toggleRecurUI(){document.getElementById('recurOpts').style.display=docu
 // ══ ITEM TYPE (task vs event) ════════════════════
 let _itemType='task';
 let _modalSubtasks=[];
+let _modalAttachments=[];
 
 function setItemType(type){
   _itemType=type;
@@ -2381,7 +2406,6 @@ function setItemType(type){
   document.getElementById('fName').placeholder=type==='event'?'What\'s happening?':'What needs to get done?';
   document.getElementById('fLocationWrap').style.display=type==='event'?'':'none';
   document.getElementById('fPriRow').style.display=type==='event'?'none':'';
-  document.getElementById('fSubtasksWrap').style.display=type==='event'?'none':'';
   document.getElementById('fRecurLabel').textContent=type==='event'?'event':'task';
   document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
 }
@@ -2408,9 +2432,12 @@ function renderModalSubtasks(){
 }
 function addSubtaskFromModal(){
   const input=document.getElementById('fSubtaskInput');
+  const durInput=document.getElementById('fSubtaskDur');
   const name=input.value.trim();if(!name)return;
-  _modalSubtasks.push({id:genId(),name,duration:0,done:false});
+  const dur=parseInt(durInput.value)||0;
+  _modalSubtasks.push({id:genId(),name,duration:dur,done:false});
   input.value='';
+  durInput.value='';
   renderModalSubtasks();
   input.focus();
 }
@@ -2449,8 +2476,8 @@ async function generateSubtasks(){
   const taskName=document.getElementById('fName').value.trim();
   const dur=_selDur||30;
   if(!taskName){showToast('Enter a task name first');return;}
-  const btn=document.querySelector('.subtask-gen-btn');
-  btn.textContent='⏳';btn.style.pointerEvents='none';
+  const btn=document.querySelector('.subtask-gen-btn-full');
+  btn.textContent='⏳ Generating…';btn.style.pointerEvents='none';
   try{
     const prompt=`The user has a task called "${taskName}" with ${dur} minutes total. Break it into focused subtasks with realistic durations in minutes. Include short breaks if >60min. Respond with ONLY a JSON array: [{"name":"Subtask","duration":25}]`;
     const response=await fetch("https://api.anthropic.com/v1/messages",{
@@ -2463,8 +2490,37 @@ async function generateSubtasks(){
     const subs=JSON.parse(clean);
     subs.forEach(s=>_modalSubtasks.push({id:genId(),name:s.name,duration:s.duration||0,done:false}));
     renderModalSubtasks();
-  }catch(err){showToast('Could not generate subtasks');}
-  btn.textContent='✨';btn.style.pointerEvents='';
+  }catch(err){
+    showToast('AI generation unavailable — add subtasks manually using the + button');
+  }
+  btn.textContent='✨ Generate with AI';btn.style.pointerEvents='';
+}
+
+// ══ ATTACHMENT MANAGEMENT ═══════════════════════
+function renderModalAttachments(){
+  const list=document.getElementById('fAttachList');
+  if(!_modalAttachments.length){list.innerHTML='';return;}
+  list.innerHTML=_modalAttachments.map((a,i)=>{
+    const icon=a.type==='file'?'📄':'🔗';
+    const display=a.type==='link'?a.url.replace(/^https?:\/\//,'').slice(0,40):a.name;
+    return`<div class="attach-item">
+      <span class="attach-item-icon">${icon}</span>
+      <a class="attach-item-name" href="${esc(a.url)}" target="_blank" onclick="event.stopPropagation()">${esc(display)}</a>
+      <button class="attach-item-del" onclick="deleteAttachment(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+function addAttachment(){
+  const input=document.getElementById('fAttachInput');
+  const url=input.value.trim();if(!url)return;
+  _modalAttachments.push({type:'link',url,name:url.replace(/^https?:\/\//,'').slice(0,50)});
+  input.value='';
+  renderModalAttachments();
+  input.focus();
+}
+function deleteAttachment(i){
+  _modalAttachments.splice(i,1);
+  renderModalAttachments();
 }
 
 function openNew(dateKey,time){
@@ -2478,14 +2534,15 @@ function openNew(dateKey,time){
   document.getElementById('fPri').value='none';
   buildAllCatSelects('none');
   document.getElementById('fNotes').value='';
-  document.getElementById('fLink').value='';
   document.getElementById('fLocation').value='';
+  _modalAttachments=[];
+  renderModalAttachments();
   document.getElementById('fRecurOn').checked=false;
   document.getElementById('fRecurN').value=1;
   document.getElementById('fRecurU').value='day';
   document.getElementById('recurOpts').style.display='none';
   document.getElementById('btnDel').style.display='none';
-  buildDurSelect(30);
+  setDurSpinner(30);
   renderModalSubtasks();
   showModal('mOverlay');
 }
@@ -2503,14 +2560,22 @@ function openEdit(id,instanceDate,e){
   document.getElementById('fPri').value=t.priority||'none';
   buildAllCatSelects(t.category||'none');
   document.getElementById('fNotes').value=t.notes||'';
-  document.getElementById('fLink').value=t.link||'';
+  // Load attachments (migrate old link field)
+  if(t.attachments){
+    _modalAttachments=JSON.parse(JSON.stringify(t.attachments));
+  } else if(t.link){
+    _modalAttachments=[{type:'link',url:t.link,name:t.link.replace(/^https?:\/\//,'').slice(0,50)}];
+  } else {
+    _modalAttachments=[];
+  }
+  renderModalAttachments();
   document.getElementById('fLocation').value=t.location||'';
   document.getElementById('fRecurOn').checked=!!t.recur;
   document.getElementById('fRecurN').value=t.recurN||1;
   document.getElementById('fRecurU').value=t.recurU||'day';
   document.getElementById('recurOpts').style.display=t.recur?'flex':'none';
   document.getElementById('btnDel').style.display='block';
-  buildDurSelect(t.duration||30);
+  setDurSpinner(t.duration||30);
   renderModalSubtasks();
   showModal('mOverlay');
 }
@@ -2533,12 +2598,12 @@ function saveTask(){
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
   const recur=document.getElementById('fRecurOn').checked,recurN=parseInt(document.getElementById('fRecurN').value)||1,recurU=document.getElementById('fRecurU').value;
   const duration=_selDur||30;
-  const link=document.getElementById('fLink').value.trim();
   const location=document.getElementById('fLocation').value.trim();
   const type=_itemType;
   const subtasks=_modalSubtasks;
-  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,link,location,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,link,location,duration,recur,recurN,recurU,subtasks});}
+  const attachments=_modalAttachments;
+  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
+  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,duration,recur,recurN,recurU,subtasks});}
   save();closeModal();renderAll();
 }
 function startDelete(){
@@ -3470,7 +3535,7 @@ function saveQuickAdd(){
   const timeVal=document.getElementById('qaTime').value||'09:00';
   const priority=document.getElementById('qaPri').value;
   tasks.push({
-    id:genId(),name,type:_qaType,priority:_qaType==='event'?'none':priority,category:'none',notes:'',link:'',location:'',
+    id:genId(),name,type:_qaType,priority:_qaType==='event'?'none':priority,category:'none',notes:'',attachments:[],location:'',
     date:dateVal,time:timeVal,duration:_qaDur,scheduled:true,done:false,
     recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]
   });
