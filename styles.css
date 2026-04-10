@@ -42,52 +42,62 @@
 html,body{height:100%}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;font-size:14px;transition:background .3s,color .3s}
 
-/* ══ ONBOARDING ══════════════════════════════════ */
-.onboard-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;
-  display:none;align-items:center;justify-content:center;
-  animation:onboardFadeIn .3s ease;
+/* ══ SPLASH NAME INPUT ════════════════════════════ */
+.splash-name-wrap{
+  margin-top:20px;animation:splashFadeUp .5s ease 1s both;
 }
-.onboard-overlay.open{display:flex}
+.splash-name-input{
+  width:240px;padding:12px 18px;border:2px solid var(--border);border-radius:14px;
+  font-family:'DM Sans',sans-serif;font-size:16px;color:var(--text);
+  background:var(--surface);outline:none;text-align:center;
+  transition:border-color .2s,box-shadow .2s;
+}
+.splash-name-input:focus{
+  border-color:var(--accent);box-shadow:0 0 0 4px rgba(var(--accent-rgb),.15);
+}
+.splash-name-input::placeholder{color:var(--text3);font-weight:400}
+
+/* ══ GUIDED TOUR (contextual onboarding) ═════════ */
+.tour-card{
+  position:fixed;z-index:9999;
+  background:var(--surface);border:1.5px solid var(--accent);
+  border-radius:14px;padding:16px 18px;
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+  max-width:300px;width:calc(100% - 40px);
+  animation:tourPop .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes tourPop{from{opacity:0;transform:scale(.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.tour-card::before{
+  content:'';position:absolute;width:12px;height:12px;
+  background:var(--surface);border:1.5px solid var(--accent);
+  transform:rotate(45deg);
+}
+.tour-card.arrow-top::before{top:-7px;left:50%;margin-left:-6px;border-bottom:none;border-right:none}
+.tour-card.arrow-bottom::before{bottom:-7px;left:50%;margin-left:-6px;border-top:none;border-left:none}
+.tour-card.arrow-right::before{right:-7px;top:20px;border-bottom:none;border-left:none}
+.tour-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--text);margin-bottom:4px}
+.tour-body{font-size:12px;color:var(--text2);line-height:1.65;margin-bottom:12px}
+.tour-actions{display:flex;gap:8px;align-items:center}
+.tour-btn{
+  flex:1;padding:9px;background:var(--accent);color:#fff;border:none;
+  border-radius:9px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;
+  cursor:pointer;transition:background .15s;
+}
+.tour-btn:hover{background:var(--accent-dim)}
+.tour-skip{
+  background:none;border:none;color:var(--text3);font-size:11px;
+  cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;
+}
+.tour-skip:hover{color:var(--text2)}
+.tour-step-dots{display:flex;gap:5px;justify-content:center;margin-top:10px}
+.tour-step-dot{width:6px;height:6px;border-radius:50%;background:var(--border)}
+.tour-step-dot.active{background:var(--accent)}
+.tour-backdrop{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,.35);
+  animation:onboardFadeIn .25s ease;
+}
 @keyframes onboardFadeIn{from{opacity:0}to{opacity:1}}
-.onboard-card{
-  background:var(--surface);border-radius:20px;padding:36px 32px 28px;
-  max-width:380px;width:calc(100% - 40px);text-align:center;
-  box-shadow:0 20px 60px rgba(0,0,0,.2);position:relative;
-}
-.onboard-step{display:none;flex-direction:column;align-items:center;gap:12px}
-.onboard-step.active{display:flex}
-.onboard-emoji{font-size:42px;margin-bottom:4px}
-.onboard-title{font-family:'DM Serif Display',serif;font-size:22px;color:var(--text)}
-.onboard-body{font-size:13px;color:var(--text2);line-height:1.7;max-width:300px}
-.onboard-input{
-  width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:12px;
-  font-family:'DM Sans',sans-serif;font-size:15px;color:var(--text);
-  background:var(--bg);outline:none;text-align:center;transition:border-color .15s;
-}
-.onboard-input:focus{border-color:var(--accent)}
-.onboard-input::placeholder{color:var(--text3)}
-.onboard-btn{
-  width:100%;padding:13px;background:var(--accent);color:#fff;border:none;
-  border-radius:12px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;
-  cursor:pointer;transition:background .15s,transform .1s;margin-top:4px;
-}
-.onboard-btn:hover{background:var(--accent-dim);transform:translateY(-1px)}
-.onboard-skip{
-  background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;
-  font-family:'DM Sans',sans-serif;padding:4px;
-}
-.onboard-skip:hover{color:var(--text2)}
-.onboard-visual{display:flex;flex-direction:column;gap:6px;width:100%;margin:4px 0}
-.onboard-card-mini{
-  padding:8px 14px;background:var(--surface2);border:1px solid var(--border);
-  border-radius:8px;font-size:12px;color:var(--text);text-align:left;
-  border-left:3px solid var(--accent);
-}
-.onboard-progress{display:flex;gap:6px;justify-content:center;margin-top:16px}
-.onboard-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .2s}
-.onboard-dot.active{background:var(--accent)}
-.onboard-dots{display:flex;gap:6px;justify-content:center}
 
 /* ══ DAY GREETING ════════════════════════════════ */
 .day-greeting{

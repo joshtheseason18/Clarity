@@ -71,33 +71,133 @@ function syncBottomNav(view){
   document.querySelectorAll('.bnav-tab').forEach((b,i)=>b.classList.toggle('active',i===map[view]));
 }
 
-// ══ ONBOARDING ══════════════════════════════════
-function showOnboarding(){
-  if(localStorage.getItem('clarity_onboarded'))return;
-  setTimeout(()=>{
-    document.getElementById('onboardOverlay').classList.add('open');
-    const nameInput=document.getElementById('onboardName');
-    if(nameInput)setTimeout(()=>nameInput.focus(),400);
-  },800);
+// ══ ONBOARDING — SPLASH NAME ════════════════════
+function initSplashName(){
+  if(!localStorage.getItem('clarity_onboarded')){
+    document.getElementById('splashNameWrap').style.display='';
+  }
 }
-function onboardNext(step){
-  // Save name on step 1
-  if(step===1){
-    const name=document.getElementById('onboardName').value.trim();
+initSplashName();
+
+// ══ GUIDED TOUR (contextual, tip-highlight style) ═══
+let _tourStep=0;
+const TOUR_STEPS=[
+  {
+    target:'.sidebar-toggle-btn',
+    arrow:'top',
+    title:'🧠 Dump everything',
+    body:'Tap here to open the sidebar. Write down whatever\'s on your mind — tasks, ideas, reminders. Don\'t organize, just dump.',
+    pre:function(){if(sidebarOpen)toggleSidebar();} // ensure closed so they see the button
+  },
+  {
+    target:'.sidebar',
+    arrow:'right',
+    title:'✋ Drag to schedule',
+    body:'Grab any card and drag it onto a time slot in Day or Week view. Or just leave it here — organize whenever you\'re ready.',
+    pre:function(){if(!sidebarOpen)toggleSidebar();switchSide('braindump');}
+  },
+  {
+    target:'[onclick="openAISchedule()"]',
+    arrow:'bottom',
+    title:'✨ Let Clarity plan your day',
+    body:'Describe what you need to do and Clarity\'s AI builds a schedule for you. Tweak anything, then accept.',
+    pre:function(){if(sidebarOpen)toggleSidebar();}
+  }
+];
+
+function startGuidedTour(){
+  if(localStorage.getItem('clarity_onboarded'))return;
+  // Save name from splash
+  const nameInput=document.getElementById('splashName');
+  if(nameInput){
+    const name=nameInput.value.trim();
     if(name)localStorage.setItem('clarity_username',name);
   }
-  // Hide current step, show next
-  document.getElementById('onboardStep'+step).classList.remove('active');
-  document.getElementById('onboardStep'+(step+1)).classList.add('active');
-  // Update progress dots
-  document.querySelectorAll('#onboardProgress .onboard-dot').forEach((d,i)=>{
-    d.classList.toggle('active',i===step);
+  _tourStep=0;
+  setTimeout(showTourStep,600);
+}
+
+function showTourStep(){
+  // Clean up previous
+  clearTourUI();
+  if(_tourStep>=TOUR_STEPS.length){finishTour();return;}
+
+  const step=TOUR_STEPS[_tourStep];
+  if(step.pre)step.pre();
+
+  setTimeout(()=>{
+    const target=document.querySelector(step.target);
+    if(!target){_tourStep++;showTourStep();return;}
+
+    // Backdrop
+    const backdrop=document.createElement('div');
+    backdrop.className='tour-backdrop';
+    backdrop.id='tourBackdrop';
+    document.body.appendChild(backdrop);
+
+    // Highlight target
+    target.classList.add('tip-highlight');
+    target.style.position=target.style.position||'relative';
+    target.style.zIndex='9999';
+    target._tourStyled=true;
+
+    // Tour card
+    const card=document.createElement('div');
+    card.className='tour-card arrow-'+step.arrow;
+    card.id='tourCard';
+
+    const dots=TOUR_STEPS.map((_,i)=>
+      `<span class="tour-step-dot${i===_tourStep?' active':''}"></span>`
+    ).join('');
+
+    card.innerHTML=`
+      <div class="tour-title">${step.title}</div>
+      <div class="tour-body">${step.body}</div>
+      <div class="tour-actions">
+        <button class="tour-skip" onclick="finishTour()">Skip tour</button>
+        <button class="tour-btn" onclick="nextTourStep()">${_tourStep<TOUR_STEPS.length-1?'Next →':'Got it 🚀'}</button>
+      </div>
+      <div class="tour-step-dots">${dots}</div>`;
+    document.body.appendChild(card);
+
+    // Position card relative to target
+    const rect=target.getBoundingClientRect();
+    if(step.arrow==='top'){
+      card.style.top=(rect.bottom+12)+'px';
+      card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
+    } else if(step.arrow==='bottom'){
+      card.style.top=(rect.top-card.offsetHeight-12)+'px';
+      card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
+    } else if(step.arrow==='right'){
+      card.style.top=rect.top+'px';
+      card.style.right=(window.innerWidth-rect.left+12)+'px';
+    }
+  },200);
+}
+
+function nextTourStep(){
+  _tourStep++;
+  showTourStep();
+}
+
+function clearTourUI(){
+  const card=document.getElementById('tourCard');if(card)card.remove();
+  const bd=document.getElementById('tourBackdrop');if(bd)bd.remove();
+  document.querySelectorAll('.tip-highlight').forEach(el=>{
+    el.classList.remove('tip-highlight');
+    if(el._tourStyled){el.style.zIndex='';delete el._tourStyled;}
   });
 }
-function finishOnboard(){
+
+function finishTour(){
+  clearTourUI();
   localStorage.setItem('clarity_onboarded','true');
-  document.getElementById('onboardOverlay').classList.remove('open');
   renderGreeting();
+  if(sidebarOpen)toggleSidebar();
+}
+
+function showOnboarding(){
+  startGuidedTour();
 }
 
 // ══ DAY GREETING ════════════════════════════════
