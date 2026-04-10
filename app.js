@@ -73,7 +73,19 @@ function syncBottomNav(view){
 
 // ══ ONBOARDING — SPLASH NAME ════════════════════
 function initSplashName(){
-  if(!localStorage.getItem('clarity_onboarded')){
+  const name=localStorage.getItem('clarity_username');
+  const onboarded=localStorage.getItem('clarity_onboarded');
+  if(onboarded&&name){
+    // Returning user with name — show greeting
+    const h=new Date().getHours();
+    let greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+    document.getElementById('splashGreeting').textContent=greet+', '+name;
+    document.getElementById('splashGreeting').style.display='';
+    document.getElementById('splashTagline').style.display='none';
+  } else if(onboarded&&!name){
+    // Returning user without name — just show tagline (default)
+  } else {
+    // First-time user — show name input
     document.getElementById('splashNameWrap').style.display='';
   }
 }
@@ -160,19 +172,25 @@ function showTourStep(){
       <div class="tour-step-dots">${dots}</div>`;
     document.body.appendChild(card);
 
-    // Position card relative to target
+    // Position card relative to target (use RAF to ensure card is rendered)
     const rect=target.getBoundingClientRect();
-    if(step.arrow==='top'){
-      card.style.top=(rect.bottom+12)+'px';
-      card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
-    } else if(step.arrow==='bottom'){
-      card.style.top=(rect.top-card.offsetHeight-12)+'px';
-      card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
-    } else if(step.arrow==='right'){
-      card.style.top=rect.top+'px';
-      card.style.right=(window.innerWidth-rect.left+12)+'px';
-    }
-  },200);
+    requestAnimationFrame(()=>{
+      const cardH=card.offsetHeight;
+      if(step.arrow==='top'){
+        // Card below target, arrow points up
+        card.style.top=(rect.bottom+12)+'px';
+        card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
+      } else if(step.arrow==='bottom'){
+        // Card above target, arrow points down
+        card.style.top=Math.max(8,(rect.top-cardH-12))+'px';
+        card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
+      } else if(step.arrow==='right'){
+        // Card left of target, arrow points right
+        card.style.top=rect.top+'px';
+        card.style.right=(window.innerWidth-rect.left+12)+'px';
+      }
+    });
+  },400);
 }
 
 function nextTourStep(){
@@ -230,6 +248,40 @@ function renderJournalPrompt(){
   // Pick a prompt based on the day (so it rotates daily, not randomly each render)
   const dayNum=Math.floor(Date.now()/86400000);
   el.textContent=JOURNAL_PROMPTS[dayNum%JOURNAL_PROMPTS.length];
+}
+
+// ══ UPCOMING EVENTS WIDGET ══════════════════════
+let _upcomingExpanded=true;
+function renderUpcomingEvents(){
+  const el=document.getElementById('upcomingEvents');if(!el)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayKey=dk(today);
+  const weekEnd=addDays(today,7);
+  // Get events for the next 7 days
+  const upcoming=expandedTasks(today,weekEnd).filter(t=>(t.type||'task')==='event'&&t._instanceDate>=todayKey).sort((a,b)=>(a._instanceDate+a.time).localeCompare(b._instanceDate+b.time));
+  if(!upcoming.length){el.innerHTML='';return;}
+  const count=Math.min(upcoming.length,5);
+  const shown=upcoming.slice(0,count);
+  let html=`<button class="upcoming-toggle" onclick="_upcomingExpanded=!_upcomingExpanded;renderUpcomingEvents()">
+    <span>${_upcomingExpanded?'▾':'▸'}</span> ${upcoming.length} upcoming event${upcoming.length!==1?'s':''}
+  </button>`;
+  if(_upcomingExpanded){
+    html+=`<div class="upcoming-list">`;
+    shown.forEach(t=>{
+      const d=fromDk(t._instanceDate);
+      const isToday=t._instanceDate===todayKey;
+      const dayLabel=isToday?'Today':DAYS_S[d.getDay()];
+      html+=`<div class="upcoming-item" onclick="selDate=fromDk('${t._instanceDate}');switchView('day')">
+        <span class="upcoming-item-day">${dayLabel}</span>
+        <span class="upcoming-item-time">${t.time?fmtT(t.time):''}</span>
+        <span class="upcoming-item-name">${esc(t.name)}</span>
+        ${t.location?`<span class="upcoming-item-loc">📍 ${esc(t.location)}</span>`:''}
+      </div>`;
+    });
+    if(upcoming.length>5)html+=`<div style="text-align:center;font-size:10px;color:var(--text3);padding:4px">+${upcoming.length-5} more</div>`;
+    html+=`</div>`;
+  }
+  el.innerHTML=html;
 }
 
 // ══ DRAWER ══════════════════════════════════
@@ -603,9 +655,10 @@ function renderMonth(){
     let cls='month-cell'+((!cur)?' other-month':'')+(isTod?' today':'');
     let chips=shown.map(t=>{
       const cc=catColor(t.category);
-      let c='m-chip'+(t.done?' done':'');
-      if(t.priority==='high')c+=' pri-high';else if(t.priority==='medium')c+=' pri-medium';
-      return`<span class="${c}" style="border-left-color:${cc}" draggable="true"
+      const isEvent=(t.type||'task')==='event';
+      let c='m-chip'+(t.done?' done':'')+(isEvent?' m-chip-event':'');
+      if(!isEvent&&t.priority==='high')c+=' pri-high';else if(!isEvent&&t.priority==='medium')c+=' pri-medium';
+      return`<span class="${c}" style="border-left-color:${isEvent?'var(--accent)':cc}${isEvent?';background:var(--accent-pale)':''}" draggable="true"
         ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||key}')" ondragend="onTaskDragEnd(event)"
         onclick="openEdit('${t.id}','${t._instanceDate||key}',event)">${esc(t.name)}${t.recur?' ↻':''}</span>`;
     }).join('')+(dt.length>3?`<span class="more-chip">+${dt.length-3}</span>`:'');
@@ -643,6 +696,19 @@ function renderWeek(){
       const hPx=Math.max(14,dur/30*WK_SLOT_H-1);
       const cc=catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
+      const isEvent=(t.type||'task')==='event';
+
+      if(isEvent){
+        return`<div class="wk-task-block event-block" data-id="${t.id}"
+          draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
+          style="top:${topPx}px;height:${hPx}px;background:${cc}"
+          onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
+          <span class="wk-task-block-name">${esc(t.name)}</span>
+          ${dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
+          <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
+        </div>`;
+      }
+
       return`<div class="wk-task-block${isDone?' done-block':''}" data-id="${t.id}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
@@ -676,6 +742,7 @@ function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-che
 // ══ DAY ═════════════════════════════════════
 function renderDay(){
   renderGreeting();
+  renderUpcomingEvents();
   const key=dk(selDate);
   document.getElementById('dayTitle').textContent=DLONG[selDate.getDay()]+', '+MONTHS_LONG[selDate.getMonth()]+' '+selDate.getDate();
   const _dayTasks=tasksOn(dk(selDate));
@@ -684,7 +751,7 @@ function renderDay(){
   const _dayProgress=_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'';
   document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+_dayProgress;
   const sl=slots();
-  const DAY_SLOT_H=52;
+  const DAY_SLOT_H=64;
   // Slots grid (just for click-to-add, no tasks inside)
   let html=sl.map(s=>{
     const sk2=sk(s.h,s.m);
@@ -701,6 +768,23 @@ function renderDay(){
     const cc=catColor(t.category);
     const idate=t._instanceDate||key;
     const isDone=t.done||(t.doneOverrides||[]).includes(idate);
+    const isEvent=(t.type||'task')==='event';
+    const subs=t.subtasks||[];
+    const subsDone=subs.filter(s=>s.done).length;
+    const subsTotal=subs.length;
+
+    if(isEvent){
+      return`<div class="day-task-block event-block" data-id="${t.id}"
+        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+        style="top:${topPx}px;height:${hPx}px;background:${cc}"
+        onclick="openEdit('${t.id}','${idate}',event)">
+        <span class="day-task-block-name">${esc(t.name)}</span>
+        ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+        ${t.link?`<a class="task-link" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 ${esc(t.link.replace(/^https?:\/\//,'').slice(0,30))}</a>`:''}
+        <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
+      </div>`;
+    }
+
     return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
       style="top:${topPx}px;height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
@@ -711,6 +795,8 @@ function renderDay(){
         ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
+      ${t.link?`<a class="task-link" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 ${esc(t.link.replace(/^https?:\/\//,'').slice(0,30))}</a>`:''}
+      ${subsTotal?`<div class="subtask-progress"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${Math.round(subsDone/subsTotal*100)}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
   }).join('');
@@ -719,7 +805,7 @@ function renderDay(){
   const routineBands=getRoutineForDay(key);
   if(routineBands.length){
     const bandLayer=document.createElement('div');
-    bandLayer.style.cssText='position:absolute;top:0;left:72px;right:0;pointer-events:none;z-index:1';
+    bandLayer.style.cssText='position:absolute;top:0;left:80px;right:0;pointer-events:none;z-index:1';
     routineBands.forEach(b=>{
       const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
       const[sh,sm]=b.start.split(':').map(Number);
@@ -1340,6 +1426,7 @@ function checkOverdueTasks(){
   const yesterday=dk(addDays(new Date(),-1));
   const overdue=tasks.filter(t=>
     t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'&&
     !(t._smartRescheduleOffered||[]).includes(t.date)
   );
   if(!overdue.length)return;
@@ -1539,7 +1626,7 @@ function openWrapup(){
     MONTHS_S[weekStart.getMonth()]+' '+weekStart.getDate()+' – '+
     MONTHS_S[weekEnd.getMonth()]+' '+weekEnd.getDate()+', '+weekEnd.getFullYear();
 
-  const weekTasks=expandedTasks(weekStart,weekEnd);
+  const weekTasks=expandedTasks(weekStart,weekEnd).filter(t=>(t.type||'task')==='task');
   const completed=weekTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate));
   const total=weekTasks.length;
   const doneCount=completed.length;
@@ -1671,10 +1758,13 @@ Rules:
 - Put time-specific requests where asked ("at noon", "in the morning")
 - Estimate realistic durations: quick tasks (emails, calls) ~15m, medium tasks ~30-45m, deep work ~60-120m
 - If the user specifies a duration (e.g. "~15m", "1 hour"), use that exact duration
+- If something sounds like an event (class, meeting, appointment, church), set type to "event"
+- For tasks over 60 minutes, add a "subtasks" array breaking the time into focused blocks with breaks
 - Order by logical flow of the day
 
 Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
-[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work"}]`;
+[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","subtasks":[]}]
+For long tasks with subtasks: {"name":"Study Block","time":"14:00","duration":120,"type":"task","subtasks":[{"name":"Review notes","duration":50},{"name":"Break","duration":10},{"name":"Practice problems","duration":50}]}`;
 
   try{
     const response=await fetch("https://api.anthropic.com/v1/messages",{
@@ -1693,14 +1783,17 @@ Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
 
     // Show preview
     const preview=document.getElementById('aiPreview');
-    preview.innerHTML=_aiTasks.map((t,i)=>
-      `<div class="ai-preview-task">
+    preview.innerHTML=_aiTasks.map((t,i)=>{
+      const isEvent=(t.type||'task')==='event';
+      const subs=t.subtasks||[];
+      let subsHtml=subs.length?`<div style="margin-left:26px;margin-top:3px">${subs.map(s=>`<div style="font-size:10px;color:var(--text3);padding-left:10px;border-left:2px solid var(--border)">↳ ${esc(s.name)}${s.duration?' · '+durLabel(s.duration):''}</div>`).join('')}</div>`:'';
+      return`<div class="ai-preview-task" style="${isEvent?'border-left:3px solid var(--accent);background:var(--accent-pale)':''}">
         <span style="font-size:11px;font-weight:700;color:var(--text3);min-width:18px">${i+1}.</span>
         <span class="ai-preview-time">${fmtT(t.time)}</span>
-        <span class="ai-preview-name">${esc(t.name)}</span>
+        <span class="ai-preview-name">${esc(t.name)}${isEvent?' <span style="font-size:9px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">EVENT</span>':''}</span>
         <span class="ai-preview-dur">${durLabel(t.duration||30)}</span>
-      </div>`
-    ).join('');
+      </div>${subsHtml}`;
+    }).join('');
     document.getElementById('aiPreviewWrap').style.display='';
     document.getElementById('aiGenBtn').style.display='';
     document.getElementById('aiGenLabel').textContent='Regenerate';
@@ -1721,15 +1814,20 @@ Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
 function acceptAISchedule(){
   const dateVal=document.getElementById('aiDate').value;
   _aiTasks.forEach(t=>{
+    const subs=(t.subtasks||[]).map(s=>({id:genId(),name:s.name,duration:s.duration||0,done:false}));
     tasks.push({
       id:genId(),
       name:t.name,
+      type:t.type||'task',
       date:dateVal,
       time:t.time,
       duration:t.duration||30,
       priority:t.priority||'none',
       category:t.category||'none',
+      location:t.location||'',
+      link:'',
       notes:'',
+      subtasks:subs,
       scheduled:true,
       done:false,
       recur:false,recurN:1,recurU:'day',
@@ -1740,7 +1838,12 @@ function acceptAISchedule(){
   selDate=fromDk(dateVal);
   switchView('day');
   renderAll();
-  showToast(`${_aiTasks.length} tasks added to your schedule`);
+  const evtCount=_aiTasks.filter(t=>(t.type||'task')==='event').length;
+  const taskCount=_aiTasks.length-evtCount;
+  let msg=[];
+  if(taskCount)msg.push(`${taskCount} task${taskCount!==1?'s':''}`);
+  if(evtCount)msg.push(`${evtCount} event${evtCount!==1?'s':''}`);
+  showToast(msg.join(' and ')+' added to your schedule');
   _aiTasks=[];
 }
 
@@ -2186,6 +2289,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
 function toggleDone(id,instanceDate,e,el){
   e.stopPropagation();if(AC.state==='suspended')AC.resume();
   const t=tasks.find(t=>t.id===id);if(!t)return;
+  if((t.type||'task')==='event')return; // events can't be checked off
   if(t.recur&&instanceDate){
     if(!t.doneOverrides)t.doneOverrides=[];
     const idx=t.doneOverrides.indexOf(instanceDate);
@@ -2265,8 +2369,108 @@ function onResizeUp(){
 
 let mMode=null,mDate=null,mTime=null,mId=null,mInstanceDate=null;
 function toggleRecurUI(){document.getElementById('recurOpts').style.display=document.getElementById('fRecurOn').checked?'flex':'none'}
+// ══ ITEM TYPE (task vs event) ════════════════════
+let _itemType='task';
+let _modalSubtasks=[];
+
+function setItemType(type){
+  _itemType=type;
+  document.getElementById('typeBtnTask').classList.toggle('active',type==='task');
+  document.getElementById('typeBtnEvent').classList.toggle('active',type==='event');
+  document.getElementById('fNameLabel').textContent=type==='event'?'Event':'Task';
+  document.getElementById('fName').placeholder=type==='event'?'What\'s happening?':'What needs to get done?';
+  document.getElementById('fLocationWrap').style.display=type==='event'?'':'none';
+  document.getElementById('fPriRow').style.display=type==='event'?'none':'';
+  document.getElementById('fSubtasksWrap').style.display=type==='event'?'none':'';
+  document.getElementById('fRecurLabel').textContent=type==='event'?'event':'task';
+  document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
+}
+function setQaType(type){
+  _qaType=type;
+  document.getElementById('qaTypeBtnTask').classList.toggle('active',type==='task');
+  document.getElementById('qaTypeBtnEvent').classList.toggle('active',type==='event');
+  document.getElementById('qaName').placeholder=type==='event'?'Event name…':'Task name…';
+}
+
+// ══ SUBTASK MANAGEMENT ══════════════════════════
+function renderModalSubtasks(){
+  const list=document.getElementById('fSubtaskList');
+  if(!_modalSubtasks.length){list.innerHTML='';return;}
+  list.innerHTML=_modalSubtasks.map((s,i)=>`
+    <div class="subtask-item">
+      <div class="subtask-check${s.done?' checked':''}" onclick="toggleSubtaskInModal(${i})"></div>
+      <span class="subtask-name${s.done?' done':''}">${esc(s.name)}</span>
+      ${s.duration?`<span class="subtask-dur">${durLabel(s.duration)}</span>`:''}
+      ${s.duration&&!s.done&&mId?`<button class="subtask-focus-btn" onclick="event.stopPropagation();startSubtaskFocus(${i})" title="Focus on this subtask">▶</button>`:''}
+      <button class="subtask-del" onclick="deleteSubtaskFromModal(${i})">✕</button>
+    </div>
+  `).join('');
+}
+function addSubtaskFromModal(){
+  const input=document.getElementById('fSubtaskInput');
+  const name=input.value.trim();if(!name)return;
+  _modalSubtasks.push({id:genId(),name,duration:0,done:false});
+  input.value='';
+  renderModalSubtasks();
+  input.focus();
+}
+function deleteSubtaskFromModal(i){
+  _modalSubtasks.splice(i,1);
+  renderModalSubtasks();
+}
+function toggleSubtaskInModal(i){
+  _modalSubtasks[i].done=!_modalSubtasks[i].done;
+  renderModalSubtasks();
+  // Auto-save subtask state to task (so closing without Save doesn't lose checkbox changes)
+  if(mMode==='edit'&&mId){
+    const t=tasks.find(t=>t.id===mId);
+    if(t){t.subtasks=JSON.parse(JSON.stringify(_modalSubtasks));save();renderAll();}
+  }
+}
+function startSubtaskFocus(idx){
+  if(!mId)return;
+  const sub=_modalSubtasks[idx];if(!sub)return;
+  // Save subtasks first
+  const t=tasks.find(t=>t.id===mId);
+  if(t)t.subtasks=JSON.parse(JSON.stringify(_modalSubtasks));
+  save();
+  closeModal();
+  // Start focus with subtask duration
+  startFocusForTask(mId,mInstanceDate);
+  if(sub.duration){
+    _focusDur=sub.duration;_focusRemaining=sub.duration*60;_focusTotal=sub.duration*60;
+    buildFocusDurButtons(sub.duration);
+    updateFocusDisplay();
+  }
+  document.getElementById('focusTaskName').textContent=sub.name;
+  document.getElementById('focusTaskMeta').textContent='Subtask of: '+(t?t.name:'');
+}
+async function generateSubtasks(){
+  const taskName=document.getElementById('fName').value.trim();
+  const dur=_selDur||30;
+  if(!taskName){showToast('Enter a task name first');return;}
+  const btn=document.querySelector('.subtask-gen-btn');
+  btn.textContent='⏳';btn.style.pointerEvents='none';
+  try{
+    const prompt=`The user has a task called "${taskName}" with ${dur} minutes total. Break it into focused subtasks with realistic durations in minutes. Include short breaks if >60min. Respond with ONLY a JSON array: [{"name":"Subtask","duration":25}]`;
+    const response=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{role:"user",content:prompt}]})
+    });
+    const data=await response.json();
+    const text=data.content.map(i=>i.text||'').join('');
+    const clean=text.replace(/```json|```/g,'').trim();
+    const subs=JSON.parse(clean);
+    subs.forEach(s=>_modalSubtasks.push({id:genId(),name:s.name,duration:s.duration||0,done:false}));
+    renderModalSubtasks();
+  }catch(err){showToast('Could not generate subtasks');}
+  btn.textContent='✨';btn.style.pointerEvents='';
+}
+
 function openNew(dateKey,time){
   mMode='new';mDate=dateKey;mTime=time;mId=null;mInstanceDate=null;
+  _itemType='task';_modalSubtasks=[];
+  setItemType('task');
   document.getElementById('mTitle').textContent='New Task';
   const d=fromDk(dateKey);
   document.getElementById('mSub').textContent=DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate()+' · '+fmtT(time);
@@ -2274,31 +2478,40 @@ function openNew(dateKey,time){
   document.getElementById('fPri').value='none';
   buildAllCatSelects('none');
   document.getElementById('fNotes').value='';
+  document.getElementById('fLink').value='';
+  document.getElementById('fLocation').value='';
   document.getElementById('fRecurOn').checked=false;
   document.getElementById('fRecurN').value=1;
   document.getElementById('fRecurU').value='day';
   document.getElementById('recurOpts').style.display='none';
   document.getElementById('btnDel').style.display='none';
   buildDurSelect(30);
+  renderModalSubtasks();
   showModal('mOverlay');
 }
 function openEdit(id,instanceDate,e){
   e.stopPropagation();
   const t=tasks.find(t=>t.id===id);if(!t)return;
   mMode='edit';mId=id;mInstanceDate=instanceDate;
-  document.getElementById('mTitle').textContent='Edit Task';
+  _itemType=t.type||'task';
+  _modalSubtasks=JSON.parse(JSON.stringify(t.subtasks||[]));
+  setItemType(_itemType);
+  document.getElementById('mTitle').textContent='Edit '+(_itemType==='event'?'Event':'Task');
   const d=fromDk(t.date);
   document.getElementById('mSub').textContent=DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate()+(t.time?' · '+fmtT(t.time):'');
   document.getElementById('fName').value=t.name;
   document.getElementById('fPri').value=t.priority||'none';
   buildAllCatSelects(t.category||'none');
   document.getElementById('fNotes').value=t.notes||'';
+  document.getElementById('fLink').value=t.link||'';
+  document.getElementById('fLocation').value=t.location||'';
   document.getElementById('fRecurOn').checked=!!t.recur;
   document.getElementById('fRecurN').value=t.recurN||1;
   document.getElementById('fRecurU').value=t.recurU||'day';
   document.getElementById('recurOpts').style.display=t.recur?'flex':'none';
   document.getElementById('btnDel').style.display='block';
   buildDurSelect(t.duration||30);
+  renderModalSubtasks();
   showModal('mOverlay');
 }
 function showModal(id){
@@ -2320,8 +2533,12 @@ function saveTask(){
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
   const recur=document.getElementById('fRecurOn').checked,recurN=parseInt(document.getElementById('fRecurN').value)||1,recurU=document.getElementById('fRecurU').value;
   const duration=_selDur||30;
-  if(mMode==='new'){tasks.push({id:genId(),name,priority,category,notes,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,doneOverrides:[],deletedOccurrences:[]});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,priority,category,notes,duration,recur,recurN,recurU});}
+  const link=document.getElementById('fLink').value.trim();
+  const location=document.getElementById('fLocation').value.trim();
+  const type=_itemType;
+  const subtasks=_modalSubtasks;
+  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,link,location,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
+  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,link,location,duration,recur,recurN,recurU,subtasks});}
   save();closeModal();renderAll();
 }
 function startDelete(){
@@ -2674,7 +2891,7 @@ window.toggleDone=function(id,instanceDate,e,el){
   const todayKey=dk(new Date());
   if(curView==='day'&&dk(selDate)===todayKey){
     const dayTasks=tasksOn(todayKey);
-    if(dayTasks.length>0&&dayTasks.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
+    const _tasksOnly=dayTasks.filter(t=>(t.type||'task')==='task');if(_tasksOnly.length>0&&_tasksOnly.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
       setTimeout(fireConfetti,300);
     }
   }
@@ -3187,7 +3404,8 @@ setInterval(()=>{if(curView==='day'||curView==='week')renderNowLine();},60000);
 function updateOverdueBadge(){
   const today=dk(new Date());
   const overdue=tasks.filter(t=>
-    t.scheduled&&t.date&&t.date<today&&!t.done&&!t.recur
+    t.scheduled&&t.date&&t.date<today&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'
   );
   const badge=document.getElementById('overdueBadge');
   if(!badge)return;
@@ -3208,10 +3426,13 @@ function goOverdue(){
 let _qaOpen=false;
 
 let _qaDur=30;
+let _qaType='task';
 function openQuickAdd(){
   if(_qaOpen)return;
   _qaOpen=true;
   _qaDur=30;
+  _qaType='task';
+  setQaType('task');
   const bar=document.getElementById('quickAddBar');
   const now=new Date();
   document.getElementById('qaDate').value=dk(now);
@@ -3249,9 +3470,9 @@ function saveQuickAdd(){
   const timeVal=document.getElementById('qaTime').value||'09:00';
   const priority=document.getElementById('qaPri').value;
   tasks.push({
-    id:genId(),name,priority,category:'none',notes:'',
+    id:genId(),name,type:_qaType,priority:_qaType==='event'?'none':priority,category:'none',notes:'',link:'',location:'',
     date:dateVal,time:timeVal,duration:_qaDur,scheduled:true,done:false,
-    recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
+    recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]
   });
   save();renderAll();closeQuickAdd();
   showToast('"'+name+'" added');

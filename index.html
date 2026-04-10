@@ -22,10 +22,11 @@
     <div class="splash-logo-dot"></div>
     <div class="splash-logo-text">Clarity</div>
   </div>
-  <div class="splash-tagline">Your personal scheduler</div>
+  <div class="splash-tagline" id="splashTagline">Your personal scheduler</div>
   <div class="splash-name-wrap" id="splashNameWrap" style="display:none">
     <input class="splash-name-input" id="splashName" placeholder="What's your name?" maxlength="30" autocomplete="given-name">
   </div>
+  <div class="splash-greeting" id="splashGreeting" style="display:none"></div>
   <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:32px">Open Clarity →</button>
 </div>
 
@@ -218,23 +219,23 @@
 
 <!-- ══ BOTTOM NAV ══ -->
 <nav class="bottom-nav" id="bottomNav">
-  <button class="bnav-tab active" onclick="switchView('day')">
+  <button class="bnav-tab active" data-tip="Day" onclick="switchView('day')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.4"/><line x1="2" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="11.5" r="1.5" fill="currentColor"/></svg>
     <span>Day</span>
   </button>
-  <button class="bnav-tab" onclick="switchView('week')">
+  <button class="bnav-tab" data-tip="Week" onclick="switchView('week')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.4"/><line x1="2" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.4"/><line x1="6" y1="3" x2="6" y2="16" stroke="currentColor" stroke-width="1" opacity=".3"/><line x1="10" y1="3" x2="10" y2="16" stroke="currentColor" stroke-width="1" opacity=".3"/><line x1="14" y1="3" x2="14" y2="16" stroke="currentColor" stroke-width="1" opacity=".3"/></svg>
     <span>Week</span>
   </button>
-  <button class="bnav-tab" onclick="switchView('month')">
+  <button class="bnav-tab" data-tip="Month" onclick="switchView('month')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.4"/><line x1="2" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.4"/><circle cx="6" cy="10" r=".8" fill="currentColor"/><circle cx="9" cy="10" r=".8" fill="currentColor"/><circle cx="12" cy="10" r=".8" fill="currentColor"/><circle cx="6" cy="13" r=".8" fill="currentColor"/><circle cx="9" cy="13" r=".8" fill="currentColor"/></svg>
     <span>Month</span>
   </button>
-  <button class="bnav-tab" onclick="switchView('year')">
+  <button class="bnav-tab" data-tip="Year" onclick="switchView('year')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
     <span>Year</span>
   </button>
-  <button class="bnav-tab" onclick="switchView('categories')">
+  <button class="bnav-tab" data-tip="Tasks" onclick="switchView('categories')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="6" cy="6" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="6" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="13" r="2.5" stroke="currentColor" stroke-width="1.3"/></svg>
     <span>Tasks</span>
   </button>
@@ -270,6 +271,7 @@
           <div class="day-greeting" id="dayGreeting"></div>
           <div class="day-title" id="dayTitle"></div>
           <div class="day-sub" id="daySub"></div>
+          <div class="upcoming-events" id="upcomingEvents"></div>
         </div>
         <div class="day-scroll"><div class="day-timeline" id="dayTimeline"></div></div>
       </div>
@@ -293,19 +295,19 @@
   <!-- RIGHT SIDEBAR -->
   <div class="sidebar" id="sidebar">
     <div class="side-tabs" id="sideTabs">
-      <button class="side-tab active" onclick="switchSide('braindump')" title="Brain Dump">
+      <button class="side-tab active" data-tip="Brain Dump" onclick="switchSide('braindump')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C4.7 1 2 3.2 2 6c0 1.7 1 3.2 2.5 4.1V12a1 1 0 001 1h5a1 1 0 001-1v-1.9C13 9.2 14 7.7 14 6c0-2.8-2.7-5-6-5z" stroke="currentColor" stroke-width="1.3"/><line x1="6" y1="14" x2="10" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       </button>
-      <button class="side-tab" onclick="switchSide('priority')" title="Priorities">
+      <button class="side-tab" data-tip="Priorities" onclick="switchSide('priority')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14V3l5 3-5 3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><line x1="8" y1="3" x2="13" y2="3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="8" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="8" y1="11" x2="11" y2="11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       </button>
-      <button class="side-tab" onclick="switchSide('focus')" title="Focus Timer">
+      <button class="side-tab" data-tip="Focus" onclick="switchSide('focus')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><polyline points="8,4 8,8 11,10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="side-tab" id="suggTab" onclick="switchSide('suggestions')" title="Ideas">
+      <button class="side-tab" id="suggTab" data-tip="Ideas" onclick="switchSide('suggestions')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M6 10v2a2 2 0 004 0v-2" stroke="currentColor" stroke-width="1.3"/><line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="6" y1="5.5" x2="8" y2="4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
       </button>
-      <button class="side-tab" id="journalTab" onclick="switchSide('journal')" title="Journal">
+      <button class="side-tab" id="journalTab" data-tip="Journal" onclick="switchSide('journal')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1" width="10" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><line x1="6" y1="4" x2="11" y2="4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="7" x2="11" y2="7" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="10" x2="9" y2="10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
       </button>
     </div>
@@ -407,8 +409,15 @@
 <div class="modal-overlay" id="mOverlay" onclick="handleMBg(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <div><div class="modal-title" id="mTitle">New Task</div><div class="modal-sub" id="mSub"></div></div>
-    <div class="fg"><label class="flbl">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
-    <div class="frow">
+    <!-- Type toggle -->
+    <div class="type-toggle-row">
+      <button class="type-btn active" id="typeBtnTask" onclick="setItemType('task')">Task</button>
+      <button class="type-btn" id="typeBtnEvent" onclick="setItemType('event')">Event</button>
+    </div>
+    <div class="fg"><label class="flbl" id="fNameLabel">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <!-- Location (events only) -->
+    <div class="fg" id="fLocationWrap" style="display:none"><label class="flbl">Location</label><input class="fi" id="fLocation" placeholder="Room, address, or link…" style="font-size:12px"></div>
+    <div class="frow" id="fPriRow">
       <div class="fg"><label class="flbl">Priority</label>
         <select class="fi" id="fPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
       </div>
@@ -416,7 +425,7 @@
     </div>
     <div class="fg"><label class="flbl">Duration</label><div class="dur-select" id="fDurSelect"></div></div>
     <div class="recur-box">
-      <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring task</label>
+      <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring <span id="fRecurLabel">task</span></label>
       <div class="recur-opts" id="recurOpts" style="display:none">
         <span style="font-size:12px;color:var(--text2)">Every</span>
         <input class="fi" id="fRecurN" type="number" min="1" max="99" value="1" style="width:50px;padding:4px 7px;font-size:12px">
@@ -425,7 +434,18 @@
         </select>
       </div>
     </div>
+    <!-- Link -->
+    <div class="fg"><label class="flbl">Link <span style="font-weight:400;color:var(--text3)">(optional)</span></label><input class="fi" id="fLink" placeholder="https://…" type="url" style="font-size:12px"></div>
     <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <!-- Subtasks (tasks only) -->
+    <div class="fg" id="fSubtasksWrap">
+      <label class="flbl">Subtasks</label>
+      <div class="subtask-list" id="fSubtaskList"></div>
+      <div class="subtask-add-row">
+        <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="+ Add a subtask" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
+        <button class="subtask-gen-btn" onclick="generateSubtasks()" title="AI generate subtasks">✨</button>
+      </div>
+    </div>
     <div class="modal-acts">
       <button class="btn-d" id="btnDel" onclick="startDelete()" style="display:none">Delete</button>
       <button class="btn-c" onclick="closeModal()">Cancel</button>
@@ -760,6 +780,10 @@
 <div id="quickAddBackdrop" onclick="closeQuickAdd()" style="display:none;position:fixed;inset:0;z-index:799"></div>
 <div id="quickAddBar" role="dialog" aria-label="Quick add task">
   <div class="qa-title">Quick Add</div>
+  <div class="type-toggle-row" style="margin-bottom:8px">
+    <button class="type-btn active" id="qaTypeBtnTask" onclick="setQaType('task')">Task</button>
+    <button class="type-btn" id="qaTypeBtnEvent" onclick="setQaType('event')">Event</button>
+  </div>
   <input class="qa-input" id="qaName" placeholder="Task name…" autocomplete="off">
   <div class="qa-row">
     <input class="qa-fi" type="date" id="qaDate">
