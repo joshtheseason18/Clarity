@@ -98,7 +98,7 @@ const TOUR_STEPS=[
   },
   {
     target:'[onclick="openAISchedule()"]',
-    arrow:'bottom',
+    arrow:'top',
     title:'✨ Let Clarity plan your day',
     body:'Describe what you need to do and Clarity\'s AI builds a schedule for you. Tweak anything, then accept.',
     pre:function(){if(sidebarOpen)toggleSidebar();}
