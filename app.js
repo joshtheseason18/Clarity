@@ -71,6 +71,67 @@ function syncBottomNav(view){
   document.querySelectorAll('.bnav-tab').forEach((b,i)=>b.classList.toggle('active',i===map[view]));
 }
 
+// ══ ONBOARDING ══════════════════════════════════
+function showOnboarding(){
+  if(localStorage.getItem('clarity_onboarded'))return;
+  setTimeout(()=>{
+    document.getElementById('onboardOverlay').classList.add('open');
+    const nameInput=document.getElementById('onboardName');
+    if(nameInput)setTimeout(()=>nameInput.focus(),400);
+  },800);
+}
+function onboardNext(step){
+  // Save name on step 1
+  if(step===1){
+    const name=document.getElementById('onboardName').value.trim();
+    if(name)localStorage.setItem('clarity_username',name);
+  }
+  // Hide current step, show next
+  document.getElementById('onboardStep'+step).classList.remove('active');
+  document.getElementById('onboardStep'+(step+1)).classList.add('active');
+  // Update progress dots
+  document.querySelectorAll('#onboardProgress .onboard-dot').forEach((d,i)=>{
+    d.classList.toggle('active',i===step);
+  });
+}
+function finishOnboard(){
+  localStorage.setItem('clarity_onboarded','true');
+  document.getElementById('onboardOverlay').classList.remove('open');
+  renderGreeting();
+}
+
+// ══ DAY GREETING ════════════════════════════════
+function renderGreeting(){
+  const el=document.getElementById('dayGreeting');if(!el)return;
+  const h=new Date().getHours();
+  const name=localStorage.getItem('clarity_username')||'';
+  let greeting;
+  if(h<12)greeting='Good morning';
+  else if(h<17)greeting='Good afternoon';
+  else greeting='Good evening';
+  el.textContent=name?`${greeting}, ${name}`:greeting;
+}
+
+// ══ JOURNAL PROMPTS ═════════════════════════════
+const JOURNAL_PROMPTS=[
+  '💭 What went well today?',
+  '🌱 What\'s one thing you learned?',
+  '🙏 What are you grateful for right now?',
+  '🔄 What would you do differently today?',
+  '⭐ What was the highlight of your day?',
+  '😌 How are you really feeling right now?',
+  '🎯 Did you make progress on what matters most?',
+  '💡 What\'s one idea you had today?',
+  '🤝 Who made your day better?',
+  '🌅 What are you looking forward to tomorrow?',
+];
+function renderJournalPrompt(){
+  const el=document.getElementById('journalPrompt');if(!el)return;
+  // Pick a prompt based on the day (so it rotates daily, not randomly each render)
+  const dayNum=Math.floor(Date.now()/86400000);
+  el.textContent=JOURNAL_PROMPTS[dayNum%JOURNAL_PROMPTS.length];
+}
+
 // ══ DRAWER ══════════════════════════════════
 function openDrawer(){
   document.getElementById('drawer').classList.add('open');
@@ -514,6 +575,7 @@ function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-che
 
 // ══ DAY ═════════════════════════════════════
 function renderDay(){
+  renderGreeting();
   const key=dk(selDate);
   document.getElementById('dayTitle').textContent=DLONG[selDate.getDay()]+', '+MONTHS_LONG[selDate.getMonth()]+' '+selDate.getDate();
   const _dayTasks=tasksOn(dk(selDate));
@@ -1244,6 +1306,8 @@ const _origEnterApp=enterApp;
 window.enterApp=function(){
   _origEnterApp();
   setTimeout(checkOverdueTasks,1500);
+  showOnboarding();
+  renderGreeting();
 };
 
 // ══ CANVAS LMS IMPORT ════════════════════════════
@@ -1542,7 +1606,12 @@ Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
     document.getElementById('aiGenLabel').textContent='Regenerate';
     document.getElementById('aiAcceptBtn').style.display='';
   }catch(err){
-    document.getElementById('aiError').textContent='Something went wrong — try again. '+err.message;
+    const isFetchErr=err.message&&(err.message.includes('fetch')||err.message.includes('network')||err.message.includes('Failed'));
+    if(isFetchErr){
+      document.getElementById('aiError').textContent='AI planning requires the Anthropic API. If you\'re using Clarity standalone, set up a Supabase Edge Function to proxy the API — or use this feature inside claude.ai.';
+    } else {
+      document.getElementById('aiError').textContent='Something went wrong — try again. '+err.message;
+    }
     document.getElementById('aiError').style.display='';
   }
   document.getElementById('aiGenLabel').style.display='';
@@ -2290,6 +2359,7 @@ function exportData(){
   const data={
     tasks,brainDump,categories,
     routineBlocks,
+    username:localStorage.getItem('clarity_username')||'',
     journal:JSON.parse(localStorage.getItem('clarity_journal')||'{}'),
     theme:currentTheme,dark:isDark,military:useMilitary,
     weekStartDay,
@@ -2317,6 +2387,7 @@ function importData(e){
       if(data.military!==undefined)setTimeFormat(data.military);
       if(data.routineBlocks){routineBlocks=data.routineBlocks;saveRoutine();renderRoutineList();}
       if(data.weekStartDay!==undefined)setWeekStart(data.weekStartDay);
+      if(data.username)localStorage.setItem('clarity_username',data.username);
       save();renderAll();
       showToast('Data imported successfully');
     }catch(err){
@@ -3142,6 +3213,9 @@ function openJournalForDate(dateKey){
   // Text
   const ta = document.getElementById('journalTa');
   if(ta) ta.value = entry.text || '';
+
+  // Journal prompt
+  renderJournalPrompt();
 
   // Hide saved hint
   const hint = document.getElementById('journalSavedHint');

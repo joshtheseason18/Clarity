@@ -26,6 +26,51 @@
   <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:32px">Open Clarity →</button>
 </div>
 
+<!-- ══ ONBOARDING ══ -->
+<div class="onboard-overlay" id="onboardOverlay">
+  <div class="onboard-card">
+    <!-- Step 1: Name -->
+    <div class="onboard-step active" id="onboardStep1">
+      <div class="onboard-emoji">👋</div>
+      <div class="onboard-title">Welcome to Clarity</div>
+      <div class="onboard-body">Let's make this yours. What should we call you?</div>
+      <input class="onboard-input" id="onboardName" placeholder="Your first name" maxlength="30" autocomplete="given-name">
+      <button class="onboard-btn" onclick="onboardNext(1)">Continue →</button>
+      <button class="onboard-skip" onclick="onboardNext(1)">Skip</button>
+    </div>
+    <!-- Step 2: Brain Dump -->
+    <div class="onboard-step" id="onboardStep2">
+      <div class="onboard-emoji">🧠</div>
+      <div class="onboard-title">Dump everything</div>
+      <div class="onboard-body">Open the sidebar and write down whatever's on your mind — tasks, ideas, reminders. Don't organize, just dump. You'll sort it later.</div>
+      <div class="onboard-visual">
+        <div class="onboard-card-mini">Buy groceries</div>
+        <div class="onboard-card-mini">Study for exam</div>
+        <div class="onboard-card-mini">Call mom</div>
+      </div>
+      <button class="onboard-btn" onclick="onboardNext(2)">Got it →</button>
+    </div>
+    <!-- Step 3: AI Planner -->
+    <div class="onboard-step" id="onboardStep3">
+      <div class="onboard-emoji">✨</div>
+      <div class="onboard-title">Let Clarity plan your day</div>
+      <div class="onboard-body">Hit "Plan My Day" and describe what you need to do. Clarity's AI builds a schedule for you — then tweak it however you want.</div>
+      <div class="onboard-dots">
+        <span class="onboard-dot"></span>
+        <span class="onboard-dot"></span>
+        <span class="onboard-dot active"></span>
+      </div>
+      <button class="onboard-btn" onclick="finishOnboard()">Let's go 🚀</button>
+    </div>
+    <!-- Step dots -->
+    <div class="onboard-progress" id="onboardProgress">
+      <span class="onboard-dot active"></span>
+      <span class="onboard-dot"></span>
+      <span class="onboard-dot"></span>
+    </div>
+  </div>
+</div>
+
 <!-- ══ DRAWER BACKDROP ══ -->
 <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
 
@@ -264,6 +309,7 @@
     <div class="view active" id="view-day">
       <div class="day-view">
         <div class="day-hdr">
+          <div class="day-greeting" id="dayGreeting"></div>
           <div class="day-title" id="dayTitle"></div>
           <div class="day-sub" id="daySub"></div>
         </div>
@@ -381,6 +427,7 @@
           </div>
         </div>
         <div class="journal-body">
+          <div class="journal-prompt" id="journalPrompt"></div>
           <div class="journal-entry-wrap">
             <textarea class="journal-ta" id="journalTa"
               placeholder="Write anything — what happened today, how you're feeling, something you're grateful for, or a thought you want to hold onto…"
