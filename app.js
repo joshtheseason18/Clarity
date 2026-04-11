@@ -792,7 +792,7 @@ function renderDay(){
         <span class="day-task-block-name">${esc(t.name)}</span>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-        ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"><div class="day-subtask-check${s.done?' checked':''}"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+        ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
       </div>`;
     }
@@ -808,7 +808,7 @@ function renderDay(){
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done'  :''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"><div class="day-subtask-check${s.done?' checked':''}"></div><span class="day-subtask-name">${esc(s.name)}</span>${s.duration?`<span class="day-subtask-dur">${durLabel(s.duration)}</span>`:''}</div>`).join('')}</div>`:''}
+      ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span>${s.duration?`<span class="day-subtask-dur">${durLabel(s.duration)}</span>`:''}</div>`).join('')}</div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
   }).join('');
@@ -2536,6 +2536,50 @@ function toggleSubtaskInline(taskId,subIdx){
   if(!t||!t.subtasks||!t.subtasks[subIdx])return;
   t.subtasks[subIdx].done=!t.subtasks[subIdx].done;
   save();renderAll();
+}
+// Save subtask name edited inline on Day view
+function saveSubtaskInline(taskId,subIdx,el){
+  const t=tasks.find(t=>t.id===taskId);
+  if(!t||!t.subtasks||!t.subtasks[subIdx])return;
+  const newName=el.textContent.trim();
+  if(!newName){
+    // Empty name — delete the subtask
+    t.subtasks.splice(subIdx,1);
+  } else {
+    t.subtasks[subIdx].name=newName;
+  }
+  save();
+}
+// Handle Enter/Escape on inline subtask editing
+function onSubtaskKeydown(e,taskId,subIdx,el){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    // Save current
+    saveSubtaskInline(taskId,subIdx,el);
+    // Create new subtask below
+    const t=tasks.find(t=>t.id===taskId);
+    if(!t)return;
+    if(!t.subtasks)t.subtasks=[];
+    t.subtasks.splice(subIdx+1,0,{id:genId(),name:'',duration:0,done:false});
+    save();renderAll();
+    // Focus the new subtask's name span
+    setTimeout(()=>{
+      const blocks=document.querySelectorAll(`.day-task-block[data-id="${taskId}"] .day-subtask-name, .day-task-block.event-block[data-id="${taskId}"] .day-subtask-name`);
+      const target=blocks[subIdx+1];
+      if(target){target.focus();placeCaretAtEnd(target);}
+    },50);
+  } else if(e.key==='Escape'){
+    el.blur();
+  }
+}
+// Helper: place caret at end of contenteditable
+function placeCaretAtEnd(el){
+  const range=document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel=window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 function openNew(dateKey,time){

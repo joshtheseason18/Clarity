@@ -298,6 +298,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .day-subtask-name{
   font-size:11px;color:var(--text2);font-weight:400;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  outline:none;cursor:text;padding:0 2px;border-radius:3px;
+  transition:background .15s;min-width:20px;
+}
+.day-subtask-name:focus{
+  background:var(--surface);box-shadow:0 0 0 1.5px var(--accent);
+  white-space:normal;overflow:visible;
+}
+.day-subtask-name:empty::before{
+  content:'Type here…';color:var(--text3);font-style:italic;
 }
 .day-subtask.done .day-subtask-name{
   text-decoration:line-through;opacity:.4;
@@ -453,7 +462,7 @@ header{
   opacity:1;transform:translateX(-50%) translateY(0);
   background:none;color:var(--accent);
   font-size:8px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;
-  padding:2px 0;
+  padding:2px 0;box-shadow:none;border-radius:0;
 }
 
 /* ══ SEARCH BAR (now below header) ═══════════ */
