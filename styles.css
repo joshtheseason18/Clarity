@@ -738,10 +738,10 @@ header{
 .allday-pill:hover{opacity:.8;box-shadow:0 1px 6px rgba(0,0,0,.1)}
 .allday-pill.done{opacity:.4;text-decoration:line-through}
 
-.day-scroll{flex:1;overflow-y:auto}
+.day-scroll{flex:1;overflow-y:auto;overflow-x:hidden} /* overflow-x:hidden forces grid 1fr to reflow when sidebar toggles */
 
 /* Timeline grid: two columns — time labels | slots */
-.day-timeline{display:grid;grid-template-columns:80px 1fr;padding-bottom:40px;position:relative}
+.day-timeline{display:grid;grid-template-columns:80px 1fr;padding-bottom:40px;position:relative;min-width:0}
 
 /* Time label: no fixed height — stretches to match its grid-row partner */
 .day-time-lbl{
@@ -766,13 +766,18 @@ header{
   align-items:flex-start;
 }
 
-/* Slot: in-flow container — height is driven by task block's min-height */
+/* Slot: in-flow container.
+   Empty slots: min-height from CSS (76px/64px mobile) — always consistent.
+   Task slots: the task block's inline min-height drives the row height via flex.
+   overflow:hidden on .day-task-block means the block's layout height = its content height,
+   so the slot stretches to contain ALL subtasks without bleeding into the next row. */
 .day-slot{
   min-height:76px;
   border-bottom:1px solid var(--border);
   cursor:pointer;transition:background .12s;
   position:relative;
   display:flex;flex-direction:column;
+  min-width:0; /* prevent slot from expanding the grid column */
 }
 .day-slot.half{border-bottom-style:dashed;border-bottom-color:var(--surface3)}
 .day-slot.has-task{cursor:default;padding:0}
@@ -780,6 +785,15 @@ header{
 .day-slot.drag-over{background:var(--accent-pale)!important;outline:1px dashed var(--accent)}
 .day-slot.snap-flash{animation:snapFlash .5s ease-out}
 .day-slot-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0;pointer-events:none}
+
+/* Wrapper around each task block + its resize handle.
+   position:relative so the handle can be absolutely positioned outside overflow:hidden.
+   The slot (flex column) sizes to fit this wrapper, which sizes to fit the block. */
+.day-task-slot-wrap{
+  position:relative;
+  display:flex;flex-direction:column;
+  /* min-height set inline per scheduled duration */
+}
 
 .recur-icon{font-size:10px;opacity:.5;flex-shrink:0}
 
@@ -805,12 +819,15 @@ header{
 /* Day task block — in-flow inside .day-slot, min-height set per duration in JS */
 .day-task-block{
   position:relative;
-  /* Let the flex column parent size the width — no hardcoded calc */
   align-self:stretch;
+  flex:1; /* stretches to fill wrapper height so block matches scheduled duration */
+  min-width:0; /* prevent block from pushing the grid column wider */
   margin:3px 6px 3px 8px;
   border-radius:8px;border-left:4px solid var(--accent);
   background:rgba(var(--accent-rgb),.13);
-  overflow:visible;cursor:grab;
+  /* No overflow:hidden — subtasks need to grow the block vertically.
+     Horizontal containment is handled by min-width:0 chain + word-break:break-word on the title. */
+  cursor:grab;
   pointer-events:all;
   display:flex;flex-direction:column;justify-content:flex-start;
   padding:8px 14px 16px;
@@ -823,10 +840,15 @@ header{
 .day-task-block.done-block{opacity:.5}
 .day-task-block-name{
   font-size:15px;font-weight:600;color:var(--text);
-  /* Wrap long titles rather than truncating — user sees full name + subtasks stay accessible */
-  overflow:visible;white-space:normal;word-break:break-word;
+  /* Wrap long titles to next line — slot width stays fixed */
+  overflow:hidden; /* clip, don't expand horizontally */
+  white-space:normal;word-break:break-word;
   flex:1;min-width:0;
 }
+/* Override task-lbl's position:relative strikethrough with proper multi-line version */
+.day-task-block-name.task-lbl::after{display:none} /* disable width-animation on wrapping titles */
+.done-block .day-task-block-name,
+.done .day-task-block-name{text-decoration:line-through;opacity:.6} /* multi-line strikethrough */
 /* Time range badge — top-right of the name row */
 .day-time-range{
   font-size:10px;font-weight:600;color:var(--accent);

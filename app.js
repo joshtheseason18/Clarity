@@ -84,7 +84,7 @@ function initSplashName(){
     // Returning user with name — show greeting
     const h=new Date().getHours();
     let greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-    document.getElementById('splashGreeting').textContent=greet+', '+name;
+    document.getElementById('splashGreeting').textContent=greet+', '+name+'.';
     document.getElementById('splashGreeting').style.display='';
     document.getElementById('splashTagline').style.display='none';
   } else if(onboarded&&!name){
@@ -252,7 +252,7 @@ function renderGreeting(){
   if(h<12)greeting='Good morning';
   else if(h<17)greeting='Good afternoon';
   else greeting='Good evening';
-  el.textContent=name?`${greeting}, ${name}`:greeting;
+  el.textContent=name?`${greeting}, ${name}.`:greeting;
 }
 
 // ══ JOURNAL PROMPTS ═════════════════════════════
@@ -283,7 +283,7 @@ function renderUpcomingEvents(){
   const todayKey=dk(today);
   const weekEnd=addDays(today,7);
   // Get events for the next 7 days
-  const upcoming=expandedTasks(today,weekEnd).filter(t=>(t.type||'task')==='event'&&t._instanceDate>=todayKey).sort((a,b)=>(a._instanceDate+a.time).localeCompare(b._instanceDate+b.time));
+  const upcoming=expandedTasks(today,weekEnd).filter(t=>(t.type||'task')==='event'&&t._instanceDate>=todayKey).sort((a,b)=>(a._instanceDate+(a.time||'')).localeCompare(b._instanceDate+(b.time||'')));
   if(!upcoming.length){el.innerHTML='';return;}
   const count=Math.min(upcoming.length,5);
   const shown=upcoming.slice(0,count);
@@ -789,7 +789,11 @@ function buildDayTaskBlock(t, key, conflictIds){
   const subsTotal=subs.length;
   const DAY_H=window.innerWidth<=640?64:76;
   const schedH=Math.max(36,dur/30*DAY_H-8);
-  const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}" style="top:${schedH-10}px;bottom:auto;position:absolute" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+  // Resize handle sits OUTSIDE the task block (overflow:hidden would clip it otherwise)
+  // Positioned relative to .day-slot via the wrapper div
+  const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}"
+    style="position:absolute;top:${schedH-10}px;left:8px;right:6px;bottom:auto"
+    onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
   const hasConflict=conflictIds&&conflictIds.has(t.id);
   const conflictBadge=hasConflict?`<span class="day-conflict-badge" title="This task overlaps another scheduled task">⚠ overlap</span>`:'';
 
@@ -804,44 +808,49 @@ function buildDayTaskBlock(t, key, conflictIds){
   }
 
   if(isEvent){
-    return`<div class="day-task-block event-block" data-id="${t.id}"
-      draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="background:${cc};min-height:${schedH}px"
-      onclick="openEdit('${t.id}','${idate}',event)">
-      <div class="day-task-block-check">
-        <span class="day-task-block-name">${esc(t.name)}</span>
-        <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-        ${timeRangeBadge}
+    return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
+      <div class="day-task-block event-block" data-id="${t.id}"
+        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+        style="background:${cc}"
+        onclick="openEdit('${t.id}','${idate}',event)">
+        <div class="day-task-block-check">
+          <span class="day-task-block-name">${esc(t.name)}</span>
+          <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+          ${timeRangeBadge}
+        </div>
+        ${dur>15?`<div class="day-task-meta-row">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
+        ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+        ${conflictBadge}
       </div>
-      ${dur>15?`<div class="day-task-meta-row">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
-      ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
-      ${conflictBadge}${resizeHandle}
+      ${resizeHandle}
     </div>`;
   }
 
   // Focus pill — compact pill style instead of inline button
   const focusPill=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
 
-  return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
-    draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-    style="border-left-color:${cc};background:${taskBlockBg(t.category)};min-height:${schedH}px"
-    onclick="openEdit('${t.id}','${idate}',event)">
-    <div class="day-task-block-check">
-      <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
-      <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-      <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-      ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
-      ${timeRangeBadge}
+  return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
+    <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
+      draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+      style="border-left-color:${cc};background:${taskBlockBg(t.category)}"
+      onclick="openEdit('${t.id}','${idate}',event)">
+      <div class="day-task-block-check">
+        <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
+        <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
+        <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+        ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
+        ${timeRangeBadge}
+      </div>
+      ${dur>15?`<div class="day-task-meta-row">
+        <span class="day-task-dur-pill">${durLabel(dur)}</span>
+        ${focusPill}
+        ${t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">📎 ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗</a>`:''}
+        ${conflictBadge}
+      </div>`:''}
+      ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
     </div>
-    ${dur>15?`<div class="day-task-meta-row">
-      <span class="day-task-dur-pill">${durLabel(dur)}</span>
-      ${focusPill}
-      ${t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
-      ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">📎 ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗</a>`:''}
-      ${conflictBadge}
-    </div>`:''}
-    ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
     ${resizeHandle}
   </div>`;
 }
@@ -984,7 +993,7 @@ function renderDay(){
     tl.appendChild(empty);
   }
 }
-function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
+function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
 
 // ══ CATEGORIES ════════════════════════════════
 function renderCatChips(){
@@ -2535,10 +2544,28 @@ function onResizeMove(e){
       document.body.style.cursor='ns-resize';
       document.body.style.userSelect='none';
     } else {
-      // Same slot count — just update the duration pill text live
+      // Same slot count — update the wrapper's min-height and duration pill live
       const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
+      const wrap=block?.closest('.day-task-slot-wrap');
+      const DAY_H=window.innerWidth<=640?64:76;
+      const newSchedH=Math.max(36,newDur/30*DAY_H-8);
+      if(wrap)wrap.style.minHeight=newSchedH+'px';
+      // Move resize handle to match new scheduled height
+      const handle=wrap?.querySelector('.task-resize-handle');
+      if(handle)handle.style.top=(newSchedH-10)+'px';
       const dl=block?.querySelector('.day-task-dur-pill,.day-task-block-dur');
       if(dl)dl.textContent=durLabel(newDur);
+      // Update time range badge
+      if(block&&_rzTask.time){
+        const tr=block.querySelector('.day-time-range');
+        if(tr){
+          const[th,tm]=_rzTask.time.split(':').map(Number);
+          const endMins=(th*60+tm)+newDur;
+          const endH=Math.floor(endMins/60)%24;
+          const endM=endMins%60;
+          tr.textContent=fmtT(_rzTask.time)+' – '+fmtT(pad(endH)+':'+pad(endM));
+        }
+      }
     }
   }
 }
