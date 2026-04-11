@@ -2456,7 +2456,7 @@ function renderModalSubtasks(){
   list.innerHTML=_modalSubtasks.map((s,i)=>`
     <div class="subtask-item">
       <div class="subtask-check${s.done?' checked':''}" onclick="toggleSubtaskInModal(${i})"></div>
-      <span class="subtask-name${s.done?' done':''}">${esc(s.name)}</span>
+      <span class="subtask-name${s.done?' done':''}" contenteditable="true" spellcheck="false" onblur="saveSubtaskNameInModal(${i},this)" onkeydown="onModalSubtaskKey(event,${i},this)">${esc(s.name)}</span>
       ${s.duration?`<span class="subtask-dur">${durLabel(s.duration)}</span>`:''}
       ${s.duration&&!s.done&&mId?`<button class="subtask-focus-btn" onclick="event.stopPropagation();startSubtaskFocus(${i})" title="Focus on this subtask">▶</button>`:''}
       <button class="subtask-del" onclick="deleteSubtaskFromModal(${i})">✕</button>
@@ -2475,6 +2475,30 @@ function addSubtaskFromModal(){
 function deleteSubtaskFromModal(i){
   _modalSubtasks.splice(i,1);
   renderModalSubtasks();
+}
+function saveSubtaskNameInModal(i,el){
+  const name=el.textContent.trim();
+  if(!name){
+    _modalSubtasks.splice(i,1);
+    renderModalSubtasks();
+  } else {
+    _modalSubtasks[i].name=name;
+  }
+}
+function onModalSubtaskKey(e,i,el){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    saveSubtaskNameInModal(i,el);
+    _modalSubtasks.splice(i+1,0,{id:genId(),name:'',duration:0,done:false});
+    renderModalSubtasks();
+    setTimeout(()=>{
+      const names=document.querySelectorAll('#fSubtaskList .subtask-name');
+      const target=names[i+1];
+      if(target){target.focus();placeCaretAtEnd(target);}
+    },50);
+  } else if(e.key==='Escape'){
+    el.blur();
+  }
 }
 function toggleSubtaskInModal(i){
   _modalSubtasks[i].done=!_modalSubtasks[i].done;
@@ -3068,8 +3092,8 @@ window.toggleDone=function(id,instanceDate,e,el){
 
 // ══ KEYBOARD NAVIGATION ═════════════════════════
 document.addEventListener('keydown',function(e){
-  // Skip if typing in an input/textarea
-  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  // Skip if typing in an input/textarea/contenteditable
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
   if(e.key==='ArrowLeft'){
     e.preventDefault();navPrev();
   } else if(e.key==='ArrowRight'){
@@ -3655,7 +3679,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='n'||e.key==='N'){
     const tag=document.activeElement.tagName;
     const inModal=document.activeElement.closest('.modal-overlay.open,.modal');
-    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||inModal)return;
+    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||inModal||document.activeElement.isContentEditable)return;
     e.preventDefault();
     openQuickAdd();
   }

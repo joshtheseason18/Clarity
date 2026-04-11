@@ -256,7 +256,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .subtask-item .subtask-check.checked::after{
   content:'✓';color:#fff;font-size:10px;font-weight:700;
 }
-.subtask-item .subtask-name{flex:1;min-width:0;color:var(--text)}
+.subtask-item .subtask-name{flex:1;min-width:0;color:var(--text);outline:none;cursor:text;padding:1px 4px;border-radius:4px;transition:background .15s}
+.subtask-item .subtask-name:focus{background:var(--surface2);box-shadow:0 0 0 1.5px var(--accent)}
+.subtask-item .subtask-name:empty::before{content:'Type here…';color:var(--text3);font-style:italic}
 .subtask-item .subtask-name.done{text-decoration:line-through;opacity:.5}
 .subtask-item .subtask-dur{font-size:10px;color:var(--text3);white-space:nowrap}
 .subtask-item .subtask-del{
@@ -301,11 +303,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 /* Inline subtasks on Day view blocks */
 .day-subtask-hdr{
   font-size:8px;font-weight:700;color:var(--text3);letter-spacing:.8px;
-  text-transform:uppercase;margin-top:6px;margin-bottom:2px;padding-left:20px;
+  text-transform:uppercase;margin-top:6px;margin-bottom:2px;padding-left:12px;
 }
 .day-subtask-list{
-  margin-top:2px;padding-left:18px;display:flex;flex-direction:column;gap:2px;
-  border-left:2px solid rgba(var(--accent-rgb),.25);margin-left:4px;
+  margin-top:2px;padding-left:10px;display:flex;flex-direction:column;gap:2px;
+  border-left:2px solid rgba(var(--accent-rgb),.25);margin-left:8px;
 }
 .day-subtask-more{
   font-size:10px;color:var(--accent);font-weight:600;padding:2px 0;cursor:pointer;
