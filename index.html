@@ -445,9 +445,18 @@
         </select>
       </div>
     </div>
-    <!-- Attachments -->
-    <div class="fg">
-      <label class="flbl">Attachments</label>
+    <!-- Detail Tabs -->
+    <div class="modal-detail-tabs" id="modalDetailTabs">
+      <button class="modal-dtab active" onclick="switchDetailTab('notes')">Notes <span class="dtab-dot" id="dtabDotNotes"></span></button>
+      <button class="modal-dtab" onclick="switchDetailTab('attach')">Attachments <span class="dtab-badge" id="dtabBadgeAttach"></span></button>
+      <button class="modal-dtab" onclick="switchDetailTab('subtasks')">Subtasks <span class="dtab-badge" id="dtabBadgeSubs"></span></button>
+    </div>
+    <!-- Notes panel -->
+    <div class="modal-dpanel active" id="dpanelNotes">
+      <textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="2" oninput="autoExpand(this);updateDetailBadges()" style="line-height:1.5"></textarea>
+    </div>
+    <!-- Attachments panel -->
+    <div class="modal-dpanel" id="dpanelAttach">
       <div class="attach-list" id="fAttachList"></div>
       <div class="attach-add-row">
         <input class="fi attach-add-input" id="fAttachInput" placeholder="Paste a link…" onkeydown="if(event.key==='Enter'){event.preventDefault();addAttachment()}">
@@ -455,14 +464,11 @@
         <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)">📎</button>
       </div>
     </div>
-    <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
-    <!-- Subtasks (tasks only) -->
-    <div class="fg" id="fSubtasksWrap">
-      <label class="flbl">Subtasks</label>
+    <!-- Subtasks panel -->
+    <div class="modal-dpanel" id="dpanelSubtasks">
       <div class="subtask-list" id="fSubtaskList"></div>
       <div class="subtask-add-row">
         <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
-        <input class="fi" id="fSubtaskDur" type="number" min="0" max="480" placeholder="min" style="width:52px;font-size:11px;padding:7px 6px;text-align:center">
         <button class="subtask-add-btn" onclick="addSubtaskFromModal()">+</button>
       </div>
       <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="AI generate subtasks">✨ Generate with AI</button>

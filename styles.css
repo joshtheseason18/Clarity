@@ -119,6 +119,30 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 /* ══ TYPE TOGGLE (Task / Event) ═════════════════ */
 .type-toggle-row{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:3px;margin-bottom:10px}
+
+/* ══ MODAL DETAIL TABS ═════════════════════════ */
+.modal-detail-tabs{
+  display:flex;gap:0;border-bottom:2px solid var(--border);margin-top:12px;
+}
+.modal-dtab{
+  flex:1;padding:8px 4px;border:none;background:none;
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;
+  color:var(--text3);cursor:pointer;transition:all .15s;
+  border-bottom:2px solid transparent;margin-bottom:-2px;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+}
+.modal-dtab:hover{color:var(--text)}
+.modal-dtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.dtab-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none}
+.dtab-dot.visible{display:inline-block}
+.dtab-badge{
+  font-size:9px;font-weight:700;background:var(--accent);color:#fff;
+  border-radius:99px;padding:0 5px;min-width:16px;text-align:center;
+  line-height:16px;display:none;
+}
+.dtab-badge.visible{display:inline-block}
+.modal-dpanel{display:none;padding-top:10px}
+.modal-dpanel.active{display:block}
 .type-btn{
   flex:1;padding:6px;border:none;border-radius:6px;font-family:'DM Sans',sans-serif;
   font-size:12px;font-weight:600;color:var(--text3);background:none;cursor:pointer;
@@ -275,10 +299,44 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .subtask-progress-label{font-size:9px;color:var(--text3);font-weight:600}
 
 /* Inline subtasks on Day view blocks */
+.day-subtask-hdr{
+  font-size:8px;font-weight:700;color:var(--text3);letter-spacing:.8px;
+  text-transform:uppercase;margin-top:6px;margin-bottom:2px;padding-left:20px;
+}
 .day-subtask-list{
-  margin-top:4px;padding-left:18px;display:flex;flex-direction:column;gap:2px;
+  margin-top:2px;padding-left:18px;display:flex;flex-direction:column;gap:2px;
   border-left:2px solid rgba(var(--accent-rgb),.25);margin-left:4px;
 }
+.day-subtask-more{
+  font-size:10px;color:var(--accent);font-weight:600;padding:2px 0;cursor:pointer;
+}
+.day-subtask-more:hover{text-decoration:underline}
+
+/* [+] Add subtask button on task block */
+.day-add-sub-btn{
+  position:relative;
+  width:18px;height:18px;border:none;border-radius:4px;
+  background:rgba(var(--accent-rgb),.15);color:var(--accent);
+  font-size:13px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s;flex-shrink:0;
+  font-family:'DM Sans',sans-serif;margin-left:auto;
+}
+.day-task-block:hover .day-add-sub-btn{opacity:1}
+.day-add-sub-btn:hover{background:var(--accent);color:#fff}
+.day-add-sub-btn::after{
+  content:attr(data-tip);
+  position:absolute;top:100%;left:50%;transform:translateX(-50%) translateY(4px);
+  padding:4px 10px;background:var(--accent);color:#fff;
+  font-size:10px;font-weight:600;border-radius:6px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;
+  z-index:200;box-shadow:0 2px 8px rgba(var(--accent-rgb),.3);
+}
+.day-add-sub-btn:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Event block [+] button */
+.event-add-sub{background:rgba(255,255,255,.2);color:#fff}
+.event-add-sub:hover{background:rgba(255,255,255,.4)}
 .day-subtask{
   display:flex;align-items:center;gap:5px;cursor:pointer;
   padding:1px 0;transition:opacity .15s;

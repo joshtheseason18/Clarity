@@ -787,28 +787,32 @@ function renderDay(){
     if(isEvent){
       return`<div class="day-task-block event-block" data-id="${t.id}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-        style="top:${topPx}px;height:${hPx}px;background:${cc}"
+        style="top:${topPx}px;min-height:${hPx}px;background:${cc}"
         onclick="openEdit('${t.id}','${idate}',event)">
-        <span class="day-task-block-name">${esc(t.name)}</span>
+        <div class="day-task-block-check">
+          <span class="day-task-block-name">${esc(t.name)}</span>
+          <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+        </div>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-        ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
       </div>`;
     }
 
     return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="top:${topPx}px;height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
+      style="top:${topPx}px;min-height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
       onclick="openEdit('${t.id}','${idate}',event)">
       <div class="day-task-block-check">
         <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
         <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
         ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
+        <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span>${s.duration?`<span class="day-subtask-dur">${durLabel(s.duration)}</span>`:''}</div>`).join('')}</div>`:''}
+      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
   }).join('');
@@ -2416,6 +2420,28 @@ function setItemType(type){
   document.getElementById('fRecurLabel').textContent=type==='event'?'event':'task';
   document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
 }
+
+// ══ MODAL DETAIL TABS ═══════════════════════════
+let _activeDetailTab='notes';
+function switchDetailTab(tab){
+  _activeDetailTab=tab;
+  document.querySelectorAll('.modal-dtab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.modal-dpanel').forEach(el=>el.classList.remove('active'));
+  const tabMap={notes:0,attach:1,subtasks:2};
+  document.querySelectorAll('.modal-dtab')[tabMap[tab]].classList.add('active');
+  document.getElementById('dpanel'+{notes:'Notes',attach:'Attach',subtasks:'Subtasks'}[tab]).classList.add('active');
+}
+function updateDetailBadges(){
+  const notesDot=document.getElementById('dtabDotNotes');
+  const attachBadge=document.getElementById('dtabBadgeAttach');
+  const subsBadge=document.getElementById('dtabBadgeSubs');
+  const hasNotes=document.getElementById('fNotes').value.trim().length>0;
+  const attachCount=_modalAttachments.length;
+  const subsCount=_modalSubtasks.length;
+  if(notesDot){notesDot.classList.toggle('visible',hasNotes);}
+  if(attachBadge){attachBadge.classList.toggle('visible',attachCount>0);attachBadge.textContent=attachCount;}
+  if(subsBadge){subsBadge.classList.toggle('visible',subsCount>0);subsBadge.textContent=subsCount;}
+}
 function setQaType(type){
   _qaType=type;
   document.getElementById('qaTypeBtnTask').classList.toggle('active',type==='task');
@@ -2426,7 +2452,7 @@ function setQaType(type){
 // ══ SUBTASK MANAGEMENT ══════════════════════════
 function renderModalSubtasks(){
   const list=document.getElementById('fSubtaskList');
-  if(!_modalSubtasks.length){list.innerHTML='';return;}
+  if(!_modalSubtasks.length){list.innerHTML='';updateDetailBadges();return;}
   list.innerHTML=_modalSubtasks.map((s,i)=>`
     <div class="subtask-item">
       <div class="subtask-check${s.done?' checked':''}" onclick="toggleSubtaskInModal(${i})"></div>
@@ -2436,15 +2462,13 @@ function renderModalSubtasks(){
       <button class="subtask-del" onclick="deleteSubtaskFromModal(${i})">✕</button>
     </div>
   `).join('');
+  updateDetailBadges();
 }
 function addSubtaskFromModal(){
   const input=document.getElementById('fSubtaskInput');
-  const durInput=document.getElementById('fSubtaskDur');
   const name=input.value.trim();if(!name)return;
-  const dur=parseInt(durInput.value)||0;
-  _modalSubtasks.push({id:genId(),name,duration:dur,done:false});
+  _modalSubtasks.push({id:genId(),name,duration:0,done:false});
   input.value='';
-  durInput.value='';
   renderModalSubtasks();
   input.focus();
 }
@@ -2506,7 +2530,7 @@ async function generateSubtasks(){
 // ══ ATTACHMENT MANAGEMENT ═══════════════════════
 function renderModalAttachments(){
   const list=document.getElementById('fAttachList');
-  if(!_modalAttachments.length){list.innerHTML='';return;}
+  if(!_modalAttachments.length){list.innerHTML='';updateDetailBadges();return;}
   list.innerHTML=_modalAttachments.map((a,i)=>{
     const icon=a.type==='file'?'📄':'🔗';
     const display=a.type==='link'?a.url.replace(/^https?:\/\//,'').slice(0,40):a.name;
@@ -2516,6 +2540,7 @@ function renderModalAttachments(){
       <button class="attach-item-del" onclick="deleteAttachment(${i})">✕</button>
     </div>`;
   }).join('');
+  updateDetailBadges();
 }
 function addAttachment(){
   const input=document.getElementById('fAttachInput');
@@ -2536,6 +2561,20 @@ function toggleSubtaskInline(taskId,subIdx){
   if(!t||!t.subtasks||!t.subtasks[subIdx])return;
   t.subtasks[subIdx].done=!t.subtasks[subIdx].done;
   save();renderAll();
+}
+// Add new blank subtask from Day view [+] button
+function addSubtaskInline(taskId,idate){
+  const t=tasks.find(t=>t.id===taskId);
+  if(!t)return;
+  if(!t.subtasks)t.subtasks=[];
+  t.subtasks.push({id:genId(),name:'',duration:0,done:false});
+  save();renderAll();
+  // Focus the new blank subtask
+  setTimeout(()=>{
+    const names=document.querySelectorAll(`.day-task-block[data-id="${taskId}"] .day-subtask-name`);
+    const last=names[names.length-1];
+    if(last){last.focus();placeCaretAtEnd(last);}
+  },50);
 }
 // Save subtask name edited inline on Day view
 function saveSubtaskInline(taskId,subIdx,el){
@@ -2603,6 +2642,9 @@ function openNew(dateKey,time){
   document.getElementById('btnDel').style.display='none';
   setDurSpinner(30);
   renderModalSubtasks();
+  renderModalAttachments();
+  switchDetailTab('notes');
+  updateDetailBadges();
   showModal('mOverlay');
 }
 function openEdit(id,instanceDate,e){
@@ -2636,6 +2678,9 @@ function openEdit(id,instanceDate,e){
   document.getElementById('btnDel').style.display='block';
   setDurSpinner(t.duration||30);
   renderModalSubtasks();
+  renderModalAttachments();
+  switchDetailTab('notes');
+  updateDetailBadges();
   showModal('mOverlay');
 }
 function showModal(id){
