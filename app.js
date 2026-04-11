@@ -778,7 +778,7 @@ function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-che
 // ══ DAY ═════════════════════════════════════
 
 // Build a single in-flow day task block (no absolute top/height — slot provides sizing)
-function buildDayTaskBlock(t,key){
+function buildDayTaskBlock(t, key, conflictIds){
   const idate=t._instanceDate||key;
   const dur=t.duration||30;
   const cc=catColor(t.category);
@@ -787,40 +787,61 @@ function buildDayTaskBlock(t,key){
   const subs=t.subtasks||[];
   const subsDone=subs.filter(s=>s.done).length;
   const subsTotal=subs.length;
-  // Resize handle anchored at the scheduled-duration height (not content bottom)
   const DAY_H=window.innerWidth<=640?64:76;
-  const schedH=Math.max(20,dur/30*DAY_H-2);
+  const schedH=Math.max(36,dur/30*DAY_H-8);
   const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}" style="top:${schedH-10}px;bottom:auto;position:absolute" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+  const hasConflict=conflictIds&&conflictIds.has(t.id);
+  const conflictBadge=hasConflict?`<span class="day-conflict-badge" title="This task overlaps another scheduled task">⚠ overlap</span>`:'';
+
+  // Time range badge: "8:30 – 9:30 AM"
+  let timeRangeBadge='';
+  if(t.time){
+    const[th,tm]=t.time.split(':').map(Number);
+    const endMins=(th*60+tm)+dur;
+    const endH=Math.floor(endMins/60)%24;
+    const endM=endMins%60;
+    timeRangeBadge=`<span class="day-time-range">${fmtT(t.time)} – ${fmtT(pad(endH)+':'+pad(endM))}</span>`;
+  }
 
   if(isEvent){
     return`<div class="day-task-block event-block" data-id="${t.id}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="background:${cc}"
+      style="background:${cc};min-height:${schedH}px"
       onclick="openEdit('${t.id}','${idate}',event)">
       <div class="day-task-block-check">
         <span class="day-task-block-name">${esc(t.name)}</span>
         <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+        ${timeRangeBadge}
       </div>
-      ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+      ${dur>15?`<div class="day-task-meta-row">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS ${subsDone?`<span style="opacity:.7">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
-      ${resizeHandle}
+      ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+      ${conflictBadge}${resizeHandle}
     </div>`;
   }
 
+  // Focus pill — compact pill style instead of inline button
+  const focusPill=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
+
   return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
     draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-    style="border-left-color:${cc};background:${taskBlockBg(t.category)}"
+    style="border-left-color:${cc};background:${taskBlockBg(t.category)};min-height:${schedH}px"
     onclick="openEdit('${t.id}','${idate}',event)">
     <div class="day-task-block-check">
       <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
       <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-      ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
       <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+      ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
+      ${timeRangeBadge}
     </div>
-    ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
-    ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-    ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS ${subsDone?`<span style="font-size:9px;color:var(--text3)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+    ${dur>15?`<div class="day-task-meta-row">
+      <span class="day-task-dur-pill">${durLabel(dur)}</span>
+      ${focusPill}
+      ${t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
+      ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">📎 ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗</a>`:''}
+      ${conflictBadge}
+    </div>`:''}
+    ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
     ${resizeHandle}
   </div>`;
 }
@@ -830,25 +851,65 @@ function renderDay(){
   renderUpcomingEvents();
   const key=dk(selDate);
   document.getElementById('dayTitle').textContent=DLONG[selDate.getDay()]+', '+MONTHS_LONG[selDate.getMonth()]+' '+selDate.getDate();
-  const _dayTasks=tasksOn(dk(selDate));
-  const _dayTotal=_dayTasks.length;
-  const _dayDone=_dayTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(dk(selDate))).length;
+  const _allTasks=tasksOn(dk(selDate));
+  const _alldayTasks=_allTasks.filter(t=>t.allday===true);
+  const _timedTasks=_allTasks.filter(t=>t.time&&!t.allday);
+  const _dayTotal=_allTasks.length;
+  const _dayDone=_allTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(dk(selDate))).length;
   document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+(_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'');
 
+  // ── All-day banner ─────────────────────────────────────────────────────────
+  const alldayBar=document.getElementById('dayAlldayBar');
+  if(alldayBar){
+    if(_alldayTasks.length){
+      alldayBar.innerHTML=_alldayTasks.map(t=>{
+        const cc=catColor(t.category);
+        const isDone=t.done;
+        return`<span class="allday-pill${isDone?' done':''}" style="background:${cc}22;border-color:${cc};color:${cc}"
+          onclick="openEdit('${t.id}','${key}',event)">
+          ${esc(t.name)}${t.recur?' ↻':''}
+        </span>`;
+      }).join('');
+      alldayBar.style.display='flex';
+    } else {
+      alldayBar.innerHTML='';
+      alldayBar.style.display='none';
+    }
+  }
+
+  // ── Conflict detection ─────────────────────────────────────────────────────
+  // Build a set of task IDs that overlap at least one other timed task
+  const conflictIds=new Set();
+  _timedTasks.forEach((a,ai)=>{
+    const[ah,am]=a.time.split(':').map(Number);
+    const aStart=ah*60+am;
+    const aEnd=aStart+(a.duration||30);
+    _timedTasks.forEach((b,bi)=>{
+      if(ai>=bi)return; // only check each pair once
+      const[bh,bm]=b.time.split(':').map(Number);
+      const bStart=bh*60+bm;
+      const bEnd=bStart+(b.duration||30);
+      // Overlap if one starts before the other ends
+      if(aStart<bEnd&&bStart<aEnd){
+        conflictIds.add(a.id);
+        conflictIds.add(b.id);
+      }
+    });
+  });
+
   const sl=slots();
-  const DAY_SLOT_H=window.innerWidth<=640?64:76; // matches mobile CSS min-height override
+  const DAY_SLOT_H=window.innerWidth<=640?64:76;
 
   // Group timed tasks by start slot
   const taskMap={};
-  _dayTasks.filter(t=>t.time).forEach(t=>{
+  _timedTasks.forEach(t=>{
     if(!taskMap[t.time])taskMap[t.time]=[];
     taskMap[t.time].push(t);
   });
 
-  // Mark which slots are interior to a multi-slot task
-  // (they get collapsed so the task above them visually fills that time)
+  // Mark slots interior to a multi-slot task (collapse them)
   const interiorSlots=new Set();
-  _dayTasks.filter(t=>t.time&&(t.duration||30)>30).forEach(t=>{
+  _timedTasks.filter(t=>(t.duration||30)>30).forEach(t=>{
     const[h,m]=t.time.split(':').map(Number);
     const startMins=h*60+m;
     const dur=t.duration||30;
@@ -859,7 +920,7 @@ function renderDay(){
     }
   });
 
-  // Routine block lookup for inline shading
+  // Routine block lookup
   const routineBands=getRoutineForDay(key);
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
@@ -871,26 +932,27 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots (covered by a multi-slot task above, no task starting here)
+    // Interior slots — collapsed to 0 height, the covering task's slot provides the space
     if(interiorSlots.has(sk2)&&!tasksHere.length){
       html+=`<div class="day-time-lbl day-lbl-interior"></div>
              <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
       return;
     }
 
-    // Min-height: empty slot = DAY_SLOT_H; task slot = enough rows to show full duration
     const hasTask=tasksHere.length>0;
-    const maxDur=hasTask?Math.max(...tasksHere.map(t=>t.duration||30)):30;
-    const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
-    const minH=slotsNeeded*DAY_SLOT_H;
 
-    // Routine shading on the border-right of the time label
+    // Routine shading
     const rb=routineAt(sk2);
     const rt=rb?ROUTINE_TYPES[rb.type]||ROUTINE_TYPES.custom:null;
     const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
-    const slotBg=rt&&!hasTask?`background:${rt.color}0d`:''; // very subtle tint on empty routine slots
+    const slotBg=rt&&!hasTask?`background:${rt.color}0d`:'';
 
-    const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key)).join('');
+    // Slot min-height: always DAY_SLOT_H for empty, for task slots the BLOCK's
+    // own min-height (set via inline style) drives the row — slot itself just
+    // needs the base so empty half-rows don't collapse.
+    const minH=DAY_SLOT_H;
+
+    const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
 
     html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="min-height:${minH}px;${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
            <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}" data-time="${sk2}"
@@ -2494,10 +2556,31 @@ function setItemType(type){
   document.getElementById('fNameLabel').textContent=type==='event'?'Event':'Task';
   document.getElementById('fName').placeholder=type==='event'?'What\'s happening?':'What needs to get done?';
   document.getElementById('fLocationWrap').style.display=type==='event'?'':'none';
+  document.getElementById('fAlldayWrap').style.display=type==='event'?'':'none';
   document.getElementById('fPriRow').style.display=type==='event'?'none':'';
   document.getElementById('fRecurLabel').textContent=type==='event'?'event':'task';
   document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
+  // When switching away from event, clear all-day
+  if(type!=='event')setAlldayModal(false);
 }
+
+let _modalAllday=false;
+function setAlldayModal(val){
+  _modalAllday=val;
+  const tog=document.getElementById('fAlldayToggle');
+  if(tog)tog.classList.toggle('on',val);
+  // Hide duration when all-day
+  const durWrap=document.querySelector('.dur-spinner-row')?.closest('.fg');
+  if(durWrap)durWrap.style.display=val?'none':'';
+  // Update modal subtitle — remove time when all-day
+  const subEl=document.getElementById('mSub');
+  if(subEl&&mDate){
+    const d=fromDk(mDate);
+    const timeStr=(!val&&mTime)?' · '+fmtT(mTime):'';
+    subEl.textContent=DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate()+timeStr;
+  }
+}
+function toggleAlldayModal(){setAlldayModal(!_modalAllday);}
 
 // ══ MODAL DETAIL TABS ═══════════════════════════
 let _activeDetailTab='notes';
@@ -2740,7 +2823,7 @@ function placeCaretAtEnd(el){
 
 function openNew(dateKey,time){
   mMode='new';mDate=dateKey;mTime=time;mId=null;mInstanceDate=null;
-  _itemType='task';_modalSubtasks=[];
+  _itemType='task';_modalSubtasks=[];_modalAllday=false;
   setItemType('task');
   document.getElementById('mTitle').textContent='New Task';
   const d=fromDk(dateKey);
@@ -2770,9 +2853,12 @@ function openEdit(id,instanceDate,e){
   mMode='edit';mId=id;mInstanceDate=instanceDate;
   _itemType=t.type||'task';
   _modalSubtasks=JSON.parse(JSON.stringify(t.subtasks||[]));
-  _editOrigSubtasks=JSON.parse(JSON.stringify(t.subtasks||[])); // snapshot for cancel restore
+  _editOrigSubtasks=JSON.parse(JSON.stringify(t.subtasks||[]));
   _modalCommitted=false;
+  _modalAllday=!!(t.allday);
   setItemType(_itemType);
+  // Apply all-day state after setItemType (which shows the toggle)
+  if(_itemType==='event')setAlldayModal(_modalAllday);
   document.getElementById('mTitle').textContent='Edit '+(_itemType==='event'?'Event':'Task');
   const d=fromDk(t.date);
   document.getElementById('mSub').textContent=DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate()+(t.time?' · '+fmtT(t.time):'');
@@ -2808,6 +2894,16 @@ function showModal(id){
     const f=document.getElementById('fName');
     if(f){f.focus();autoExpand(f);}
     resetTextareaHeights();
+    // Wire scroll fade: remove mask when body is scrolled to the bottom
+    const body=document.querySelector('#'+id+' .modal-body');
+    if(body){
+      const checkScroll=()=>{
+        const atBottom=body.scrollHeight-body.scrollTop<=body.clientHeight+8;
+        body.classList.toggle('at-bottom',atBottom);
+      };
+      checkScroll(); // run once on open
+      body.addEventListener('scroll',checkScroll,{passive:true});
+    }
   },150);
 }
 function closeModal(){
@@ -2834,8 +2930,10 @@ function saveTask(){
   const type=_itemType;
   const subtasks=_modalSubtasks;
   const attachments=_modalAttachments;
-  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,duration,recur,recurN,recurU,subtasks});}
+  const allday=_itemType==='event'&&_modalAllday;
+  const finalTime=allday?null:mTime;
+  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
+  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:allday?null:t.time,duration,recur,recurN,recurU,subtasks});}
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){

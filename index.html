@@ -271,6 +271,7 @@
           <div class="day-greeting" id="dayGreeting"></div>
           <div class="day-title" id="dayTitle"></div>
           <div class="day-sub" id="daySub"></div>
+          <div class="day-allday-bar" id="dayAlldayBar"></div>
           <div class="upcoming-events" id="upcomingEvents"></div>
         </div>
         <div class="day-scroll"><div class="day-timeline" id="dayTimeline"></div></div>
@@ -408,72 +409,85 @@
 <!-- TASK MODAL -->
 <div class="modal-overlay" id="mOverlay" onclick="handleMBg(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <div><div class="modal-title" id="mTitle">New Task</div><div class="modal-sub" id="mSub"></div></div>
-    <!-- Type toggle -->
-    <div class="type-toggle-row">
-      <button class="type-btn active" id="typeBtnTask" onclick="setItemType('task')">Task</button>
-      <button class="type-btn" id="typeBtnEvent" onclick="setItemType('event')">Event</button>
-    </div>
-    <div class="fg"><label class="flbl" id="fNameLabel">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
-    <!-- Location (events only) -->
-    <div class="fg" id="fLocationWrap" style="display:none"><label class="flbl">Location</label><input class="fi" id="fLocation" placeholder="Room, address, or link…" style="font-size:12px"></div>
-    <div class="frow" id="fPriRow">
-      <div class="fg"><label class="flbl">Priority</label>
-        <select class="fi" id="fPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
+    <!-- Sticky header: title + type toggle -->
+    <div class="modal-header">
+      <div><div class="modal-title" id="mTitle">New Task</div><div class="modal-sub" id="mSub"></div></div>
+      <div class="type-toggle-row">
+        <button class="type-btn active" id="typeBtnTask" onclick="setItemType('task')">Task</button>
+        <button class="type-btn" id="typeBtnEvent" onclick="setItemType('event')">Event</button>
       </div>
-      <div class="fg"><label class="flbl">Category</label><select class="fi" id="fCat"></select></div>
     </div>
-    <div class="fg"><label class="flbl">Duration</label>
-      <div class="dur-spinner-row">
-        <div class="dur-spinner">
-          <input type="number" class="dur-spinner-input" id="fDurHr" min="0" max="12" value="0" onchange="onDurSpinnerChange()">
-          <span class="dur-spinner-label">hr</span>
+    <!-- Scrollable body: all fields -->
+    <div class="modal-body">
+      <div class="fg"><label class="flbl" id="fNameLabel">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+      <!-- Location (events only) -->
+      <div class="fg" id="fLocationWrap" style="display:none"><label class="flbl">Location</label><input class="fi" id="fLocation" placeholder="Room, address, or link…" style="font-size:12px"></div>
+      <!-- All-day toggle (events only) -->
+      <div class="toggle-row" id="fAlldayWrap" style="display:none">
+        <span class="toggle-label" style="font-size:12px">All Day</span>
+        <button class="toggle-track" id="fAlldayToggle" onclick="toggleAlldayModal()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
+      <div class="frow" id="fPriRow">
+        <div class="fg"><label class="flbl">Priority</label>
+          <select class="fi" id="fPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
         </div>
-        <div class="dur-spinner">
-          <input type="number" class="dur-spinner-input" id="fDurMin" min="0" max="45" step="15" value="30" onchange="onDurSpinnerChange()">
-          <span class="dur-spinner-label">min</span>
+        <div class="fg"><label class="flbl">Category</label><select class="fi" id="fCat"></select></div>
+      </div>
+      <div class="fg"><label class="flbl">Duration</label>
+        <div class="dur-spinner-row">
+          <div class="dur-spinner">
+            <input type="number" class="dur-spinner-input" id="fDurHr" min="0" max="12" value="0" onchange="onDurSpinnerChange()">
+            <span class="dur-spinner-label">hr</span>
+          </div>
+          <div class="dur-spinner">
+            <input type="number" class="dur-spinner-input" id="fDurMin" min="0" max="45" step="15" value="30" onchange="onDurSpinnerChange()">
+            <span class="dur-spinner-label">min</span>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="recur-box">
-      <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring <span id="fRecurLabel">task</span></label>
-      <div class="recur-opts" id="recurOpts" style="display:none">
-        <span style="font-size:12px;color:var(--text2)">Every</span>
-        <input class="fi" id="fRecurN" type="number" min="1" max="99" value="1" style="width:50px;padding:4px 7px;font-size:12px">
-        <select class="fi" id="fRecurU" style="font-size:12px;padding:4px 7px">
-          <option value="day">Day(s)</option><option value="week">Week(s)</option><option value="month">Month(s)</option>
-        </select>
+      <div class="recur-box">
+        <label><input type="checkbox" class="rcb" id="fRecurOn" onchange="toggleRecurUI()"> Recurring <span id="fRecurLabel">task</span></label>
+        <div class="recur-opts" id="recurOpts" style="display:none">
+          <span style="font-size:12px;color:var(--text2)">Every</span>
+          <input class="fi" id="fRecurN" type="number" min="1" max="99" value="1" style="width:50px;padding:4px 7px;font-size:12px">
+          <select class="fi" id="fRecurU" style="font-size:12px;padding:4px 7px">
+            <option value="day">Day(s)</option><option value="week">Week(s)</option><option value="month">Month(s)</option>
+          </select>
+        </div>
+      </div>
+      <!-- Detail Tabs -->
+      <div class="modal-detail-tabs" id="modalDetailTabs">
+        <button class="modal-dtab active" onclick="switchDetailTab('notes')">Notes <span class="dtab-dot" id="dtabDotNotes"></span></button>
+        <button class="modal-dtab" onclick="switchDetailTab('attach')">Attachments <span class="dtab-badge" id="dtabBadgeAttach"></span></button>
+        <button class="modal-dtab" onclick="switchDetailTab('subtasks')">Subtasks <span class="dtab-badge" id="dtabBadgeSubs"></span></button>
+      </div>
+      <!-- Notes panel -->
+      <div class="modal-dpanel active" id="dpanelNotes">
+        <textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="2" oninput="autoExpand(this);updateDetailBadges()" style="line-height:1.5"></textarea>
+      </div>
+      <!-- Attachments panel -->
+      <div class="modal-dpanel" id="dpanelAttach">
+        <div class="attach-list" id="fAttachList"></div>
+        <div class="attach-add-row">
+          <input class="fi attach-add-input" id="fAttachInput" placeholder="Paste a link…" onkeydown="if(event.key==='Enter'){event.preventDefault();addAttachment()}">
+          <button class="attach-add-btn" onclick="addAttachment()" title="Add link">+</button>
+          <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)">📎</button>
+        </div>
+      </div>
+      <!-- Subtasks panel -->
+      <div class="modal-dpanel" id="dpanelSubtasks">
+        <div class="subtask-list" id="fSubtaskList"></div>
+        <div class="subtask-add-row">
+          <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
+          <button class="subtask-add-btn" onclick="addSubtaskFromModal()">+</button>
+        </div>
+        <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="AI generate subtasks">✨ Generate with AI</button>
       </div>
     </div>
-    <!-- Detail Tabs -->
-    <div class="modal-detail-tabs" id="modalDetailTabs">
-      <button class="modal-dtab active" onclick="switchDetailTab('notes')">Notes <span class="dtab-dot" id="dtabDotNotes"></span></button>
-      <button class="modal-dtab" onclick="switchDetailTab('attach')">Attachments <span class="dtab-badge" id="dtabBadgeAttach"></span></button>
-      <button class="modal-dtab" onclick="switchDetailTab('subtasks')">Subtasks <span class="dtab-badge" id="dtabBadgeSubs"></span></button>
-    </div>
-    <!-- Notes panel -->
-    <div class="modal-dpanel active" id="dpanelNotes">
-      <textarea class="fi auto-expand" id="fNotes" placeholder="Optional notes…" rows="2" oninput="autoExpand(this);updateDetailBadges()" style="line-height:1.5"></textarea>
-    </div>
-    <!-- Attachments panel -->
-    <div class="modal-dpanel" id="dpanelAttach">
-      <div class="attach-list" id="fAttachList"></div>
-      <div class="attach-add-row">
-        <input class="fi attach-add-input" id="fAttachInput" placeholder="Paste a link…" onkeydown="if(event.key==='Enter'){event.preventDefault();addAttachment()}">
-        <button class="attach-add-btn" onclick="addAttachment()" title="Add link">+</button>
-        <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)">📎</button>
-      </div>
-    </div>
-    <!-- Subtasks panel -->
-    <div class="modal-dpanel" id="dpanelSubtasks">
-      <div class="subtask-list" id="fSubtaskList"></div>
-      <div class="subtask-add-row">
-        <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
-        <button class="subtask-add-btn" onclick="addSubtaskFromModal()">+</button>
-      </div>
-      <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="AI generate subtasks">✨ Generate with AI</button>
-    </div>
-    <div class="modal-acts">
+    <!-- Sticky footer: actions -->
+    <div class="modal-footer">
       <button class="btn-d" id="btnDel" onclick="startDelete()" style="display:none">Delete</button>
       <button class="btn-c" onclick="closeModal()">Cancel</button>
       <button class="btn-s" onclick="saveTask()">Save</button>
