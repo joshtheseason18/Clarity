@@ -776,6 +776,55 @@ function onWkDay(k){selDate=fromDk(k);switchView('day')}
 function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
 
 // ══ DAY ═════════════════════════════════════
+
+// Build a single in-flow day task block (no absolute top/height — slot provides sizing)
+function buildDayTaskBlock(t,key){
+  const idate=t._instanceDate||key;
+  const dur=t.duration||30;
+  const cc=catColor(t.category);
+  const isDone=t.done||(t.doneOverrides||[]).includes(idate);
+  const isEvent=(t.type||'task')==='event';
+  const subs=t.subtasks||[];
+  const subsDone=subs.filter(s=>s.done).length;
+  const subsTotal=subs.length;
+  // Resize handle anchored at the scheduled-duration height (not content bottom)
+  const DAY_H=window.innerWidth<=640?64:76;
+  const schedH=Math.max(20,dur/30*DAY_H-2);
+  const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}" style="top:${schedH-10}px;bottom:auto;position:absolute" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+
+  if(isEvent){
+    return`<div class="day-task-block event-block" data-id="${t.id}"
+      draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+      style="background:${cc}"
+      onclick="openEdit('${t.id}','${idate}',event)">
+      <div class="day-task-block-check">
+        <span class="day-task-block-name">${esc(t.name)}</span>
+        <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+      </div>
+      ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+      ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
+      ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS ${subsDone?`<span style="opacity:.7">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+      ${resizeHandle}
+    </div>`;
+  }
+
+  return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
+    draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+    style="border-left-color:${cc};background:${taskBlockBg(t.category)}"
+    onclick="openEdit('${t.id}','${idate}',event)">
+    <div class="day-task-block-check">
+      <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
+      <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
+      ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
+      <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+    </div>
+    ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
+    ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
+    ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS ${subsDone?`<span style="font-size:9px;color:var(--text3)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+    ${resizeHandle}
+  </div>`;
+}
+
 function renderDay(){
   renderGreeting();
   renderUpcomingEvents();
@@ -784,116 +833,84 @@ function renderDay(){
   const _dayTasks=tasksOn(dk(selDate));
   const _dayTotal=_dayTasks.length;
   const _dayDone=_dayTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(dk(selDate))).length;
-  const _dayProgress=_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'';
-  document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+_dayProgress;
+  document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+(_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'');
+
   const sl=slots();
-  const DAY_SLOT_H=76;
-  // Slots grid (just for click-to-add, no tasks inside)
-  let html=sl.map(s=>{
-    const sk2=sk(s.h,s.m);
-    return`<div class="day-time-lbl">${s.m===0?fmtT(sk2):''}</div>
-    <div class="day-slot${s.m===30?' half':''}" onclick="onDaySlot('${key}','${sk2}',event)"
-      ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)" ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
-  }).join('');
-  // Task overlay blocks
-  const taskBlocks=_dayTasks.filter(t=>t.time).map(t=>{
-    const [th,tm]=t.time.split(':').map(Number);
-    const topPx=(th*60+tm)/30*DAY_SLOT_H;
+  const DAY_SLOT_H=window.innerWidth<=640?64:76; // matches mobile CSS min-height override
+
+  // Group timed tasks by start slot
+  const taskMap={};
+  _dayTasks.filter(t=>t.time).forEach(t=>{
+    if(!taskMap[t.time])taskMap[t.time]=[];
+    taskMap[t.time].push(t);
+  });
+
+  // Mark which slots are interior to a multi-slot task
+  // (they get collapsed so the task above them visually fills that time)
+  const interiorSlots=new Set();
+  _dayTasks.filter(t=>t.time&&(t.duration||30)>30).forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    const startMins=h*60+m;
     const dur=t.duration||30;
-    const hPx=Math.max(20,dur/30*DAY_SLOT_H-2);
-    const cc=catColor(t.category);
-    const idate=t._instanceDate||key;
-    const isDone=t.done||(t.doneOverrides||[]).includes(idate);
-    const isEvent=(t.type||'task')==='event';
-    const subs=t.subtasks||[];
-    const subsDone=subs.filter(s=>s.done).length;
-    const subsTotal=subs.length;
+    for(let offset=30;offset<dur;offset+=30){
+      const mins=startMins+offset;
+      if(mins>=1440)break;
+      interiorSlots.add(pad(Math.floor(mins/60))+':'+pad(mins%60));
+    }
+  });
 
-    // Calculate end-time label for the boundary marker
-    const endMins=(th*60+tm)+dur;
-    const endTimeLabel=fmtT(pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60));
-    // Marker div: a dashed line at exactly the scheduled end-time pixel,
-    // visible only when the block has grown beyond it due to subtask content.
-    const endMarker=`<div class="task-end-marker" style="top:${hPx}px" data-time="${endTimeLabel}"></div>`;
-    // Resize handle locked to scheduled end — not the content bottom
-    const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}" style="top:${hPx-10}px;bottom:auto;position:absolute" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+  // Routine block lookup for inline shading
+  const routineBands=getRoutineForDay(key);
+  function routineAt(slotTime){
+    return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
+  }
 
-    if(isEvent){
-      return`<div class="day-task-block event-block" data-id="${t.id}"
-        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-        style="top:${topPx}px;min-height:${hPx}px;background:${cc}"
-        onclick="openEdit('${t.id}','${idate}',event)">
-        <div class="day-task-block-check">
-          <span class="day-task-block-name">${esc(t.name)}</span>
-          <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-        </div>
-        ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
-        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS ${subsDone?`<span style="opacity:.7">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
-        ${endMarker}${resizeHandle}
-      </div>`;
+  let html='';
+  sl.forEach(s=>{
+    const sk2=sk(s.h,s.m);
+    const isHalf=s.m===30;
+    const tasksHere=taskMap[sk2]||[];
+
+    // Interior slots (covered by a multi-slot task above, no task starting here)
+    if(interiorSlots.has(sk2)&&!tasksHere.length){
+      html+=`<div class="day-time-lbl day-lbl-interior"></div>
+             <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+      return;
     }
 
-    return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
-      draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="top:${topPx}px;min-height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
-      onclick="openEdit('${t.id}','${idate}',event)">
-      <div class="day-task-block-check">
-        <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
-        <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-        ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
-        <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-      </div>
-      ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
-      ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS ${subsDone?`<span style="font-size:9px;color:var(--text3)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
-      ${endMarker}${resizeHandle}
-    </div>`;
-  }).join('');
-  document.getElementById('dayTimeline').innerHTML=html;
-  // Routine blocks as background bands
-  const routineBands=getRoutineForDay(key);
-  if(routineBands.length){
-    const bandLayer=document.createElement('div');
-    bandLayer.style.cssText='position:absolute;top:0;left:80px;right:0;pointer-events:none;z-index:1';
-    routineBands.forEach(b=>{
-      const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-      const[sh,sm]=b.start.split(':').map(Number);
-      const[eh,em]=b.end.split(':').map(Number);
-      const topPx=(sh*60+sm)/30*DAY_SLOT_H;
-      const botPx=(eh*60+em)/30*DAY_SLOT_H;
-      const hPx=botPx-topPx;
-      const band=document.createElement('div');
-      band.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:0;right:0;background:${rt.color};opacity:.06;border-radius:6px;border-left:3px solid ${rt.color}`;
-      const lbl=document.createElement('div');
-      lbl.style.cssText=`position:absolute;top:${topPx+3}px;right:8px;font-size:9px;font-weight:600;color:${rt.color};opacity:.55;letter-spacing:.3px`;
-      lbl.textContent=(b.customName||rt.label).toUpperCase();
-      bandLayer.appendChild(band);
-      bandLayer.appendChild(lbl);
-    });
-    document.getElementById('dayTimeline').style.position='relative';
-    document.getElementById('dayTimeline').appendChild(bandLayer);
-  }
-  // Task overlay blocks
-  const overlay=document.createElement('div');
-  overlay.className='day-task-layer';overlay.innerHTML=taskBlocks;
-  document.getElementById('dayTimeline').appendChild(overlay);
-  // Post-render pass: mark blocks that have grown beyond their scheduled height
-  // so the end-time marker becomes visible only when actually needed
-  requestAnimationFrame(()=>{
-    overlay.querySelectorAll('.day-task-block').forEach(el=>{
-      const marker=el.querySelector('.task-end-marker');
-      if(!marker)return;
-      const scheduledEndPx=parseInt(marker.style.top)||0;
-      el.classList.toggle('expanded',el.offsetHeight>scheduledEndPx+6);
-    });
+    // Min-height: empty slot = DAY_SLOT_H; task slot = enough rows to show full duration
+    const hasTask=tasksHere.length>0;
+    const maxDur=hasTask?Math.max(...tasksHere.map(t=>t.duration||30)):30;
+    const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
+    const minH=slotsNeeded*DAY_SLOT_H;
+
+    // Routine shading on the border-right of the time label
+    const rb=routineAt(sk2);
+    const rt=rb?ROUTINE_TYPES[rb.type]||ROUTINE_TYPES.custom:null;
+    const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
+    const slotBg=rt&&!hasTask?`background:${rt.color}0d`:''; // very subtle tint on empty routine slots
+
+    const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key)).join('');
+
+    html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="min-height:${minH}px;${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
+           <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}" data-time="${sk2}"
+             style="min-height:${minH}px;${slotBg}"
+             onclick="onDaySlot('${key}','${sk2}',event)"
+             ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
+             ondrop="onDropSlot(event,'${key}','${sk2}')">
+             ${taskHtml}
+           </div>`;
   });
-  // Empty state
+
+  const tl=document.getElementById('dayTimeline');
+  tl.innerHTML=html;
+
+  // Empty-day state
   if(!_dayTotal){
     const empty=document.createElement('div');
     empty.className='day-empty-state';
     empty.innerHTML=`<div class="day-empty-icon">📭</div><div class="day-empty-text">Nothing scheduled yet<br><span style="font-size:11px">Click a time slot or press <strong>N</strong> to add a task</span></div>`;
-    document.getElementById('dayTimeline').appendChild(empty);
+    tl.appendChild(empty);
   }
 }
 function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
@@ -1554,7 +1571,7 @@ window.enterApp=function(){
   _origEnterApp();
   setTimeout(checkOverdueTasks,1500);
   showOnboarding();
-  renderGreeting();
+  // renderGreeting is already called inside renderAll→renderDay; no need to call again
 };
 
 // ══ CANVAS LMS IMPORT ════════════════════════════
@@ -2347,7 +2364,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
 
 // ══ TOGGLE DONE ══════════════════════════════
 function toggleDone(id,instanceDate,e,el){
-  e.stopPropagation();if(AC.state==='suspended')AC.resume();
+  e.stopPropagation();if(AC&&AC.state==='suspended')AC.resume();
   const t=tasks.find(t=>t.id===id);if(!t)return;
   if((t.type||'task')==='event')return; // events can't be checked off
   if(t.recur&&instanceDate){
@@ -2424,17 +2441,32 @@ function onResizeStart(e,tid,idate,view){
 }
 function onResizeMove(e){
   if(!_rzTask)return;
-  const slotH=_rzView==='week'?42:52;
+  const slotH=_rzView==='week'?42:(window.innerWidth<=640?64:76);
   const dy=e.clientY-_rzStartY;
   const deltaMins=Math.round(dy/slotH*30/15)*15;
   const newDur=Math.max(15,_rzStartDur+deltaMins);
   _rzTask.duration=newDur;
-  // Live-update the block height
-  const block=document.querySelector(`.wk-task-block[data-id="${_rzTask.id}"],.day-task-block[data-id="${_rzTask.id}"]`);
-  if(block){block.style.height=(newDur/30*slotH-1)+'px';}
-  // Live-update dur label
-  const dl=block?.querySelector('.wk-task-block-dur,.day-task-block-dur');
-  if(dl)dl.textContent=durLabel(newDur);
+  // Live-update: week view uses absolute height; day view uses slot min-height
+  if(_rzView==='week'){
+    const block=document.querySelector(`.wk-task-block[data-id="${_rzTask.id}"]`);
+    if(block){block.style.height=(newDur/30*slotH-1)+'px';}
+    const dl=block?.querySelector('.wk-task-block-dur');
+    if(dl)dl.textContent=durLabel(newDur);
+  } else {
+    // Day view: update the slot's min-height so the row expands correctly
+    const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
+    if(block){
+      const slot=block.closest('.day-slot');
+      const slotsNeeded=Math.ceil(newDur/30);
+      const minH=slotsNeeded*(window.innerWidth<=640?64:76);
+      if(slot)slot.style.minHeight=minH+'px';
+      // Sync the adjacent time label
+      const lbl=slot?.previousElementSibling;
+      if(lbl&&lbl.classList.contains('day-time-lbl'))lbl.style.minHeight=minH+'px';
+      const dl=block.querySelector('.day-task-block-dur');
+      if(dl)dl.textContent=durLabel(newDur);
+    }
+  }
 }
 function onResizeUp(){
   if(_rzTask)save();
@@ -3637,11 +3669,23 @@ function renderNowLine(){
       col.appendChild(line);
     }
   });
-  // Day view now-line
+  // Day view now-line — find actual pixel position from the slot DOM element
   const dayTimeline=document.getElementById('dayTimeline');
   if(dayTimeline&&isToday(selDate)){
     dayTimeline.querySelectorAll('.now-line').forEach(el=>el.remove());
-    const top=(mins/30)*52; // 52px per half-hour slot
+    // Find the slot at the current half-hour boundary and interpolate within it
+    const slotH=Math.floor(mins/30);
+    const s=slots()[slotH];
+    let top=0;
+    if(s){
+      const slotEl=dayTimeline.querySelector(`[data-time="${sk(s.h,s.m)}"]`);
+      if(slotEl){
+        const fracWithin=(mins%30)/30;
+        top=slotEl.offsetTop+fracWithin*slotEl.offsetHeight;
+      } else {
+        top=(mins/30)*52; // fallback if slot not in DOM
+      }
+    }
     const line=document.createElement('div');
     line.className='now-line';
     line.style.cssText=`top:${top}px;grid-column:2;position:absolute;left:56px;right:0`;
@@ -3660,7 +3704,14 @@ function scrollToNow(){
   }
   const dv=document.querySelector('.day-scroll');
   if(dv&&curView==='day'){
-    const top=Math.max(0,(mins/30)*52 - dv.clientHeight/2);
+    // Scroll to the slot for the current time
+    const slotH=Math.floor(mins/30);
+    const s=slots()[slotH];
+    let top=0;
+    if(s){
+      const slotEl=document.querySelector(`#dayTimeline [data-time="${sk(s.h,s.m)}"]`);
+      top=slotEl?Math.max(0,slotEl.offsetTop-dv.clientHeight/2):Math.max(0,(mins/30)*52-dv.clientHeight/2);
+    }
     dv.scrollTo({top,behavior:'smooth'});
   }
 }
