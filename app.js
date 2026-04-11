@@ -932,10 +932,19 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — collapsed to 0 height, the covering task's slot provides the space
+    // Interior slots — the covering task's slot contains the block.
+    // We still render the time label row so hours like "1:00 PM" remain visible,
+    // but make it a ghost: smaller, dimmer, pointer-events off on the slot side.
     if(interiorSlots.has(sk2)&&!tasksHere.length){
-      html+=`<div class="day-time-lbl day-lbl-interior"></div>
-             <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+      const isInteriorHalfHour=s.m===30;
+      // Only show on-the-hour interior labels (skip :30 ghost labels — too busy)
+      if(!isInteriorHalfHour){
+        html+=`<div class="day-time-lbl day-lbl-ghost">${fmtT(sk2)}</div>
+               <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+      } else {
+        html+=`<div class="day-time-lbl day-lbl-interior"></div>
+               <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+      }
       return;
     }
 
@@ -2507,25 +2516,28 @@ function onResizeMove(e){
   const dy=e.clientY-_rzStartY;
   const deltaMins=Math.round(dy/slotH*30/15)*15;
   const newDur=Math.max(15,_rzStartDur+deltaMins);
+  const prevDur=_rzTask.duration||30;
   _rzTask.duration=newDur;
-  // Live-update: week view uses absolute height; day view uses slot min-height
+
   if(_rzView==='week'){
     const block=document.querySelector(`.wk-task-block[data-id="${_rzTask.id}"]`);
     if(block){block.style.height=(newDur/30*slotH-1)+'px';}
     const dl=block?.querySelector('.wk-task-block-dur');
     if(dl)dl.textContent=durLabel(newDur);
   } else {
-    // Day view: update the slot's min-height so the row expands correctly
-    const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
-    if(block){
-      const slot=block.closest('.day-slot');
-      const slotsNeeded=Math.ceil(newDur/30);
-      const minH=slotsNeeded*(window.innerWidth<=640?64:76);
-      if(slot)slot.style.minHeight=minH+'px';
-      // Sync the adjacent time label
-      const lbl=slot?.previousElementSibling;
-      if(lbl&&lbl.classList.contains('day-time-lbl'))lbl.style.minHeight=minH+'px';
-      const dl=block.querySelector('.day-task-block-dur');
+    // Re-render the day view when crossing a 30-min boundary so interior
+    // ghost time labels appear/disappear correctly and the slot row stretches
+    const prevSlots=Math.ceil(prevDur/30);
+    const newSlots=Math.ceil(newDur/30);
+    if(newSlots!==prevSlots){
+      renderDay(); // full re-render
+      // Re-apply drag cursor/select which renderDay doesn't disturb (they're on body)
+      document.body.style.cursor='ns-resize';
+      document.body.style.userSelect='none';
+    } else {
+      // Same slot count — just update the duration pill text live
+      const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
+      const dl=block?.querySelector('.day-task-dur-pill,.day-task-block-dur');
       if(dl)dl.textContent=durLabel(newDur);
     }
   }
@@ -2894,22 +2906,30 @@ function showModal(id){
     const f=document.getElementById('fName');
     if(f){f.focus();autoExpand(f);}
     resetTextareaHeights();
-    // Wire scroll fade: remove mask when body is scrolled to the bottom
+    // Wire scroll fade on the task modal body only
     const body=document.querySelector('#'+id+' .modal-body');
     if(body){
+      // Remove any previous listener before adding a new one (prevent accumulation)
+      if(body._scrollHandler)body.removeEventListener('scroll',body._scrollHandler);
       const checkScroll=()=>{
         const atBottom=body.scrollHeight-body.scrollTop<=body.clientHeight+8;
         body.classList.toggle('at-bottom',atBottom);
       };
-      checkScroll(); // run once on open
+      body._scrollHandler=checkScroll;
+      checkScroll();
       body.addEventListener('scroll',checkScroll,{passive:true});
     }
   },150);
 }
 function closeModal(){
   document.getElementById('mOverlay').classList.remove('open');
-  // If user cancelled (didn't commit via Save), restore the original subtasks
-  // so the live-preview block reverts back to its pre-edit state
+  // Remove scroll listener to prevent accumulation
+  const body=document.querySelector('#mOverlay .modal-body');
+  if(body&&body._scrollHandler){
+    body.removeEventListener('scroll',body._scrollHandler);
+    body._scrollHandler=null;
+  }
+  // If user cancelled, restore original subtasks
   if(mMode==='edit'&&mId&&!_modalCommitted){
     const t=tasks.find(t=>t.id===mId);
     if(t){t.subtasks=_editOrigSubtasks;if(curView==='day')renderDay();}

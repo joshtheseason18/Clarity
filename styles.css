@@ -752,6 +752,19 @@ header{
 }
 .day-time-lbl.half-lbl{border-bottom:1px dashed var(--surface3)}
 .day-lbl-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0}
+/* Ghost label: on-the-hour ticks inside a multi-slot task — visible but subordinate */
+.day-lbl-ghost{
+  min-height:0!important;
+  height:24px!important; /* just enough to show the time */
+  overflow:hidden;
+  font-size:10px!important;
+  color:var(--text3)!important;
+  font-weight:500!important;
+  opacity:.55;
+  border-right:1px dashed var(--border)!important; /* lighter than the solid border */
+  padding:4px 10px 0 0;
+  align-items:flex-start;
+}
 
 /* Slot: in-flow container — height is driven by task block's min-height */
 .day-slot{
@@ -810,7 +823,8 @@ header{
 .day-task-block.done-block{opacity:.5}
 .day-task-block-name{
   font-size:15px;font-weight:600;color:var(--text);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  /* Wrap long titles rather than truncating — user sees full name + subtasks stay accessible */
+  overflow:visible;white-space:normal;word-break:break-word;
   flex:1;min-width:0;
 }
 /* Time range badge — top-right of the name row */
@@ -1039,13 +1053,22 @@ header{
 .modal{
   background:var(--surface);border-radius:14px;width:460px;max-width:calc(100vw - 28px);
   box-shadow:0 12px 40px rgba(0,0,0,.18);
-  /* Three-zone layout: header | scrollable body | footer */
-  display:flex;flex-direction:column;
-  max-height:calc(100vh - 80px); /* never taller than viewport */
+  /* Default padding for simple modals (delete confirm, add category, etc.)
+     The task modal overrides this via .modal-header/.modal-body/.modal-footer */
+  padding:22px;
+  display:flex;flex-direction:column;gap:12px;
+  max-height:calc(100vh - 80px);
+  overflow-y:auto; /* simple modals scroll as a unit if needed */
   transform:translateY(10px) scale(.98);
   transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .3s;
 }
 .modal-overlay.open .modal{transform:translateY(0) scale(1)}
+/* Task modal specifically: three-zone layout overrides the defaults above */
+#mOverlay .modal{
+  padding:0;       /* header/body/footer provide their own padding */
+  gap:0;
+  overflow-y:visible; /* body zone handles its own scroll */
+}
 
 /* Sticky header — title, sub, type toggle */
 .modal-header{
@@ -1091,7 +1114,7 @@ header{
 .rcb{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
 .recur-opts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 /* Used by all non-task modals (delete, add category, etc.) */
-.modal-acts{display:flex;gap:6px;justify-content:flex-end;padding:12px 22px 16px;border-top:1px solid var(--border);margin:0 -22px -22px;}
+.modal-acts{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;}
 .btn-c{padding:7px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;transition:all .15s}
 .btn-c:hover{border-color:var(--border2);color:var(--text)}
 .btn-s{padding:7px 16px;border:none;border-radius:8px;background:var(--accent);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:#fff;cursor:pointer;transition:background .15s}
