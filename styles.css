@@ -274,6 +274,44 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .subtask-progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
 .subtask-progress-label{font-size:9px;color:var(--text3);font-weight:600}
 
+/* Inline subtasks on Day view blocks */
+.day-subtask-list{
+  margin-top:4px;padding-left:18px;display:flex;flex-direction:column;gap:2px;
+  border-left:2px solid rgba(var(--accent-rgb),.25);margin-left:4px;
+}
+.day-subtask{
+  display:flex;align-items:center;gap:5px;cursor:pointer;
+  padding:1px 0;transition:opacity .15s;
+}
+.day-subtask:hover{opacity:.8}
+.day-subtask-check{
+  width:12px;height:12px;border:1.5px solid var(--border2);border-radius:3px;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;background:var(--surface);
+}
+.day-subtask-check.checked{
+  background:var(--accent);border-color:var(--accent);
+}
+.day-subtask-check.checked::after{
+  content:'✓';color:#fff;font-size:8px;font-weight:700;
+}
+.day-subtask-name{
+  font-size:11px;color:var(--text2);font-weight:400;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.day-subtask.done .day-subtask-name{
+  text-decoration:line-through;opacity:.4;
+}
+.day-subtask-dur{font-size:9px;color:var(--text3);flex-shrink:0}
+
+/* Event block subtasks (white text) */
+.event-block .day-subtask-list{border-left-color:rgba(255,255,255,.3)}
+.event-block .day-subtask-check{border-color:rgba(255,255,255,.5);background:transparent}
+.event-block .day-subtask-check.checked{background:rgba(255,255,255,.9);border-color:rgba(255,255,255,.9)}
+.event-block .day-subtask-check.checked::after{color:var(--accent)}
+.event-block .day-subtask-name{color:rgba(255,255,255,.85)}
+.event-block .day-subtask.done .day-subtask-name{color:rgba(255,255,255,.4)}
+
 /* ══════════════════════════════════════════
    SPLASH SCREEN
 ══════════════════════════════════════════ */
@@ -404,10 +442,11 @@ header{
 .side-tab::after{
   content:attr(data-tip);
   position:absolute;top:100%;left:50%;transform:translateX(-50%) translateY(4px);
-  padding:4px 10px;background:var(--text);color:var(--bg);
+  padding:4px 10px;background:var(--accent);color:#fff;
   font-size:10px;font-weight:600;border-radius:6px;white-space:nowrap;
   opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;
   z-index:200;margin-top:2px;
+  box-shadow:0 2px 8px rgba(var(--accent-rgb),.3);
 }
 .side-tab:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
 .side-tab.active::after{
@@ -543,12 +582,13 @@ header{
 ══════════════════════════════════════════ */
 .month-wrap{padding:16px;overflow-y:auto}
 .month-grid-hdr{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px}
-.month-day-name{text-align:center;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);padding:4px 0}
-.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.month-day-name{text-align:center;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);padding:6px 0}
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .month-cell{
-  min-height:88px;background:var(--surface);border:1px solid var(--border);
-  border-radius:10px;padding:5px;cursor:pointer;
+  min-height:130px;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:6px;cursor:pointer;
   transition:border-color .15s,box-shadow .15s;overflow:hidden;
+  display:flex;flex-direction:column;
 }
 .month-cell:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-pale)}
 .month-cell.other-month{background:var(--surface2);opacity:.45}
@@ -556,11 +596,21 @@ header{
 [data-dark="true"] .month-cell.today{background:rgba(var(--accent-rgb),.14);border-color:var(--accent)}
 .month-cell.drag-over{border-color:var(--accent);background:var(--accent-pale);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
 .month-cell.snap-flash{animation:snapFlash .5s ease-out}
-.cell-num-circle{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text);margin-bottom:2px}
+.cell-num-circle{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px}
 .today .cell-num-circle{background:var(--accent);color:#fff;font-weight:700}
 .cell-num-row{display:flex;align-items:center;gap:3px}
 .cell-event-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}
-.m-chip{font-size:9px;font-weight:500;padding:1px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid var(--border2);background:var(--surface2);color:var(--text2);display:block;cursor:grab}
+.m-chip{
+  font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-left:2px solid var(--border2);background:var(--surface2);color:var(--text2);
+  display:flex;align-items:center;gap:4px;cursor:grab;
+}
+.m-chip-time{font-size:8px;font-weight:700;color:var(--accent);flex-shrink:0}
+.m-chip-pri{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.m-chip-pri.pri-h{background:#ef4444}
+.m-chip-pri.pri-m{background:#f59e0b}
+.m-chip-pri.pri-l{background:#10b981}
 .m-chip-event{font-weight:600;color:var(--accent)}
 .m-chip.done{opacity:.4;text-decoration:line-through}
 .more-chip{font-size:9px;color:var(--text3);padding:1px 3px}
@@ -1515,7 +1565,7 @@ header{
   /* ── Month grid ── */
   .month-wrap{padding:8px}
   .month-grid{gap:2px}
-  .month-cell{min-height:60px;padding:3px;border-radius:7px}
+  .month-cell{min-height:90px;padding:4px;border-radius:7px}
   .m-chip{font-size:8px;padding:1px 3px;border-radius:3px}
   .cell-num-circle{width:18px;height:18px;font-size:10px}
   .more-chip{font-size:8px}
@@ -1565,7 +1615,7 @@ header{
   .nav-tab{padding:4px 6px;font-size:9px}
   .hdr-btn{font-size:9px;padding:3px 6px}
   .year-grid{grid-template-columns:repeat(1,1fr)}
-  .month-cell{min-height:48px}
+  .month-cell{min-height:70px}
   .week-hdr-row{grid-template-columns:32px repeat(7,1fr)}
   .week-grid{grid-template-columns:32px repeat(7,1fr)}
   .wdh-name{font-size:8px}.wdh-num{font-size:10px}

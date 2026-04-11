@@ -651,21 +651,27 @@ function renderMonth(){
   let nx=1;while(cells.length<42)cells.push({date:new Date(y,mo+1,nx++),cur:false});
   cells.forEach(({date,cur})=>{
     const key=dk(date),isTod=key===todayKey;
-    const dt=tasksOn(key),shown=dt.slice(0,3);
+    const dt=tasksOn(key);
     const events=dt.filter(t=>(t.type||'task')==='event');
     const eventCount=events.length;
     let cls='month-cell'+((!cur)?' other-month':'')+(isTod?' today':'');
-    // Show events first, then tasks
-    const sorted=[...dt.filter(t=>(t.type||'task')==='event'),...dt.filter(t=>(t.type||'task')!=='event')].slice(0,3);
+    // Show events first, then tasks sorted by priority
+    const priOrder={high:0,medium:1,low:2,none:3};
+    const sorted=[
+      ...dt.filter(t=>(t.type||'task')==='event').sort((a,b)=>(a.time||'').localeCompare(b.time||'')),
+      ...dt.filter(t=>(t.type||'task')!=='event').sort((a,b)=>(priOrder[a.priority]||3)-(priOrder[b.priority]||3))
+    ].slice(0,5);
     let chips=sorted.map(t=>{
       const cc=catColor(t.category);
       const isEvent=(t.type||'task')==='event';
-      let c='m-chip'+(t.done?' done':'')+(isEvent?' m-chip-event':'');
-      if(!isEvent&&t.priority==='high')c+=' pri-high';else if(!isEvent&&t.priority==='medium')c+=' pri-medium';
+      const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||key);
+      let c='m-chip'+(isDone?' done':'')+(isEvent?' m-chip-event':'');
+      const priDot=!isEvent&&t.priority&&t.priority!=='none'?`<span class="m-chip-pri pri-${t.priority[0]}"></span>`:'';
+      const timeStr=t.time?`<span class="m-chip-time">${fmtT(t.time)}</span>`:'';
       return`<span class="${c}" style="border-left-color:${isEvent?'var(--accent)':cc}${isEvent?';background:var(--accent-pale)':''}" draggable="true"
         ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||key}')" ondragend="onTaskDragEnd(event)"
-        onclick="openEdit('${t.id}','${t._instanceDate||key}',event)">${esc(t.name)}${t.recur?' ↻':''}</span>`;
-    }).join('')+(dt.length>3?`<span class="more-chip">+${dt.length-3}</span>`:'');
+        onclick="openEdit('${t.id}','${t._instanceDate||key}',event)">${priDot}${timeStr}${esc(t.name)}${t.recur?' ↻':''}</span>`;
+    }).join('')+(dt.length>5?`<span class="more-chip">+${dt.length-5}</span>`:'');
     const eventDot=eventCount?`<span class="cell-event-dot" title="${eventCount} event${eventCount>1?'s':''}"></span>`:'';
     html+=`<div class="${cls}" onclick="onMCell('${key}')" ondragover="onDO(event,'${key}')" ondragleave="onDL(event)" ondrop="onDropDate(event,'${key}')">
       <div class="cell-num-row"><span class="cell-num-circle">${date.getDate()}</span>${eventDot}</div>${chips}</div>`;
@@ -786,6 +792,7 @@ function renderDay(){
         <span class="day-task-block-name">${esc(t.name)}</span>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
+        ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"><div class="day-subtask-check${s.done?' checked':''}"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
       </div>`;
     }
@@ -801,7 +808,7 @@ function renderDay(){
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="subtask-progress"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${Math.round(subsDone/subsTotal*100)}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
+      ${subsTotal?`<div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done'  :''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"><div class="day-subtask-check${s.done?' checked':''}"></div><span class="day-subtask-name">${esc(s.name)}</span>${s.duration?`<span class="day-subtask-dur">${durLabel(s.duration)}</span>`:''}</div>`).join('')}</div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
   }).join('');
@@ -2521,6 +2528,14 @@ function addAttachment(){
 function deleteAttachment(i){
   _modalAttachments.splice(i,1);
   renderModalAttachments();
+}
+
+// Toggle subtask directly from Day view block
+function toggleSubtaskInline(taskId,subIdx){
+  const t=tasks.find(t=>t.id===taskId);
+  if(!t||!t.subtasks||!t.subtasks[subIdx])return;
+  t.subtasks[subIdx].done=!t.subtasks[subIdx].done;
+  save();renderAll();
 }
 
 function openNew(dateKey,time){
