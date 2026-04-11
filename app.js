@@ -965,10 +965,12 @@ function renderDay(){
     const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
     const slotBg=rt&&!hasTask?`background:${rt.color}0d`:'';
 
-    // Slot min-height: always DAY_SLOT_H for empty, for task slots the BLOCK's
-    // own min-height (set via inline style) drives the row — slot itself just
-    // needs the base so empty half-rows don't collapse.
-    const minH=DAY_SLOT_H;
+    // Slot min-height: proportional to scheduled duration so each row visually
+    // represents the correct amount of time, keeping empty slots consistent.
+    // Empty slots always = DAY_SLOT_H. Task slots = slotsNeeded * DAY_SLOT_H.
+    const maxDur=hasTask?Math.max(...tasksHere.map(t=>t.duration||30)):30;
+    const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
+    const minH=slotsNeeded*DAY_SLOT_H;
 
     const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
 

@@ -312,6 +312,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .day-subtask-list{
   margin-top:2px;padding-left:10px;display:flex;flex-direction:column;gap:2px;
   border-left:2px solid rgba(var(--accent-rgb),.25);margin-left:8px;
+  /* Cap height so many subtasks don't push the slot row far beyond its scheduled duration.
+     Scroll within the list keeps all subtasks accessible without disrupting the timeline. */
+  max-height:150px;
+  overflow-y:auto;
+  /* Thin custom scrollbar so it doesn't look heavy */
+  scrollbar-width:thin;
+  scrollbar-color:rgba(var(--accent-rgb),.3) transparent;
 }
 .day-subtask-more{
   font-size:10px;color:var(--accent);font-weight:600;padding:2px 0;cursor:pointer;
