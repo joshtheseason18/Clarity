@@ -1,26 +1,31 @@
 // ══ AUDIO ══════════════════════════════════
-const AC=new(window.AudioContext||window.webkitAudioContext)();
-function playDone(){
+let AC=null;
+function getAC(){
+  if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();
   if(AC.state==='suspended')AC.resume();
+  return AC;
+}
+function playDone(){
+  const ac=getAC();
   [[523.25,0],[659.25,.09],[783.99,.18]].forEach(([f,d])=>{
-    const o=AC.createOscillator(),g=AC.createGain();
-    o.connect(g);g.connect(AC.destination);o.type='sine';
-    o.frequency.setValueAtTime(f,AC.currentTime+d);
-    g.gain.setValueAtTime(0,AC.currentTime+d);
-    g.gain.linearRampToValueAtTime(.15,AC.currentTime+d+.02);
-    g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d+.38);
-    o.start(AC.currentTime+d);o.stop(AC.currentTime+d+.42);
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.connect(g);g.connect(ac.destination);o.type='sine';
+    o.frequency.setValueAtTime(f,ac.currentTime+d);
+    g.gain.setValueAtTime(0,ac.currentTime+d);
+    g.gain.linearRampToValueAtTime(.15,ac.currentTime+d+.02);
+    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d+.38);
+    o.start(ac.currentTime+d);o.stop(ac.currentTime+d+.42);
   });
 }
 function playUndo(){
-  if(AC.state==='suspended')AC.resume();
-  const o=AC.createOscillator(),g=AC.createGain();
-  o.connect(g);g.connect(AC.destination);o.type='sine';
-  o.frequency.setValueAtTime(400,AC.currentTime);
-  o.frequency.linearRampToValueAtTime(280,AC.currentTime+.18);
-  g.gain.setValueAtTime(.09,AC.currentTime);
-  g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.22);
-  o.start(AC.currentTime);o.stop(AC.currentTime+.25);
+  const ac=getAC();
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.connect(g);g.connect(ac.destination);o.type='sine';
+  o.frequency.setValueAtTime(400,ac.currentTime);
+  o.frequency.linearRampToValueAtTime(280,ac.currentTime+.18);
+  g.gain.setValueAtTime(.09,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.22);
+  o.start(ac.currentTime);o.stop(ac.currentTime+.25);
 }
 
 // ══ THEME / DARK MODE ══════════════════════
@@ -141,10 +146,11 @@ function showTourStep(){
     const target=document.querySelector(step.target);
     if(!target){_tourStep++;showTourStep();return;}
 
-    // Backdrop
+    // Backdrop — clicking it skips the tour (critical for mobile)
     const backdrop=document.createElement('div');
     backdrop.className='tour-backdrop';
     backdrop.id='tourBackdrop';
+    backdrop.addEventListener('click',finishTour);
     document.body.appendChild(backdrop);
 
     // Highlight target
@@ -169,25 +175,44 @@ function showTourStep(){
         <button class="tour-skip" onclick="finishTour()">Skip tour</button>
         <button class="tour-btn" onclick="nextTourStep()">${_tourStep<TOUR_STEPS.length-1?'Next →':'Got it 🚀'}</button>
       </div>
-      <div class="tour-step-dots">${dots}</div>`;
+      <div class="tour-step-dots">${dots}</div>
+      ${window.innerWidth<=640?'<div class="tour-tap-hint">Tap outside to skip</div>':''}`;
     document.body.appendChild(card);
 
     // Position card relative to target (use RAF to ensure card is rendered)
     const rect=target.getBoundingClientRect();
+    const isMobile=window.innerWidth<=640;
     requestAnimationFrame(()=>{
       const cardH=card.offsetHeight;
-      if(step.arrow==='top'){
-        // Card below target, arrow points up
+      const cardW=Math.min(300,window.innerWidth-32);
+      if(isMobile){
+        // On mobile: always center horizontally, position below or above target
+        card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
+        card.style.right='auto';
+        const spaceBelow=window.innerHeight-rect.bottom;
+        if(spaceBelow>=cardH+20){
+          card.style.top=(rect.bottom+12)+'px';
+        } else {
+          card.style.top=Math.max(8,rect.top-cardH-12)+'px';
+        }
+      } else if(step.arrow==='top'){
         card.style.top=(rect.bottom+12)+'px';
         card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
       } else if(step.arrow==='bottom'){
-        // Card above target, arrow points down
         card.style.top=Math.max(8,(rect.top-cardH-12))+'px';
         card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
       } else if(step.arrow==='right'){
-        // Card left of target, arrow points right
-        card.style.top=rect.top+'px';
-        card.style.right=(window.innerWidth-rect.left+12)+'px';
+        // Guard against card going off the left edge of the screen
+        const rightVal=window.innerWidth-rect.left+12;
+        if(rightVal+cardW>window.innerWidth-16){
+          // Would overflow — center it instead
+          card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
+          card.style.right='auto';
+          card.style.top=Math.max(8,rect.top)+'px';
+        } else {
+          card.style.top=rect.top+'px';
+          card.style.right=rightVal+'px';
+        }
       }
     });
   },400);
@@ -337,6 +362,9 @@ function enterApp(){
   const splash=document.getElementById('splash');
   splash.classList.add('hiding');
   setTimeout(()=>{splash.style.display='none';renderAll();renderTip();},500);
+  setTimeout(checkOverdueTasks,1500);
+  showOnboarding();
+  renderGreeting();
 }
 
 // ══ CONSTANTS ══════════════════════════════
@@ -760,7 +788,8 @@ function renderDay(){
   const _dayTotal=_dayTasks.length;
   const _dayDone=_dayTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(dk(selDate))).length;
   const _dayProgress=_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'';
-  document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+_dayProgress;
+  const _dayDateStr=MONTHS_LONG[selDate.getMonth()]+' '+selDate.getDate()+', '+selDate.getFullYear();
+  document.getElementById('daySub').textContent=_dayDateStr+(isToday(selDate)?' · Today':'')+_dayProgress;
   const sl=slots();
   const DAY_SLOT_H=76;
   // Slots grid (just for click-to-add, no tasks inside)
@@ -795,7 +824,7 @@ function renderDay(){
         </div>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div>`:''}
+        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div><div class="subtask-progress" style="opacity:.7"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${subsTotal?Math.round(subsDone/subsTotal*100):0}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
       </div>`;
     }
@@ -812,7 +841,7 @@ function renderDay(){
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div>`:''}
+      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div><div class="subtask-progress"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${subsTotal?Math.round(subsDone/subsTotal*100):0}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
       <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
     </div>`;
   }).join('');
@@ -946,16 +975,34 @@ function renderCat(){
 }
 
 function calcStreak(t){
-  if(!t.recur||!t.doneOverrides)return 0;
+  if(!t.recur||!t.doneOverrides||!t.date)return 0;
   const dones=new Set(t.doneOverrides);
   let streak=0;
   const today=new Date();today.setHours(0,0,0,0);
-  // Walk backwards from today checking if each expected occurrence was completed
-  for(let i=0;i<90;i++){
-    const d=addDays(today,-i);
-    const key=dk(d);
-    if(dones.has(key))streak++;
-    else if(i>0)break; // allow today to be unchecked (day isn't over)
+  const base=fromDk(t.date);
+
+  // Build the set of dates this habit was scheduled to occur (up to today)
+  // Walk recurrence forward from base date, collect all occurrences up to today
+  const occurrences=[];
+  for(let i=0;i<=730;i++){
+    const occ=new Date(base);
+    if(t.recurU==='day')occ.setDate(occ.getDate()+t.recurN*i);
+    else if(t.recurU==='week')occ.setDate(occ.getDate()+t.recurN*7*i);
+    else occ.setMonth(occ.getMonth()+t.recurN*i);
+    if(occ>today)break;
+    if(occ>=base)occurrences.push(dk(occ));
+  }
+
+  // Walk occurrences backwards — break on first miss (allow today to be unchecked)
+  for(let i=occurrences.length-1;i>=0;i--){
+    const key=occurrences[i];
+    const isToday=key===dk(today);
+    if(dones.has(key)){
+      streak++;
+    } else if(!isToday){
+      break; // missed a scheduled day — streak is over
+    }
+    // today not yet done: continue checking earlier days
   }
   return streak;
 }
@@ -1504,15 +1551,6 @@ function smartRescheduleDismiss(id){
   document.getElementById('smartRescheduleOverlay').classList.remove('open');
   setTimeout(checkOverdueTasks,500);
 }
-// Check on app open (after splash)
-const _origEnterApp=enterApp;
-window.enterApp=function(){
-  _origEnterApp();
-  setTimeout(checkOverdueTasks,1500);
-  showOnboarding();
-  renderGreeting();
-};
-
 // ══ CANVAS LMS IMPORT ════════════════════════════
 function importCanvas(){
   const raw=document.getElementById('canvasInput').value.trim();
@@ -1552,8 +1590,9 @@ function importCanvas(){
     if(!name)return;
     if(!dateStr)dateStr=dk(addDays(new Date(),7)); // default to 1 week out
     tasks.push({
-      id:genId(),name,date:dateStr,time:timeStr,duration:60,
+      id:genId(),name,type:'task',date:dateStr,time:timeStr,duration:60,
       priority:'high',category:'work',notes:'Imported from Canvas',
+      attachments:[],subtasks:[],location:'',
       scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
       doneOverrides:[],deletedOccurrences:[]
     });
@@ -1618,10 +1657,14 @@ function openWeekPlan(){
 }
 function closeWeekPlan(){document.getElementById('weekPlanOverlay').classList.remove('open')}
 function saveWeekIntention(){
+  // Must match the planStart logic in openWeekPlan exactly
   const today=new Date();today.setHours(0,0,0,0);
   const dow=today.getDay();
-  const nextMon=dow===0?addDays(today,1):dow===1?today:addDays(today,8-dow);
-  const key='clarity_intention_'+dk(nextMon);
+  const diff=(dow-weekStartDay+7)%7;
+  const thisWeekStart=addDays(today,-diff);
+  const nextWeekStart=addDays(thisWeekStart,7);
+  const planStart=diff<=1?thisWeekStart:nextWeekStart;
+  const key='clarity_intention_'+dk(planStart);
   const val=document.getElementById('wpIntention').value.trim();
   if(val)localStorage.setItem(key,val);
   else localStorage.removeItem(key);
@@ -1992,7 +2035,7 @@ function onTaskDragStart(e,id,idate){
   e.stopPropagation();
 }
 function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null}
-function onDO(e){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
+function onDO(e,dateKey,time){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
 function onDL(e){e.currentTarget.classList.remove('drag-over')}
 function snapFlash(el){if(!el)return;el.classList.remove('snap-flash');void el.offsetWidth;el.classList.add('snap-flash');setTimeout(()=>el.classList.remove('snap-flash'),600)}
 // ══ SLOT VALIDATION ══════════════════════════
@@ -2303,7 +2346,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
 
 // ══ TOGGLE DONE ══════════════════════════════
 function toggleDone(id,instanceDate,e,el){
-  e.stopPropagation();if(AC.state==='suspended')AC.resume();
+  e.stopPropagation();
   const t=tasks.find(t=>t.id===id);if(!t)return;
   if((t.type||'task')==='event')return; // events can't be checked off
   if(t.recur&&instanceDate){
@@ -2316,6 +2359,15 @@ function toggleDone(id,instanceDate,e,el){
     if(t.done){playDone();doRipple(el);}else{playUndo();}
   }
   save();renderAll();
+  // Confetti when all tasks for today are done
+  const todayKey=dk(new Date());
+  if(curView==='day'&&dk(selDate)===todayKey){
+    const dayTasks=tasksOn(todayKey);
+    const tasksOnly=dayTasks.filter(t=>(t.type||'task')==='task');
+    if(tasksOnly.length>0&&tasksOnly.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
+      setTimeout(fireConfetti,300);
+    }
+  }
 }
 function doRipple(el){
   if(!el)return;
@@ -2380,7 +2432,7 @@ function onResizeStart(e,tid,idate,view){
 }
 function onResizeMove(e){
   if(!_rzTask)return;
-  const slotH=_rzView==='week'?42:52;
+  const slotH=_rzView==='week'?48:76; // must match WK_SLOT_H / DAY_SLOT_H in render
   const dy=e.clientY-_rzStartY;
   const deltaMins=Math.round(dy/slotH*30/15)*15;
   const newDur=Math.max(15,_rzStartDur+deltaMins);
@@ -2718,7 +2770,7 @@ function showModal(id){
 function closeModal(){document.getElementById('mOverlay').classList.remove('open')}
 function handleMBg(e){if(e.target===e.currentTarget)closeModal()}
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();}
+  if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();closeIdeaModal();}
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&document.getElementById('mOverlay').classList.contains('open')){e.preventDefault();saveTask();}
 });
 function saveTask(){
@@ -2768,7 +2820,8 @@ function showUndoToast(msg,undoFn){
   let el=document.getElementById('undoToast');
   if(!el){
     el=document.createElement('div');el.id='undoToast';
-    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:99px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)';
+    el.className='app-toast';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:99px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)';
     document.body.appendChild(el);
   }
   el.innerHTML=`<span>${msg}</span><button style="background:rgba(255,255,255,.2);border:none;color:inherit;padding:4px 10px;border-radius:99px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.3px" id="undoBtn">UNDO</button>`;
@@ -2911,6 +2964,8 @@ function importData(e){
 // ══ TASK TOOLTIP (hover preview) ════════════════
 let _tooltipEl=null,_tooltipTimer=null;
 function initTooltips(){
+  // Hover tooltips are meaningless on touch — skip entirely
+  if('ontouchstart' in window)return;
   document.addEventListener('mouseover',function(e){
     const block=e.target.closest('.wk-task-block,.day-task-block');
     if(!block)return;
@@ -2985,7 +3040,7 @@ function onSearchSelect(id,isBd,dateKey){
 }
 // Close search on outside click
 document.addEventListener('click',function(e){
-  if(_searchOpen&&!e.target.closest('.search-wrap'))toggleSearch();
+  if(_searchOpen&&!e.target.closest('.search-bar'))toggleSearch();
 });
 
 // ══ BRAIN DUMP REORDER ══════════════════════════
@@ -3075,20 +3130,6 @@ function fireConfetti(){
   }
   draw();
 }
-
-// Hook confetti into toggleDone
-const _origToggleDone=toggleDone;
-window.toggleDone=function(id,instanceDate,e,el){
-  _origToggleDone(id,instanceDate,e,el);
-  // Check if all tasks for today are now done
-  const todayKey=dk(new Date());
-  if(curView==='day'&&dk(selDate)===todayKey){
-    const dayTasks=tasksOn(todayKey);
-    const _tasksOnly=dayTasks.filter(t=>(t.type||'task')==='task');if(_tasksOnly.length>0&&_tasksOnly.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
-      setTimeout(fireConfetti,300);
-    }
-  }
-};
 
 // ══ KEYBOARD NAVIGATION ═════════════════════════
 document.addEventListener('keydown',function(e){
@@ -3180,8 +3221,9 @@ function saveBDDetail(){
   if(dateVal){
     const time=timeVal||'09:00';
     tasks.push({
-      id:genId(),name,priority,category,notes,
-      date:dateVal,time,scheduled:true,done:false,
+      id:genId(),name,type:'task',priority,category,notes,
+      attachments:[],subtasks:[],location:'',
+      date:dateVal,time,duration:30,scheduled:true,done:false,
       recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
     });
     brainDump=brainDump.filter(t=>t.id!==bdDetailId);
@@ -3323,7 +3365,8 @@ function showToast(msg){
   let t=document.getElementById('clarityToast');
   if(!t){
     t=document.createElement('div');t.id='clarityToast';
-    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap';
+    t.className='app-toast';
+    t.style.cssText='position:fixed;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap';
     document.body.appendChild(t);
   }
   t.textContent=msg;
@@ -3347,11 +3390,9 @@ function onSuggDragEnd(e){
 }
 
 // Patch onDO, onDropDate, onDropSlot to also handle suggDragId
-const _origOnDO=onDO;
 window.onDO=function(e){
   if(!dragBdId&&!dragTaskId&&!suggDragId)return;
   e.preventDefault();e.stopPropagation();
-  // Use 'copy' only for suggestion drags, 'move' for everything else
   e.dataTransfer.dropEffect=suggDragId?'copy':'move';
   e.currentTarget.classList.add('drag-over');
 };
@@ -3544,6 +3585,7 @@ function getNowMins(){const n=new Date();return n.getHours()*60+n.getMinutes()}
 
 function renderNowLine(){
   const mins=getNowMins();
+  const WK_SLOT_H=48,DAY_SLOT_H=76; // must match renderWeek/renderDay
   // Week view — one vertical column set, insert line in today's column
   const todayKey=dk(new Date());
   // Week view now-line
@@ -3553,7 +3595,7 @@ function renderNowLine(){
     col.querySelectorAll('.now-line').forEach(el=>el.remove());
     const hdrCell=weekHdrCells[i];
     if(hdrCell&&hdrCell.classList.contains('today')){
-      const top=(mins/30)*42; // 42px per half-hour slot
+      const top=(mins/30)*WK_SLOT_H;
       const line=document.createElement('div');
       line.className='now-line';
       line.style.cssText=`top:${top}px;position:absolute;left:0;right:0`;
@@ -3566,7 +3608,7 @@ function renderNowLine(){
   const dayTimeline=document.getElementById('dayTimeline');
   if(dayTimeline&&isToday(selDate)){
     dayTimeline.querySelectorAll('.now-line').forEach(el=>el.remove());
-    const top=(mins/30)*52; // 52px per half-hour slot
+    const top=(mins/30)*DAY_SLOT_H;
     const line=document.createElement('div');
     line.className='now-line';
     line.style.cssText=`top:${top}px;grid-column:2;position:absolute;left:56px;right:0`;
@@ -3578,14 +3620,15 @@ function renderNowLine(){
 
 function scrollToNow(){
   const mins=getNowMins();
+  const WK_SLOT_H=48,DAY_SLOT_H=76; // must match renderWeek/renderDay
   const wv=document.querySelector('.week-scroll');
   if(wv&&curView==='week'){
-    const top=Math.max(0,(mins/30)*42 - wv.clientHeight/2);
+    const top=Math.max(0,(mins/30)*WK_SLOT_H - wv.clientHeight/2);
     wv.scrollTo({top,behavior:'smooth'});
   }
   const dv=document.querySelector('.day-scroll');
   if(dv&&curView==='day'){
-    const top=Math.max(0,(mins/30)*52 - dv.clientHeight/2);
+    const top=Math.max(0,(mins/30)*DAY_SLOT_H - dv.clientHeight/2);
     dv.scrollTo({top,behavior:'smooth'});
   }
 }
@@ -3629,8 +3672,11 @@ function openQuickAdd(){
   const bar=document.getElementById('quickAddBar');
   const now=new Date();
   document.getElementById('qaDate').value=dk(now);
-  const h=String(now.getHours()).padStart(2,'0');
-  const m=String(Math.round(now.getMinutes()/30)*30%60).padStart(2,'0');
+  // Round to nearest 30min correctly — handle minute rollover into next hour
+  const totalMins=now.getHours()*60+now.getMinutes();
+  const roundedMins=Math.round(totalMins/30)*30;
+  const h=String(Math.floor(roundedMins/60)%24).padStart(2,'0');
+  const m=String(roundedMins%60).padStart(2,'0');
   document.getElementById('qaTime').value=h+':'+m;
   document.getElementById('qaPri').value='none';
   document.getElementById('qaName').value='';
@@ -3918,10 +3964,7 @@ function saveIdea() {
   closeIdeaModal();
 }
 
-// Close idea modal on Escape (patch into existing keydown listener)
-document.addEventListener('keydown', function ideaEsc(e) {
-  if (e.key === 'Escape') closeIdeaModal();
-});
+// (closeIdeaModal on Escape is handled by the master keydown listener above)
 
 // ══ CONSOLIDATED INIT ═══════════════════════════
 function clarityInit(){
@@ -3974,5 +4017,30 @@ function clarityInit(){
   initTooltips();
   initBDReorder();
   restoreFocusTimer();
+
+  // Long-press to rename in Categories view (mobile equivalent of double-click)
+  if('ontouchstart' in window){
+    let _lpTimer=null;
+    document.addEventListener('touchstart',function(e){
+      const nameEl=e.target.closest('.cat-task-name');
+      if(!nameEl)return;
+      _lpTimer=setTimeout(()=>{
+        _lpTimer=null;
+        const dbl=nameEl.getAttribute('ondblclick')||'';
+        const m=dbl.match(/inlineRename\(this,'([^']+)',(true|false)\)/);
+        if(m){
+          // Provide brief haptic hint if available
+          if(navigator.vibrate)navigator.vibrate(40);
+          inlineRename(nameEl,m[1],m[2]==='true');
+        }
+      },500);
+    },{passive:true});
+    document.addEventListener('touchend',function(){
+      if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
+    },{passive:true});
+    document.addEventListener('touchmove',function(){
+      if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
+    },{passive:true});
+  }
 }
 document.addEventListener('DOMContentLoaded',clarityInit);

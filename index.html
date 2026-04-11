@@ -24,7 +24,7 @@
   </div>
   <div class="splash-tagline" id="splashTagline">Your personal scheduler</div>
   <div class="splash-name-wrap" id="splashNameWrap" style="display:none">
-    <input class="splash-name-input" id="splashName" placeholder="What's your name?" maxlength="30" autocomplete="given-name">
+    <input class="splash-name-input" id="splashName" placeholder="What's your name?" maxlength="30" autocomplete="given-name" onkeydown="if(event.key==='Enter')enterApp()">
   </div>
   <div class="splash-greeting" id="splashGreeting" style="display:none"></div>
   <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:32px">Open Clarity →</button>
