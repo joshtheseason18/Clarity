@@ -362,9 +362,6 @@ function enterApp(){
   const splash=document.getElementById('splash');
   splash.classList.add('hiding');
   setTimeout(()=>{splash.style.display='none';renderAll();renderTip();},500);
-  setTimeout(checkOverdueTasks,1500);
-  showOnboarding();
-  renderGreeting();
 }
 
 // ══ CONSTANTS ══════════════════════════════
@@ -788,8 +785,7 @@ function renderDay(){
   const _dayTotal=_dayTasks.length;
   const _dayDone=_dayTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(dk(selDate))).length;
   const _dayProgress=_dayTotal>0?' · '+_dayDone+'/'+_dayTotal+' done':'';
-  const _dayDateStr=MONTHS_LONG[selDate.getMonth()]+' '+selDate.getDate()+', '+selDate.getFullYear();
-  document.getElementById('daySub').textContent=_dayDateStr+(isToday(selDate)?' · Today':'')+_dayProgress;
+  document.getElementById('daySub').textContent=selDate.getFullYear()+(isToday(selDate)?' · Today':'')+_dayProgress;
   const sl=slots();
   const DAY_SLOT_H=76;
   // Slots grid (just for click-to-add, no tasks inside)
@@ -813,6 +809,15 @@ function renderDay(){
     const subsDone=subs.filter(s=>s.done).length;
     const subsTotal=subs.length;
 
+    // Calculate end-time label for the boundary marker
+    const endMins=(th*60+tm)+dur;
+    const endTimeLabel=fmtT(pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60));
+    // Marker div: a dashed line at exactly the scheduled end-time pixel,
+    // visible only when the block has grown beyond it due to subtask content.
+    const endMarker=`<div class="task-end-marker" style="top:${hPx}px" data-time="${endTimeLabel}"></div>`;
+    // Resize handle locked to scheduled end — not the content bottom
+    const resizeHandle=`<div class="task-resize-handle" data-rid="${t.id}" style="top:${hPx-10}px;bottom:auto;position:absolute" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+
     if(isEvent){
       return`<div class="day-task-block event-block" data-id="${t.id}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
@@ -824,8 +829,8 @@ function renderDay(){
         </div>
         ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div><div class="subtask-progress" style="opacity:.7"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${subsTotal?Math.round(subsDone/subsTotal*100):0}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
-        <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
+        ${subsTotal?`<div class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS ${subsDone?`<span style="opacity:.7">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+        ${endMarker}${resizeHandle}
       </div>`;
     }
 
@@ -841,8 +846,8 @@ function renderDay(){
       </div>
       ${dur>15?`<div class="day-task-block-dur">${durLabel(dur)}${t.notes?` · <span style="font-size:9px;opacity:.7">${esc(t.notes.slice(0,40))}</span>`:''}${!isDone?` <button onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')" style="background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:8px;font-weight:700;padding:1px 6px;cursor:pointer;margin-left:4px;font-family:'DM Sans',sans-serif">▶ Focus</button>`:''}</div>`:''}
       ${(t.attachments||[]).length?`<span class="task-attach">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
-      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS</div><div class="day-subtask-list">${subs.slice(0,5).map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}${subsTotal>5?`<div class="day-subtask-more" onclick="event.stopPropagation();openEdit('${t.id}','${idate}',event)">+${subsTotal-5} more</div>`:''}</div><div class="subtask-progress"><div class="subtask-progress-bar"><div class="subtask-progress-fill" style="width:${subsTotal?Math.round(subsDone/subsTotal*100):0}%"></div></div><span class="subtask-progress-label">${subsDone}/${subsTotal}</span></div>`:''}
-      <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>
+      ${subsTotal?`<div class="day-subtask-hdr">SUBTASKS ${subsDone?`<span style="font-size:9px;color:var(--text3)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+      ${endMarker}${resizeHandle}
     </div>`;
   }).join('');
   document.getElementById('dayTimeline').innerHTML=html;
@@ -873,6 +878,16 @@ function renderDay(){
   const overlay=document.createElement('div');
   overlay.className='day-task-layer';overlay.innerHTML=taskBlocks;
   document.getElementById('dayTimeline').appendChild(overlay);
+  // Post-render pass: mark blocks that have grown beyond their scheduled height
+  // so the end-time marker becomes visible only when actually needed
+  requestAnimationFrame(()=>{
+    overlay.querySelectorAll('.day-task-block').forEach(el=>{
+      const marker=el.querySelector('.task-end-marker');
+      if(!marker)return;
+      const scheduledEndPx=parseInt(marker.style.top)||0;
+      el.classList.toggle('expanded',el.offsetHeight>scheduledEndPx+6);
+    });
+  });
   // Empty state
   if(!_dayTotal){
     const empty=document.createElement('div');
@@ -975,34 +990,16 @@ function renderCat(){
 }
 
 function calcStreak(t){
-  if(!t.recur||!t.doneOverrides||!t.date)return 0;
+  if(!t.recur||!t.doneOverrides)return 0;
   const dones=new Set(t.doneOverrides);
   let streak=0;
   const today=new Date();today.setHours(0,0,0,0);
-  const base=fromDk(t.date);
-
-  // Build the set of dates this habit was scheduled to occur (up to today)
-  // Walk recurrence forward from base date, collect all occurrences up to today
-  const occurrences=[];
-  for(let i=0;i<=730;i++){
-    const occ=new Date(base);
-    if(t.recurU==='day')occ.setDate(occ.getDate()+t.recurN*i);
-    else if(t.recurU==='week')occ.setDate(occ.getDate()+t.recurN*7*i);
-    else occ.setMonth(occ.getMonth()+t.recurN*i);
-    if(occ>today)break;
-    if(occ>=base)occurrences.push(dk(occ));
-  }
-
-  // Walk occurrences backwards — break on first miss (allow today to be unchecked)
-  for(let i=occurrences.length-1;i>=0;i--){
-    const key=occurrences[i];
-    const isToday=key===dk(today);
-    if(dones.has(key)){
-      streak++;
-    } else if(!isToday){
-      break; // missed a scheduled day — streak is over
-    }
-    // today not yet done: continue checking earlier days
+  // Walk backwards from today checking if each expected occurrence was completed
+  for(let i=0;i<90;i++){
+    const d=addDays(today,-i);
+    const key=dk(d);
+    if(dones.has(key))streak++;
+    else if(i>0)break; // allow today to be unchecked (day isn't over)
   }
   return streak;
 }
@@ -1551,6 +1548,15 @@ function smartRescheduleDismiss(id){
   document.getElementById('smartRescheduleOverlay').classList.remove('open');
   setTimeout(checkOverdueTasks,500);
 }
+// Check on app open (after splash)
+const _origEnterApp=enterApp;
+window.enterApp=function(){
+  _origEnterApp();
+  setTimeout(checkOverdueTasks,1500);
+  showOnboarding();
+  renderGreeting();
+};
+
 // ══ CANVAS LMS IMPORT ════════════════════════════
 function importCanvas(){
   const raw=document.getElementById('canvasInput').value.trim();
@@ -1590,9 +1596,8 @@ function importCanvas(){
     if(!name)return;
     if(!dateStr)dateStr=dk(addDays(new Date(),7)); // default to 1 week out
     tasks.push({
-      id:genId(),name,type:'task',date:dateStr,time:timeStr,duration:60,
+      id:genId(),name,date:dateStr,time:timeStr,duration:60,
       priority:'high',category:'work',notes:'Imported from Canvas',
-      attachments:[],subtasks:[],location:'',
       scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
       doneOverrides:[],deletedOccurrences:[]
     });
@@ -1657,14 +1662,10 @@ function openWeekPlan(){
 }
 function closeWeekPlan(){document.getElementById('weekPlanOverlay').classList.remove('open')}
 function saveWeekIntention(){
-  // Must match the planStart logic in openWeekPlan exactly
   const today=new Date();today.setHours(0,0,0,0);
   const dow=today.getDay();
-  const diff=(dow-weekStartDay+7)%7;
-  const thisWeekStart=addDays(today,-diff);
-  const nextWeekStart=addDays(thisWeekStart,7);
-  const planStart=diff<=1?thisWeekStart:nextWeekStart;
-  const key='clarity_intention_'+dk(planStart);
+  const nextMon=dow===0?addDays(today,1):dow===1?today:addDays(today,8-dow);
+  const key='clarity_intention_'+dk(nextMon);
   const val=document.getElementById('wpIntention').value.trim();
   if(val)localStorage.setItem(key,val);
   else localStorage.removeItem(key);
@@ -2035,7 +2036,7 @@ function onTaskDragStart(e,id,idate){
   e.stopPropagation();
 }
 function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null}
-function onDO(e,dateKey,time){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
+function onDO(e){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
 function onDL(e){e.currentTarget.classList.remove('drag-over')}
 function snapFlash(el){if(!el)return;el.classList.remove('snap-flash');void el.offsetWidth;el.classList.add('snap-flash');setTimeout(()=>el.classList.remove('snap-flash'),600)}
 // ══ SLOT VALIDATION ══════════════════════════
@@ -2346,7 +2347,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
 
 // ══ TOGGLE DONE ══════════════════════════════
 function toggleDone(id,instanceDate,e,el){
-  e.stopPropagation();
+  e.stopPropagation();if(AC.state==='suspended')AC.resume();
   const t=tasks.find(t=>t.id===id);if(!t)return;
   if((t.type||'task')==='event')return; // events can't be checked off
   if(t.recur&&instanceDate){
@@ -2359,15 +2360,6 @@ function toggleDone(id,instanceDate,e,el){
     if(t.done){playDone();doRipple(el);}else{playUndo();}
   }
   save();renderAll();
-  // Confetti when all tasks for today are done
-  const todayKey=dk(new Date());
-  if(curView==='day'&&dk(selDate)===todayKey){
-    const dayTasks=tasksOn(todayKey);
-    const tasksOnly=dayTasks.filter(t=>(t.type||'task')==='task');
-    if(tasksOnly.length>0&&tasksOnly.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
-      setTimeout(fireConfetti,300);
-    }
-  }
 }
 function doRipple(el){
   if(!el)return;
@@ -2432,7 +2424,7 @@ function onResizeStart(e,tid,idate,view){
 }
 function onResizeMove(e){
   if(!_rzTask)return;
-  const slotH=_rzView==='week'?48:76; // must match WK_SLOT_H / DAY_SLOT_H in render
+  const slotH=_rzView==='week'?42:52;
   const dy=e.clientY-_rzStartY;
   const deltaMins=Math.round(dy/slotH*30/15)*15;
   const newDur=Math.max(15,_rzStartDur+deltaMins);
@@ -2455,6 +2447,8 @@ function onResizeUp(){
 }
 
 let mMode=null,mDate=null,mTime=null,mId=null,mInstanceDate=null;
+let _editOrigSubtasks=[];  // snapshot taken at openEdit; restored on cancel
+let _modalCommitted=false; // set true by saveTask so closeModal knows not to restore
 function toggleRecurUI(){document.getElementById('recurOpts').style.display=document.getElementById('fRecurOn').checked?'flex':'none'}
 // ══ ITEM TYPE (task vs event) ════════════════════
 let _itemType='task';
@@ -2523,10 +2517,24 @@ function addSubtaskFromModal(){
   input.value='';
   renderModalSubtasks();
   input.focus();
+  _livePreviewSubtasks();
 }
 function deleteSubtaskFromModal(i){
   _modalSubtasks.splice(i,1);
   renderModalSubtasks();
+  _livePreviewSubtasks();
+}
+
+// Pushes the current modal subtask list into the in-memory task object
+// and re-renders the Day view block so the user sees it expanding in real-time.
+// Does NOT call save() — that only happens when the user clicks Save.
+function _livePreviewSubtasks(){
+  if(mMode!=='edit'||!mId||curView!=='day')return;
+  const t=tasks.find(t=>t.id===mId);
+  if(!t)return;
+  // Write a live snapshot (non-persisted) so renderDay picks up the subtasks
+  t.subtasks=JSON.parse(JSON.stringify(_modalSubtasks));
+  renderDay();
 }
 function saveSubtaskNameInModal(i,el){
   const name=el.textContent.trim();
@@ -2543,6 +2551,7 @@ function onModalSubtaskKey(e,i,el){
     saveSubtaskNameInModal(i,el);
     _modalSubtasks.splice(i+1,0,{id:genId(),name:'',duration:0,done:false});
     renderModalSubtasks();
+    _livePreviewSubtasks();
     setTimeout(()=>{
       const names=document.querySelectorAll('#fSubtaskList .subtask-name');
       const target=names[i+1];
@@ -2729,6 +2738,8 @@ function openEdit(id,instanceDate,e){
   mMode='edit';mId=id;mInstanceDate=instanceDate;
   _itemType=t.type||'task';
   _modalSubtasks=JSON.parse(JSON.stringify(t.subtasks||[]));
+  _editOrigSubtasks=JSON.parse(JSON.stringify(t.subtasks||[])); // snapshot for cancel restore
+  _modalCommitted=false;
   setItemType(_itemType);
   document.getElementById('mTitle').textContent='Edit '+(_itemType==='event'?'Event':'Task');
   const d=fromDk(t.date);
@@ -2767,10 +2778,19 @@ function showModal(id){
     resetTextareaHeights();
   },150);
 }
-function closeModal(){document.getElementById('mOverlay').classList.remove('open')}
+function closeModal(){
+  document.getElementById('mOverlay').classList.remove('open');
+  // If user cancelled (didn't commit via Save), restore the original subtasks
+  // so the live-preview block reverts back to its pre-edit state
+  if(mMode==='edit'&&mId&&!_modalCommitted){
+    const t=tasks.find(t=>t.id===mId);
+    if(t){t.subtasks=_editOrigSubtasks;if(curView==='day')renderDay();}
+  }
+  _modalCommitted=false;
+}
 function handleMBg(e){if(e.target===e.currentTarget)closeModal()}
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();closeIdeaModal();}
+  if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();}
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&document.getElementById('mOverlay').classList.contains('open')){e.preventDefault();saveTask();}
 });
 function saveTask(){
@@ -2784,10 +2804,11 @@ function saveTask(){
   const attachments=_modalAttachments;
   if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:mTime,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
   else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,duration,recur,recurN,recurU,subtasks});}
-  save();closeModal();renderAll();
+  save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){
   const t=tasks.find(t=>t.id===mId);if(!t)return;
+  _modalCommitted=true; // prevent subtask restore — task is being deleted
   closeModal();
   if(t.recur)showModal('delOverlay');
   else doDelete('all');
@@ -2820,8 +2841,7 @@ function showUndoToast(msg,undoFn){
   let el=document.getElementById('undoToast');
   if(!el){
     el=document.createElement('div');el.id='undoToast';
-    el.className='app-toast';
-    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:99px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)';
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:99px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)';
     document.body.appendChild(el);
   }
   el.innerHTML=`<span>${msg}</span><button style="background:rgba(255,255,255,.2);border:none;color:inherit;padding:4px 10px;border-radius:99px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.3px" id="undoBtn">UNDO</button>`;
@@ -3131,6 +3151,20 @@ function fireConfetti(){
   draw();
 }
 
+// Hook confetti into toggleDone
+const _origToggleDone=toggleDone;
+window.toggleDone=function(id,instanceDate,e,el){
+  _origToggleDone(id,instanceDate,e,el);
+  // Check if all tasks for today are now done
+  const todayKey=dk(new Date());
+  if(curView==='day'&&dk(selDate)===todayKey){
+    const dayTasks=tasksOn(todayKey);
+    const _tasksOnly=dayTasks.filter(t=>(t.type||'task')==='task');if(_tasksOnly.length>0&&_tasksOnly.every(t=>t.done||(t.doneOverrides||[]).includes(todayKey))){
+      setTimeout(fireConfetti,300);
+    }
+  }
+};
+
 // ══ KEYBOARD NAVIGATION ═════════════════════════
 document.addEventListener('keydown',function(e){
   // Skip if typing in an input/textarea/contenteditable
@@ -3221,9 +3255,8 @@ function saveBDDetail(){
   if(dateVal){
     const time=timeVal||'09:00';
     tasks.push({
-      id:genId(),name,type:'task',priority,category,notes,
-      attachments:[],subtasks:[],location:'',
-      date:dateVal,time,duration:30,scheduled:true,done:false,
+      id:genId(),name,priority,category,notes,
+      date:dateVal,time,scheduled:true,done:false,
       recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
     });
     brainDump=brainDump.filter(t=>t.id!==bdDetailId);
@@ -3365,8 +3398,7 @@ function showToast(msg){
   let t=document.getElementById('clarityToast');
   if(!t){
     t=document.createElement('div');t.id='clarityToast';
-    t.className='app-toast';
-    t.style.cssText='position:fixed;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap';
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap';
     document.body.appendChild(t);
   }
   t.textContent=msg;
@@ -3390,9 +3422,11 @@ function onSuggDragEnd(e){
 }
 
 // Patch onDO, onDropDate, onDropSlot to also handle suggDragId
+const _origOnDO=onDO;
 window.onDO=function(e){
   if(!dragBdId&&!dragTaskId&&!suggDragId)return;
   e.preventDefault();e.stopPropagation();
+  // Use 'copy' only for suggestion drags, 'move' for everything else
   e.dataTransfer.dropEffect=suggDragId?'copy':'move';
   e.currentTarget.classList.add('drag-over');
 };
@@ -3585,7 +3619,6 @@ function getNowMins(){const n=new Date();return n.getHours()*60+n.getMinutes()}
 
 function renderNowLine(){
   const mins=getNowMins();
-  const WK_SLOT_H=48,DAY_SLOT_H=76; // must match renderWeek/renderDay
   // Week view — one vertical column set, insert line in today's column
   const todayKey=dk(new Date());
   // Week view now-line
@@ -3595,7 +3628,7 @@ function renderNowLine(){
     col.querySelectorAll('.now-line').forEach(el=>el.remove());
     const hdrCell=weekHdrCells[i];
     if(hdrCell&&hdrCell.classList.contains('today')){
-      const top=(mins/30)*WK_SLOT_H;
+      const top=(mins/30)*42; // 42px per half-hour slot
       const line=document.createElement('div');
       line.className='now-line';
       line.style.cssText=`top:${top}px;position:absolute;left:0;right:0`;
@@ -3608,7 +3641,7 @@ function renderNowLine(){
   const dayTimeline=document.getElementById('dayTimeline');
   if(dayTimeline&&isToday(selDate)){
     dayTimeline.querySelectorAll('.now-line').forEach(el=>el.remove());
-    const top=(mins/30)*DAY_SLOT_H;
+    const top=(mins/30)*52; // 52px per half-hour slot
     const line=document.createElement('div');
     line.className='now-line';
     line.style.cssText=`top:${top}px;grid-column:2;position:absolute;left:56px;right:0`;
@@ -3620,15 +3653,14 @@ function renderNowLine(){
 
 function scrollToNow(){
   const mins=getNowMins();
-  const WK_SLOT_H=48,DAY_SLOT_H=76; // must match renderWeek/renderDay
   const wv=document.querySelector('.week-scroll');
   if(wv&&curView==='week'){
-    const top=Math.max(0,(mins/30)*WK_SLOT_H - wv.clientHeight/2);
+    const top=Math.max(0,(mins/30)*42 - wv.clientHeight/2);
     wv.scrollTo({top,behavior:'smooth'});
   }
   const dv=document.querySelector('.day-scroll');
   if(dv&&curView==='day'){
-    const top=Math.max(0,(mins/30)*DAY_SLOT_H - dv.clientHeight/2);
+    const top=Math.max(0,(mins/30)*52 - dv.clientHeight/2);
     dv.scrollTo({top,behavior:'smooth'});
   }
 }
@@ -3672,11 +3704,8 @@ function openQuickAdd(){
   const bar=document.getElementById('quickAddBar');
   const now=new Date();
   document.getElementById('qaDate').value=dk(now);
-  // Round to nearest 30min correctly — handle minute rollover into next hour
-  const totalMins=now.getHours()*60+now.getMinutes();
-  const roundedMins=Math.round(totalMins/30)*30;
-  const h=String(Math.floor(roundedMins/60)%24).padStart(2,'0');
-  const m=String(roundedMins%60).padStart(2,'0');
+  const h=String(now.getHours()).padStart(2,'0');
+  const m=String(Math.round(now.getMinutes()/30)*30%60).padStart(2,'0');
   document.getElementById('qaTime').value=h+':'+m;
   document.getElementById('qaPri').value='none';
   document.getElementById('qaName').value='';
@@ -3964,7 +3993,10 @@ function saveIdea() {
   closeIdeaModal();
 }
 
-// (closeIdeaModal on Escape is handled by the master keydown listener above)
+// Close idea modal on Escape (patch into existing keydown listener)
+document.addEventListener('keydown', function ideaEsc(e) {
+  if (e.key === 'Escape') closeIdeaModal();
+});
 
 // ══ CONSOLIDATED INIT ═══════════════════════════
 function clarityInit(){
@@ -4017,30 +4049,5 @@ function clarityInit(){
   initTooltips();
   initBDReorder();
   restoreFocusTimer();
-
-  // Long-press to rename in Categories view (mobile equivalent of double-click)
-  if('ontouchstart' in window){
-    let _lpTimer=null;
-    document.addEventListener('touchstart',function(e){
-      const nameEl=e.target.closest('.cat-task-name');
-      if(!nameEl)return;
-      _lpTimer=setTimeout(()=>{
-        _lpTimer=null;
-        const dbl=nameEl.getAttribute('ondblclick')||'';
-        const m=dbl.match(/inlineRename\(this,'([^']+)',(true|false)\)/);
-        if(m){
-          // Provide brief haptic hint if available
-          if(navigator.vibrate)navigator.vibrate(40);
-          inlineRename(nameEl,m[1],m[2]==='true');
-        }
-      },500);
-    },{passive:true});
-    document.addEventListener('touchend',function(){
-      if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
-    },{passive:true});
-    document.addEventListener('touchmove',function(){
-      if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
-    },{passive:true});
-  }
 }
 document.addEventListener('DOMContentLoaded',clarityInit);
