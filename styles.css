@@ -984,7 +984,21 @@ header{
    CATEGORIES VIEW
 ══════════════════════════════════════════ */
 .cat-view{display:flex;flex-direction:column;flex:1;overflow:hidden}
-.cat-view-hdr{padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cat-view-hdr{
+  padding:12px 18px 0;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;
+  display:flex;flex-direction:column;gap:0;
+}
+/* Row 1: title + segment toggle — horizontal, space-between */
+.cat-hdr-row1{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:10px;
+}
+/* Row 2: chips + buttons — full width, wraps onto next line if needed */
+.cat-hdr-row2{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding-bottom:10px;
+}
 .cat-view-title{font-family:'DM Serif Display',serif;font-size:20px;font-weight:400;flex-shrink:0}
 .cat-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 .cat-chip{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;transition:all .15s;background:var(--surface2);color:var(--text2);display:flex;align-items:center;gap:4px}
@@ -1190,7 +1204,40 @@ header{
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
 
 
-/* ══ WEEK ALLDAY ROW ══════════════════════════ */
+/* ══ DAY SLOT AUTO-SPLIT (event + task overlap) ══════ */
+/* When a slot has both a timed event and a timed task at the same time,
+   the slot splits into two columns: tasks left, events right.
+   Normal slots without conflicts stay full-width (no split). */
+.day-slot.is-split{padding:0}
+.day-slot-split{
+  display:grid;
+  grid-template-columns:1fr 1px 1fr;
+  width:100%;min-height:inherit;
+}
+.day-slot-split-col{
+  display:flex;flex-direction:column;min-width:0;
+}
+.day-slot-split-divider{
+  background:var(--border);
+  /* Subtle label above the divider */
+  position:relative;
+}
+/* Column header labels — "Tasks" left, "Events" right */
+.day-slot-tasks-col::before{
+  content:'Tasks';
+  display:block;font-size:8px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--text3);
+  padding:3px 8px 1px;opacity:.7;
+}
+.day-slot-events-col::before{
+  content:'Events';
+  display:block;font-size:8px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--text3);
+  padding:3px 8px 1px;opacity:.7;
+}
+/* Make blocks inside split columns fill width correctly */
+.day-slot-split-col .day-task-slot-wrap{width:100%}
+.day-slot-split-col .day-task-block{margin:2px 4px 2px 4px}
 .week-allday-row{flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border)}
 .wk-allday-row{display:grid;grid-template-columns:68px repeat(7,1fr)}
 .wk-allday-gutter{display:flex;align-items:center;justify-content:flex-end;padding:4px 8px 4px 0;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-right:1px solid var(--border)}
@@ -1920,8 +1967,10 @@ header{
   .day-time-range{font-size:9px;padding:1px 5px}
   .day-task-notes-pill{display:none}
 
-  /* ── Categories ── */
-  .cat-view-hdr{padding:8px 12px;gap:6px}
+  /* ── Schedule/Categories view ── */
+  .cat-view-hdr{padding:8px 12px 0}
+  .cat-hdr-row1{padding-bottom:8px}
+  .cat-hdr-row2{padding-bottom:8px}
   .cat-view-title{font-size:17px}
   .cat-scroll{padding:10px 12px}
   .cat-chip{font-size:10px;padding:2px 8px}

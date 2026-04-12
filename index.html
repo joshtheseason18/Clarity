@@ -283,20 +283,22 @@
     <div class="view" id="view-categories">
       <div class="cat-view">
         <div class="cat-view-hdr">
-          <div class="cat-view-title">Schedule</div>
-          <!-- Tasks / Events segment toggle -->
-          <div class="sched-seg-wrap">
-            <button class="sched-seg-btn active" id="schedTabTasks" onclick="switchScheduleTab('tasks')">Tasks</button>
-            <button class="sched-seg-btn" id="schedTabEvents" onclick="switchScheduleTab('events')">Events</button>
+          <!-- Row 1: title + Tasks/Events toggle -->
+          <div class="cat-hdr-row1">
+            <div class="cat-view-title">Schedule</div>
+            <div class="sched-seg-wrap">
+              <button class="sched-seg-btn active" id="schedTabTasks" onclick="switchScheduleTab('tasks')">Tasks</button>
+              <button class="sched-seg-btn" id="schedTabEvents" onclick="switchScheduleTab('events')">Events</button>
+            </div>
           </div>
-          <!-- Task-only controls (hidden on Events tab) -->
-          <div id="catTaskControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <!-- Row 2: task controls (visible on Tasks tab) -->
+          <div id="catTaskControls" class="cat-hdr-row2">
             <div class="cat-chips" id="catChips"></div>
             <button class="add-cat-btn" onclick="openAddCatModal()">+ Category</button>
             <button class="show-done-btn" id="sdBtn" onclick="toggleSD()">Show Completed</button>
           </div>
-          <!-- Event-only controls -->
-          <div id="catEventControls" style="display:none;align-items:center;gap:8px">
+          <!-- Row 2 alt: event controls (visible on Events tab) -->
+          <div id="catEventControls" class="cat-hdr-row2" style="display:none">
             <button class="show-done-btn" id="pastEventsBtn" onclick="togglePastEvents()">Show Past</button>
           </div>
         </div>
