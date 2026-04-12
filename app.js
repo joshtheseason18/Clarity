@@ -78,26 +78,31 @@ function syncBottomNav(view){
 
 // ══ ONBOARDING — SPLASH NAME ════════════════════
 const SPLASH_TAGLINES=[
-  'Your day, simplified.',
-  'Make today count.',
-  'One step at a time.',
-  'Focus on what matters.',
-  'Plan it. Do it. Done.',
-  'Small steps, big progress.',
-  'Today is a good day to be productive.',
-  'Clarity starts here.',
-  'Your goals, on your schedule.',
-  'Let\'s make it a great day.',
+  "Let's get it.",
+  "Lock in today.",
+  "Make today count.",
+  "Stay sharp. Stay focused.",
+  "One day at a time.",
+  "You already know the plan.",
+  "New day, new wins.",
+  "Show up and show out.",
+  "Less talk, more action.",
+  "Today's yours — own it.",
+  "Keep the momentum going.",
+  "Big things start today.",
+  "Dialed in. Let's go.",
+  "Eyes on the prize.",
 ];
 function initSplashName(){
   const name=localStorage.getItem('clarity_username');
   const onboarded=localStorage.getItem('clarity_onboarded');
-  // Rotate tagline daily — set immediately, no animation delay issue
+  // Rotate tagline daily — always show regardless of user state
   const dayIndex=Math.floor(Date.now()/86400000)%SPLASH_TAGLINES.length;
   const sublineEl=document.getElementById('splashSubline');
   if(sublineEl){
     sublineEl.textContent=SPLASH_TAGLINES[dayIndex];
-    sublineEl.style.opacity='1'; // ensure visible regardless of animation state
+    sublineEl.style.opacity='1';
+    sublineEl.style.display=''; // ensure not hidden
   }
   if(onboarded&&name){
     const h=new Date().getHours();
@@ -1214,7 +1219,7 @@ function renderCatChips(){
   let html=`<div class="cat-chip all-chip${catFilter==='all'?' active':''}" onclick="setCF('all')">All</div>`;
   categories.forEach(c=>{
     const isActive=catFilter===c.id;
-    html+=`<div class="cat-chip${isActive?' active':''}" style="${isActive?`background:${c.color}`:'background:var(--surface2)'};${isActive?'':'color:var(--text2)'}" onclick="setCF('${c.id}')">
+    html+=`<div class="cat-chip${isActive?' active':''}" style="${isActive?`background:${c.color}`:'background:var(--surface3)'};${isActive?'':'color:var(--text2)'}" onclick="setCF('${c.id}')">
       ${c.name}${!c.locked?`<button class="cat-chip-del" onclick="delCat('${c.id}',event)">×</button>`:''}
     </div>`;
   });
