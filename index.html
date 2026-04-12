@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Clarity">
+<meta name="apple-mobile-web-app-title" content="Luclaro">
 <meta name="theme-color" content="#10b981">
-<title>Clarity v20 — Your Day, Simplified</title>
-<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkNsYXJpdHkiLAogICJzaG9ydF9uYW1lIjogIkNsYXJpdHkiLAogICJkZXNjcmlwdGlvbiI6ICJZb3VyIHBlcnNvbmFsIHNjaGVkdWxlciIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmFmYWY5IiwKICAidGhlbWVfY29sb3IiOiAiIzEwYjk4MSIsCiAgImljb25zIjogW3sKICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLDxzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgMzIgMzInPjxjaXJjbGUgY3g9JzE2JyBjeT0nMTYnIHI9JzEyJyBmaWxsPSclMjMxMGI5ODEnLz48L3N2Zz4iLAogICAgInNpemVzIjogImFueSIsCiAgICAidHlwZSI6ICJpbWFnZS9zdmcreG1sIgogIH1dCn0=">
+<title>Luclaro — Your Day, Illuminated</title>
+<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkx1Y2xhcm8iLAogICJzaG9ydF9uYW1lIjogIkx1Y2xhcm8iLAogICJkZXNjcmlwdGlvbiI6ICJZb3VyIGRheSwgaWxsdW1pbmF0ZWQiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiI2ZhZmFmOSIsCiAgInRoZW1lX2NvbG9yIjogIiMxMGI5ODEiLAogICJpY29ucyI6IFt7CiAgICAic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbCw8c3ZnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDMyIDMyJz48Y2lyY2xlIGN4PScxNicgY3k9JzE2JyByPScxMicgZmlsbD0nJTIzMTBiOTgxJy8+PC9zdmc+IiwKICAgICJzaXplcyI6ICJhbnkiLAogICAgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIKICB9XQp9Cg==">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%2310b981'/></svg>">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%2310b981'/></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
@@ -20,15 +20,16 @@
 <div id="splash">
   <div class="splash-logo-wrap" style="animation:splashLogoIn .6s cubic-bezier(.34,1.56,.64,1) .3s both">
     <div class="splash-logo-dot"></div>
-    <div class="splash-logo-text">Clarity</div>
+    <div class="splash-logo-text">Luclaro</div>
   </div>
-  <div class="splash-tagline" id="splashTagline">Your personal scheduler</div>
+  <div class="splash-tagline" id="splashTagline">Your day, illuminated</div>
   <div class="splash-name-wrap" id="splashNameWrap" style="display:none">
     <input class="splash-name-input" id="splashName" placeholder="What's your name?" maxlength="30" autocomplete="given-name">
   </div>
   <div class="splash-greeting" id="splashGreeting" style="display:none"></div>
   <div class="splash-subline" id="splashSubline"></div>
-  <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:32px">Open Clarity →</button>
+  <div class="splash-verse" style="font-size:11px;color:var(--text3);font-style:italic;margin-top:20px;animation:splashFadeUp .5s ease 1.6s both;max-width:280px;line-height:1.6;text-align:center">"Your word is a lamp to my feet<br>and a light to my path."<br><span style="font-style:normal;font-weight:600;font-size:10px;letter-spacing:.3px">— Psalm 119:105</span></div>
+  <button class="splash-enter-btn" onclick="enterApp()" style="margin-top:24px">Open Luclaro →</button>
 </div>
 
 <!-- ══ DRAWER BACKDROP ══ -->
@@ -135,14 +136,14 @@
     </div>
 
   </div>
-  <div class="drawer-footer">Clarity v20 · Your personal scheduler</div>
+  <div class="drawer-footer">Luclaro v1.0 · Psalm 119:105</div>
 </div>
 
 <!-- ══ HEADER ══ -->
 <header>
   <button class="logo-btn" onclick="openDrawer()" title="Settings">
     <div class="logo-dot-icon"></div>
-    <span class="logo-text">Clarity</span>
+    <span class="logo-text">Luclaro</span>
   </button>
 
   <div class="hdr-center">
@@ -153,7 +154,7 @@
 
   <div class="hdr-right">
     <button class="overdue-badge hidden" id="overdueBadge" onclick="goOverdue()">Overdue 0</button>
-    <button class="hdr-btn" onclick="openAISchedule()" title="Let Clarity plan your day" style="background:var(--accent);color:#fff;border-color:var(--accent)">Plan My Day ✨</button>
+    <button class="hdr-btn" onclick="openAISchedule()" title="Let Luclaro plan your day" style="background:var(--accent);color:#fff;border-color:var(--accent)">Plan My Day ✨</button>
     <div class="more-wrap">
       <button class="hdr-btn" onclick="toggleMoreMenu()" id="moreBtn" title="More actions">⋯</button>
       <div class="more-menu" id="moreMenu">
@@ -303,7 +304,7 @@
         </div>
         <!-- Routine area -->
         <div id="catRoutineArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Tell Clarity when you're busy or free. The AI planner schedules tasks into your windows and avoids your blocks.</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Tell Luclaro when you're busy or free. The AI planner schedules tasks into your windows and avoids your blocks.</div>
           <div id="routineList"></div>
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;padding:12px;background:var(--surface2);border-radius:10px">
             <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">Add a block</div>
@@ -337,7 +338,7 @@
               <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
             </div>
             <div class="toggle-row" style="margin:4px 0">
-              <span class="toggle-label" style="font-size:11px">Can Clarity schedule tasks here?</span>
+              <span class="toggle-label" style="font-size:11px">Can Luclaro schedule tasks here?</span>
               <button class="toggle-track" id="routineSchedToggle" onclick="this.classList.toggle('on')">
                 <div class="toggle-thumb"></div>
               </button>
@@ -797,7 +798,7 @@
   <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
     <div>
       <div class="modal-title">Plan My Day ✨</div>
-      <div class="modal-sub">Clarity will build your schedule around your routine</div>
+      <div class="modal-sub">Luclaro will build your schedule around your routine</div>
     </div>
     <!-- Brain Dump chips -->
     <div class="fg" id="aiBdChipsWrap" style="display:none">

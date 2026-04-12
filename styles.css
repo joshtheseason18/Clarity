@@ -820,6 +820,13 @@ header{
 .day-slot.drag-over{background:var(--accent-pale)!important;outline:1px dashed var(--accent)}
 .day-slot.snap-flash{animation:snapFlash .5s ease-out}
 .day-slot-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0;pointer-events:none}
+/* Ghost slot: on-the-hour interior slots that are clickable for adding tasks */
+.day-slot-ghost{
+  min-height:0!important;height:24px!important;
+  overflow:hidden;border:none;padding:0;
+  cursor:pointer;transition:background .12s;
+}
+.day-slot-ghost:hover{background:var(--accent-pale)}
 
 /* Wrapper around each task block + its resize handle.
    position:relative so the handle can be absolutely positioned outside overflow:hidden.
@@ -1231,25 +1238,9 @@ header{
 
 /* ══ DAY SLOT AUTO-SPLIT (event + task overlap) ══════ */
 /* When a slot has both a timed event and a timed task at the same time,
-   the slot splits into two columns: tasks left, events right.
-   Normal slots without conflicts stay full-width (no split). */
-.day-slot.is-split{padding:0}
-.day-slot-split{
-  display:grid;
-  grid-template-columns:1fr 1px 1fr;
-  width:100%;min-height:inherit;
-}
-.day-slot-split-col{
-  display:flex;flex-direction:column;min-width:0;
-}
-.day-slot-split-divider{
-  background:var(--border);
-  /* Subtle label above the divider */
-  position:relative;
-}
-/* Make blocks inside split columns fill width correctly */
-.day-slot-split-col .day-task-slot-wrap{width:100%}
-.day-slot-split-col .day-task-block{margin:2px 4px 2px 4px}
+/* Overlay layer for overlapping items (absolute positioning like week view) */
+.day-overlay-layer{pointer-events:none}
+.day-overlay-layer>div{pointer-events:all}
 .week-allday-row{flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border)}
 .wk-allday-row{display:grid;grid-template-columns:68px repeat(7,1fr)}
 .wk-allday-gutter{display:flex;align-items:center;justify-content:flex-end;padding:4px 8px 4px 0;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-right:1px solid var(--border)}

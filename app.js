@@ -90,6 +90,10 @@ const SPLASH_TAGLINES=[
   "Big things start today.",
   "Dialed in. Let's go.",
   "Eyes on the prize.",
+  "Walk in the light today.",
+  "A lamp to your feet.",
+  "Light the path forward.",
+  "Ordered steps, bright day.",
 ];
 function initSplashName(){
   const name=localStorage.getItem('clarity_username');
@@ -136,8 +140,8 @@ const TOUR_STEPS=[
   {
     target:'[onclick="openAISchedule()"]',
     arrow:'top',
-    title:'✨ Let Clarity plan your day',
-    body:'Describe what you need to do and Clarity\'s AI builds a schedule for you. Tweak anything, then accept.',
+    title:'✨ Let Luclaro plan your day',
+    body:'Describe what you need to do and Luclaro\'s AI builds a schedule for you. Tweak anything, then accept.',
     pre:function(){if(sidebarOpen)toggleSidebar();}
   }
 ];
@@ -1036,7 +1040,7 @@ function buildDayTaskBlock(t, key, conflictIds){
           <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
           ${timeRangeBadge}
         </div>
-        ${dur>15?`<div class="day-task-meta-row">${durLabel(dur)}${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+        ${dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
         ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
         ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
         ${conflictBadge}
@@ -1108,8 +1112,7 @@ function renderDay(){
 
   // ── Conflict detection ─────────────────────────────────────────────────────
   const conflictIds=new Set();
-  // Track ALL overlapping task IDs (any type) for split column layout
-  const splitIds=new Set();
+  const overlapIds=new Set();
   _timedTasks.forEach((a,ai)=>{
     const[ah,am]=a.time.split(':').map(Number);
     const aStart=ah*60+am;
@@ -1122,25 +1125,54 @@ function renderDay(){
       if(aStart<bEnd&&bStart<aEnd){
         conflictIds.add(a.id);
         conflictIds.add(b.id);
-        splitIds.add(a.id);
-        splitIds.add(b.id);
+        overlapIds.add(a.id);
+        overlapIds.add(b.id);
       }
     });
   });
 
+  // ── Overlap column layout for absolute overlay ──
+  const dayColMap=new Map();
+  if(overlapIds.size>0){
+    const oItems=_timedTasks.filter(t=>overlapIds.has(t.id)).map(t=>{
+      const[h,m]=t.time.split(':').map(Number);
+      return{id:t.id,start:h*60+m,end:h*60+m+(t.duration||30),isEvent:(t.type||'task')==='event'};
+    }).sort((a,b)=>a.start-b.start||b.end-a.end);
+    const clusters=[];
+    oItems.forEach(item=>{
+      let merged=false;
+      for(const cl of clusters){if(cl.some(c=>item.start<c.end&&c.start<item.end)){cl.push(item);merged=true;break;}}
+      if(!merged)clusters.push([item]);
+    });
+    clusters.forEach(cl=>{
+      if(cl.length===1){dayColMap.set(cl[0].id,{col:0,total:1});return;}
+      cl.sort((a,b)=>(a.isEvent?1:0)-(b.isEvent?1:0)||a.start-b.start);
+      const cols=[];
+      cl.forEach(item=>{
+        let c=cols.findIndex(end=>item.start>=end);
+        if(c===-1){c=cols.length;cols.push(0);}
+        cols[c]=item.end;
+        dayColMap.set(item.id,{col:c,total:0});
+      });
+      cl.forEach(item=>{dayColMap.get(item.id).total=cols.length;});
+    });
+  }
+
   const sl=slots();
   const DAY_SLOT_H=window.innerWidth<=640?64:76;
 
-  // Group timed tasks by start slot
+  // Group timed tasks by start slot (exclude overlapping items — they go in overlay)
   const taskMap={};
   _timedTasks.forEach(t=>{
+    if(overlapIds.has(t.id))return; // skip — rendered in absolute overlay
     if(!taskMap[t.time])taskMap[t.time]=[];
     taskMap[t.time].push(t);
   });
 
-  // Mark slots interior to a multi-slot task (collapse them)
+  // Mark slots interior to a multi-slot NON-overlapping task (collapse them)
+  // Overlapping items are excluded — their slots stay open to provide height for the absolute overlay
   const interiorSlots=new Set();
-  _timedTasks.filter(t=>(t.duration||30)>30).forEach(t=>{
+  _timedTasks.filter(t=>(t.duration||30)>30&&!overlapIds.has(t.id)).forEach(t=>{
     const[h,m]=t.time.split(':').map(Number);
     const startMins=h*60+m;
     const dur=t.duration||30;
@@ -1164,13 +1196,16 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — collapsed to ghost labels, UNLESS they contain a split item
-    // (e.g. a task spans 10:00-12:00 but an event starts at 11:00 — that slot must stay visible)
+    // Interior slots — collapsed to ghost labels, UNLESS they contain a task
     if(interiorSlots.has(sk2)&&!tasksHere.length){
       const isInteriorHalfHour=s.m===30;
       if(!isInteriorHalfHour){
+        // On-the-hour ghost: show time label + clickable slot (so users can add tasks inside events)
         html+=`<div class="day-time-lbl day-lbl-ghost">${fmtT(sk2)}</div>
-               <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+               <div class="day-slot day-slot-ghost" data-time="${sk2}"
+                 onclick="onDaySlot('${key}','${sk2}',event)"
+                 ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
+                 ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
       } else {
         html+=`<div class="day-time-lbl day-lbl-interior"></div>
                <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
@@ -1191,42 +1226,8 @@ function renderDay(){
     const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
     const minH=slotsNeeded*DAY_SLOT_H;
 
-    // Split this slot if ANY item is involved in an overlap.
-    // Even if only 1 item is here, if it overlaps with something in another slot,
-    // render it at half width so the overlapping item in the adjacent slot
-    // lines up visually (tasks left column, events right column).
-    const slotHasSplitItem=tasksHere.some(t=>splitIds.has(t.id));
-    const eventsInSlot=tasksHere.filter(t=>(t.type||'task')==='event');
-    const tasksInSlot=tasksHere.filter(t=>(t.type||'task')!=='event');
-    const shouldSplit=slotHasSplitItem;
-
-    let taskHtml;
-    if(shouldSplit){
-      let leftItems,rightItems;
-      if(eventsInSlot.length>0&&tasksInSlot.length>0){
-        // Mixed in same slot: tasks left, events right
-        leftItems=tasksInSlot;rightItems=eventsInSlot;
-      } else if(tasksHere.length>=2){
-        // 2+ same-type items in one slot: split evenly
-        const mid=Math.ceil(tasksHere.length/2);
-        leftItems=tasksHere.slice(0,mid);rightItems=tasksHere.slice(mid);
-      } else if(eventsInSlot.length>0){
-        // Single event overlapping a task in another slot — event goes right
-        leftItems=[];rightItems=eventsInSlot;
-      } else {
-        // Single task overlapping an event in another slot — task goes left
-        leftItems=tasksInSlot;rightItems=[];
-      }
-      const leftHtml=leftItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
-      const rightHtml=rightItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
-      taskHtml=`<div class="day-slot-split">
-        <div class="day-slot-split-col day-slot-tasks-col">${leftHtml}</div>
-        <div class="day-slot-split-divider"></div>
-        <div class="day-slot-split-col day-slot-events-col">${rightHtml}</div>
-      </div>`;
-    } else {
-      taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
-    }
+    // Render in-flow task blocks (overlapping items are excluded — they render in the absolute overlay)
+    const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
 
     // Routine label — show on the first empty slot of each routine band
     let routineLabelHtml='';
@@ -1240,7 +1241,7 @@ function renderDay(){
     }
 
     html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="min-height:${minH}px;${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
-           <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}${shouldSplit?' is-split':''}" data-time="${sk2}"
+           <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}" data-time="${sk2}"
              style="min-height:${minH}px;${slotBg}"
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
@@ -1251,6 +1252,80 @@ function renderDay(){
 
   const tl=document.getElementById('dayTimeline');
   tl.innerHTML=html;
+
+  // ── Absolute overlay for overlapping items (like week view) ──────────────
+  if(overlapIds.size>0){
+    const overlapping=_timedTasks.filter(t=>overlapIds.has(t.id));
+    requestAnimationFrame(()=>{
+      // Query the time label column width
+      const firstLbl=tl.querySelector('.day-time-lbl');
+      const lblW=firstLbl?firstLbl.offsetWidth:80;
+
+      const overlay=document.createElement('div');
+      overlay.className='day-overlay-layer';
+      overlay.style.cssText=`position:absolute;top:0;left:${lblW}px;right:0;bottom:0;pointer-events:none;z-index:3`;
+
+      overlapping.forEach(t=>{
+        const[h,m]=t.time.split(':').map(Number);
+        const timeKey=sk(h,m);
+        const slotEl=tl.querySelector(`.day-slot[data-time="${timeKey}"]`);
+        if(!slotEl)return;
+        const topPx=slotEl.offsetTop;
+        const dur=t.duration||30;
+        const hPx=Math.max(36,dur/30*DAY_SLOT_H);
+
+        const ci=dayColMap.get(t.id)||{col:0,total:1};
+        let leftVal='2px',rightVal='2px';
+        if(ci.total>1){
+          const pct=100/ci.total;
+          leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
+          rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
+        }
+
+        const idate=t._instanceDate||key;
+        const cc=catColor(t.category);
+        const isDone=t.done||(t.doneOverrides||[]).includes(idate);
+        const isEvent=(t.type||'task')==='event';
+        const subs=t.subtasks||[];
+
+        let blockHtml;
+        const resizeH=`<div class="task-resize-handle" data-rid="${t.id}" style="position:absolute;bottom:0;left:8px;right:6px;top:auto" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+        if(isEvent){
+          blockHtml=`<div class="day-task-block event-block" data-id="${t.id}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            style="background:${cc};height:100%;margin:0;border-radius:6px"
+            onclick="openEdit('${t.id}','${idate}',event)">
+            <div class="day-task-block-check">
+              <span class="day-task-block-name">${esc(t.name)}</span>
+            </div>
+            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · 📍 ${esc(t.location)}`:''}${t.recur?' ↻':''}</div>
+            ${subs.length?`<div class="day-task-divider"></div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+          </div>${resizeH}`;
+        } else {
+          blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            style="border-left-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:6px"
+            onclick="openEdit('${t.id}','${idate}',event)">
+            <div class="day-task-block-check">
+              <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
+              <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
+              ${t.recur?`<span class="recur-icon">↻</span>`:''}
+            </div>
+            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span></div>
+            ${subs.length?`<div class="day-task-divider"></div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+          </div>${resizeH}`;
+        }
+
+        const block=document.createElement('div');
+        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3`;
+        block.innerHTML=blockHtml;
+        overlay.appendChild(block);
+      });
+
+      tl.style.position='relative';
+      tl.appendChild(overlay);
+    });
+  }
 
   // Empty-day state
   if(!_dayTotal){
@@ -2063,12 +2138,6 @@ function toggleAiPref(btn,group){
   }
 }
 
-function fillAIFromBD(){
-  // Select all BD chips
-  brainDump.forEach(t=>_aiBdSelected.add(t.id));
-  renderAiBdChips();
-  showToast('All Brain Dump items selected');
-}
 // Bullet point behavior for AI input
 function closeAISchedule(){
   document.getElementById('aiScheduleOverlay').classList.remove('open');
@@ -2118,7 +2187,7 @@ async function generateAISchedule(){
   document.getElementById('aiError').style.display='none';
   document.getElementById('aiPreviewWrap').style.display='none';
 
-  const prompt=`You are Clarity, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}
+  const prompt=`You are Luclaro, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}
 
 The user wants to schedule:
 "${input}"
@@ -2175,7 +2244,7 @@ Subtask format: {"name":"Review notes","duration":25}`;
   }catch(err){
     const isFetchErr=err.message&&(err.message.includes('fetch')||err.message.includes('network')||err.message.includes('Failed'));
     if(isFetchErr){
-      document.getElementById('aiError').textContent='AI planning requires the Anthropic API. If you\'re using Clarity standalone, set up a Supabase Edge Function to proxy the API — or use this feature inside claude.ai.';
+      document.getElementById('aiError').textContent='AI planning requires the Anthropic API. If you\'re using Luclaro standalone, set up a Supabase Edge Function to proxy the API — or use this feature inside claude.ai.';
     } else {
       document.getElementById('aiError').textContent='Something went wrong — try again. '+err.message;
     }
@@ -2768,16 +2837,24 @@ function onResizeMove(e){
       document.body.style.cursor='ns-resize';
       document.body.style.userSelect='none';
     } else {
-      // Same slot count — update the wrapper's min-height and duration pill live
+      // Same slot count — update height and duration pill live
       const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
       const wrap=block?.closest('.day-task-slot-wrap');
       const DAY_H=window.innerWidth<=640?64:76;
       const newSchedH=Math.max(36,newDur/30*DAY_H-8);
-      if(wrap)wrap.style.minHeight=newSchedH+'px';
-      // Move resize handle to match new scheduled height
-      const handle=wrap?.querySelector('.task-resize-handle');
-      if(handle)handle.style.top=(newSchedH-10)+'px';
-      const dl=block?.querySelector('.day-task-dur-pill,.day-task-block-dur');
+      if(wrap){
+        // In-flow block: update wrapper min-height and reposition handle
+        wrap.style.minHeight=newSchedH+'px';
+        const handle=wrap.querySelector('.task-resize-handle');
+        if(handle)handle.style.top=(newSchedH-10)+'px';
+      } else {
+        // Overlay block: update the absolute container's height
+        const overlayWrap=block?.parentElement;
+        if(overlayWrap&&overlayWrap.style.position==='absolute'){
+          overlayWrap.style.height=Math.max(36,newDur/30*DAY_H)+'px';
+        }
+      }
+      const dl=block?.querySelector('.day-task-dur-pill');
       if(dl)dl.textContent=durLabel(newDur);
       // Update time range badge
       if(block&&_rzTask.time){
