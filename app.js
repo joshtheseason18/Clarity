@@ -385,8 +385,13 @@ function switchScheduleTab(tab){
   document.getElementById('schedTabEvents').classList.toggle('active',tab==='events');
   document.getElementById('catTasksArea').style.display=tab==='tasks'?'':'none';
   document.getElementById('catEventsArea').style.display=tab==='events'?'flex':'none';
+  // Chips row: visible on tasks, hidden on events
+  const chipsRow=document.getElementById('catChips');
+  if(chipsRow)chipsRow.style.display=tab==='tasks'?'flex':'none';
+  // Task action buttons (+ Category, Show Completed)
   const taskControls=document.getElementById('catTaskControls');
   if(taskControls)taskControls.style.display=tab==='tasks'?'flex':'none';
+  // Event action buttons (Show Past)
   const evControls=document.getElementById('catEventControls');
   if(evControls)evControls.style.display=tab==='events'?'flex':'none';
   if(tab==='events')renderEvents();
@@ -1018,21 +1023,27 @@ function renderDay(){
   }
 
   // ── Conflict detection ─────────────────────────────────────────────────────
-  // Build a set of task IDs that overlap at least one other timed task
   const conflictIds=new Set();
+  // Also track which task IDs overlap with an event (for the split column layout)
+  const splitTaskIds=new Set();   // non-event tasks that overlap an event
+  const splitEventIds=new Set();  // events that overlap a non-event task
   _timedTasks.forEach((a,ai)=>{
     const[ah,am]=a.time.split(':').map(Number);
     const aStart=ah*60+am;
     const aEnd=aStart+(a.duration||30);
+    const aIsEvent=(a.type||'task')==='event';
     _timedTasks.forEach((b,bi)=>{
-      if(ai>=bi)return; // only check each pair once
+      if(ai>=bi)return;
       const[bh,bm]=b.time.split(':').map(Number);
       const bStart=bh*60+bm;
       const bEnd=bStart+(b.duration||30);
-      // Overlap if one starts before the other ends
+      const bIsEvent=(b.type||'task')==='event';
       if(aStart<bEnd&&bStart<aEnd){
         conflictIds.add(a.id);
         conflictIds.add(b.id);
+        // If one is an event and the other is a task, mark both for split rendering
+        if(aIsEvent&&!bIsEvent){splitEventIds.add(a.id);splitTaskIds.add(b.id);}
+        else if(!aIsEvent&&bIsEvent){splitTaskIds.add(a.id);splitEventIds.add(b.id);}
       }
     });
   });
@@ -1072,12 +1083,10 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — the covering task's slot contains the block.
-    // We still render the time label row so hours like "1:00 PM" remain visible,
-    // but make it a ghost: smaller, dimmer, pointer-events off on the slot side.
+    // Interior slots — collapsed to ghost labels, UNLESS they contain a split item
+    // (e.g. a task spans 10:00-12:00 but an event starts at 11:00 — that slot must stay visible)
     if(interiorSlots.has(sk2)&&!tasksHere.length){
       const isInteriorHalfHour=s.m===30;
-      // Only show on-the-hour interior labels (skip :30 ghost labels — too busy)
       if(!isInteriorHalfHour){
         html+=`<div class="day-time-lbl day-lbl-ghost">${fmtT(sk2)}</div>
                <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
@@ -1101,16 +1110,23 @@ function renderDay(){
     const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
     const minH=slotsNeeded*DAY_SLOT_H;
 
-    // Split slot if there are both events AND tasks at the same time (Option B)
-    const eventsHere=tasksHere.filter(t=>(t.type||'task')==='event');
-    const nonEventsHere=tasksHere.filter(t=>(t.type||'task')!=='event');
-    const shouldSplit=eventsHere.length>0&&nonEventsHere.length>0;
+    // Split this slot if ANY item in it is involved in an event-task overlap.
+    // This catches both same-start and offset-start overlaps (e.g. task at 10:00,
+    // event at 10:30 — the task's slot at 10:00 contains a splitTaskId).
+    const slotHasSplitItem=tasksHere.some(t=>splitTaskIds.has(t.id)||splitEventIds.has(t.id));
+    const eventsInSlot=tasksHere.filter(t=>(t.type||'task')==='event');
+    const tasksInSlot=tasksHere.filter(t=>(t.type||'task')!=='event');
+    // Only split if this slot actually has items from both sides OR has a split-flagged item
+    const shouldSplit=slotHasSplitItem&&(eventsInSlot.length>0||tasksInSlot.length>0);
 
     let taskHtml;
     if(shouldSplit){
-      // Left column: tasks | thin divider | Right column: events
-      const leftHtml=nonEventsHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
-      const rightHtml=eventsHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
+      const leftItems=tasksInSlot.length>0?tasksInSlot:[];
+      const rightItems=eventsInSlot.length>0?eventsInSlot:[];
+      // If one column is empty (e.g. this slot only has the task, event starts later),
+      // still render the split structure so the layout is consistent across all split rows
+      const leftHtml=leftItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
+      const rightHtml=rightItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
       taskHtml=`<div class="day-slot-split">
         <div class="day-slot-split-col day-slot-tasks-col">${leftHtml}</div>
         <div class="day-slot-split-divider"></div>

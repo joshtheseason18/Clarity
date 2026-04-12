@@ -291,13 +291,14 @@
               <button class="sched-seg-btn" id="schedTabEvents" onclick="switchScheduleTab('events')">Events</button>
             </div>
           </div>
-          <!-- Row 2: task controls (visible on Tasks tab) -->
+          <!-- Row 2: category chips — always visible on Tasks tab, hidden on Events -->
+          <div class="cat-chips" id="catChips" style="padding-bottom:8px"></div>
+          <!-- Row 3: task action buttons (Tasks tab only) -->
           <div id="catTaskControls" class="cat-hdr-row2">
-            <div class="cat-chips" id="catChips"></div>
             <button class="add-cat-btn" onclick="openAddCatModal()">+ Category</button>
             <button class="show-done-btn" id="sdBtn" onclick="toggleSD()">Show Completed</button>
           </div>
-          <!-- Row 2 alt: event controls (visible on Events tab) -->
+          <!-- Row 3 alt: event controls (Events tab only) -->
           <div id="catEventControls" class="cat-hdr-row2" style="display:none">
             <button class="show-done-btn" id="pastEventsBtn" onclick="togglePastEvents()">Show Past</button>
           </div>
