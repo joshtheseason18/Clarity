@@ -1259,6 +1259,8 @@ function renderDay(){
     empty.innerHTML=`<div class="day-empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg></div><div class="day-empty-text">Nothing scheduled yet<br><span style="font-size:11px">Click a time slot or press <strong>N</strong> to add a task</span></div>`;
     tl.appendChild(empty);
   }
+  // Update journal if expanded
+  if(_dayJournalOpen)openJournalForDate(dk(selDate));
 }
 function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
 
@@ -4126,12 +4128,12 @@ function openJournalForDate(dateKey){
   const todayKey = dk(new Date());
   const isToday = dateKey === todayKey;
 
-  // Date label
+  // Date label (may not exist in day view journal)
   const dateLabel = DLONG[d.getDay()] + ', ' + MONTHS_LONG[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
-  document.getElementById('journalDateLabel').textContent = isToday ? 'Today' : dateLabel;
-  document.getElementById('journalDateSub').textContent = isToday
-    ? 'How did your day go?'
-    : dateLabel;
+  const dlEl = document.getElementById('journalDateLabel');
+  if(dlEl) dlEl.textContent = isToday ? 'Today' : dateLabel;
+  const dsEl = document.getElementById('journalDateSub');
+  if(dsEl) dsEl.textContent = isToday ? 'How did your day go?' : dateLabel;
 
   // Mood
   _journalMood = entry.mood || '';
