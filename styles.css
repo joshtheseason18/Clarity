@@ -2000,7 +2000,7 @@ header{
 
 /* ══ DAY JOURNAL SECTION ═══════════════════════ */
 .day-journal-section{
-  margin:16px 12px 40px;border-radius:12px;
+  margin:8px 12px 12px;border-radius:12px;
   background:var(--surface);border:1px solid var(--border);
   overflow:hidden;
 }
@@ -2021,3 +2021,34 @@ header{
   color:var(--text);background:var(--surface2);resize:vertical;line-height:1.6;
 }
 .day-journal-body .journal-save-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}
+
+/* ══ MONTH NOTES ══════════════════════════════ */
+.month-notes-section{
+  margin:16px 0 40px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);
+  overflow:hidden;
+}
+.month-notes-hdr{
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  cursor:pointer;user-select:none;transition:background .15s;
+}
+.month-notes-hdr:hover{background:var(--surface2)}
+.month-notes-icon{color:var(--text2);flex-shrink:0;display:flex;align-items:center}
+.month-notes-title{font-size:13px;font-weight:600;color:var(--text)}
+.month-notes-preview{flex:1;font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-left:6px;font-style:italic}
+.month-notes-arrow{font-size:11px;color:var(--text3);transition:transform .15s;flex-shrink:0}
+.month-notes-body{padding:0 16px 16px}
+.month-notes-ta{
+  width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:12px;
+  color:var(--text);background:var(--surface2);resize:vertical;line-height:1.6;outline:none;
+}
+.month-notes-ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)}
+.month-notes-save-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}
+.month-notes-saved{font-size:10px;color:var(--accent);opacity:0;transition:opacity .3s}
+.month-notes-saved.show{opacity:1}
+.month-notes-save-btn{
+  padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:7px;
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s;
+}
+.month-notes-save-btn:hover{background:var(--accent-dim)}

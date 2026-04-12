@@ -140,7 +140,7 @@ const TOUR_STEPS=[
   {
     target:'[onclick="openAISchedule()"]',
     arrow:'top',
-    title:'✨ Let Luclaro plan your day',
+    title:'Let Luclaro plan your day',
     body:'Describe what you need to do and Luclaro\'s AI builds a schedule for you. Tweak anything, then accept.',
     pre:function(){if(sidebarOpen)toggleSidebar();}
   }
@@ -862,8 +862,56 @@ function renderMonth(){
       <div class="cell-num-row"><span class="cell-num-circle">${date.getDate()}</span>${eventDot}</div>${chips}</div>`;
   });
   document.getElementById('monthGrid').innerHTML=html+'</div>';
+  // Load month notes preview
+  updateMonthNotesPreview();
+  if(_monthNotesOpen)loadMonthNotesUI();
 }
 function onMCell(k){selDate=fromDk(k);switchView('day')}
+
+// ── Month Notes ──────────────────────────────────────────────
+function monthNotesKey(){
+  return cursor.getFullYear()+'-'+pad(cursor.getMonth()+1);
+}
+function toggleMonthNotes(){
+  _monthNotesOpen=!_monthNotesOpen;
+  const body=document.getElementById('monthNotesBody');
+  const arrow=document.getElementById('monthNotesArrow');
+  if(body)body.style.display=_monthNotesOpen?'':'none';
+  if(arrow)arrow.textContent=_monthNotesOpen?'▾':'▸';
+  if(_monthNotesOpen)loadMonthNotesUI();
+}
+function loadMonthNotesUI(){
+  const key=monthNotesKey();
+  const text=monthNotes[key]||'';
+  const ta=document.getElementById('monthNotesTa');
+  if(ta)ta.value=text;
+  const hint=document.getElementById('monthNotesSaved');
+  if(hint)hint.classList.remove('show');
+  updateMonthNotesPreview();
+}
+function onMonthNotesInput(){
+  const hint=document.getElementById('monthNotesSaved');
+  if(hint)hint.classList.remove('show');
+}
+function saveMonthNotes(){
+  const ta=document.getElementById('monthNotesTa');
+  if(!ta)return;
+  const key=monthNotesKey();
+  const text=ta.value.trim();
+  if(text)monthNotes[key]=text;
+  else delete monthNotes[key];
+  saveMonthNotesData();
+  const hint=document.getElementById('monthNotesSaved');
+  if(hint){hint.classList.add('show');setTimeout(()=>hint.classList.remove('show'),2000);}
+  updateMonthNotesPreview();
+}
+function updateMonthNotesPreview(){
+  const preview=document.getElementById('monthNotesPreview');
+  if(!preview)return;
+  const key=monthNotesKey();
+  const text=monthNotes[key]||'';
+  preview.textContent=text?text.slice(0,50)+(text.length>50?'…':''):'';
+}
 
 // ══ WEEK ════════════════════════════════════
 function renderWeek(){
@@ -3064,7 +3112,7 @@ async function generateSubtasks(){
   }catch(err){
     showToast('AI generation unavailable — add subtasks manually using the + button');
   }
-  btn.textContent='✨ Generate with AI';btn.style.pointerEvents='';
+  btn.innerHTML='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" fill="currentColor"/></svg> Generate with AI';btn.style.pointerEvents='';
 }
 
 // ══ ATTACHMENT MANAGEMENT ═══════════════════════
@@ -3338,17 +3386,17 @@ function showUndoToast(msg,undoFn){
 function exportData(){
   const data={
     tasks,brainDump,categories,
-    routineBlocks,
+    routineBlocks,monthNotes,
     username:localStorage.getItem('clarity_username')||'',
     journal:JSON.parse(localStorage.getItem('clarity_journal')||'{}'),
     theme:currentTheme,dark:isDark,military:useMilitary,
     weekStartDay,
-    exportedAt:new Date().toISOString(),version:'v19'
+    exportedAt:new Date().toISOString(),version:'v1.0'
   };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='clarity-backup-'+dk(new Date())+'.json';
+  a.download='luclaro-backup-'+dk(new Date())+'.json';
   a.click();URL.revokeObjectURL(a.href);
   showToast('Data exported successfully');
 }
@@ -3366,6 +3414,7 @@ function importData(e){
       if(data.dark!==undefined)applyDark(data.dark);
       if(data.military!==undefined)setTimeFormat(data.military);
       if(data.routineBlocks){routineBlocks=data.routineBlocks;saveRoutine();renderRoutineList();}
+      if(data.monthNotes){monthNotes=data.monthNotes;saveMonthNotesData();}
       if(data.weekStartDay!==undefined)setWeekStart(data.weekStartDay);
       if(data.username)localStorage.setItem('clarity_username',data.username);
       save();renderAll();
@@ -4194,6 +4243,12 @@ function saveJournalData(){
   localStorage.setItem('clarity_journal', JSON.stringify(journal));
 }
 loadJournal();
+
+// ── Month Notes ──
+let monthNotes={};
+try{monthNotes=JSON.parse(localStorage.getItem('clarity_month_notes')||'{}')}catch{monthNotes={}}
+function saveMonthNotesData(){localStorage.setItem('clarity_month_notes',JSON.stringify(monthNotes))}
+let _monthNotesOpen=false;
 
 const MOOD_EMOJIS = ['😔','😐','🙂','😊','🌟'];
 const MOOD_LABELS = { '😔':'Rough day','😐':'Just okay','🙂':'Pretty good','😊':'Good day','🌟':'Amazing day' };
