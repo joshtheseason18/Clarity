@@ -235,9 +235,9 @@
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
     <span>Year</span>
   </button>
-  <button class="bnav-tab" data-tip="Tasks" onclick="switchView('categories')">
+  <button class="bnav-tab" data-tip="Schedule" onclick="switchView('categories')">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="6" cy="6" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="6" r="2.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="13" r="2.5" stroke="currentColor" stroke-width="1.3"/></svg>
-    <span>Tasks</span>
+    <span>Schedule</span>
   </button>
 </nav>
 
@@ -260,6 +260,7 @@
     <div class="view" id="view-week">
       <div class="week-view">
         <div class="week-hdr-row" id="weekHdr"></div>
+        <div class="week-allday-row" id="weekAlldayRow"></div>
         <div class="week-scroll"><div class="week-grid" id="weekGrid"></div></div>
       </div>
     </div>
@@ -278,16 +279,33 @@
       </div>
     </div>
 
-    <!-- CATEGORIES -->
+    <!-- CATEGORIES / SCHEDULE -->
     <div class="view" id="view-categories">
       <div class="cat-view">
         <div class="cat-view-hdr">
-          <div class="cat-view-title">Tasks</div>
-          <div class="cat-chips" id="catChips"></div>
-          <button class="add-cat-btn" onclick="openAddCatModal()">+ Category</button>
-          <button class="show-done-btn" id="sdBtn" onclick="toggleSD()">Show Completed</button>
+          <div class="cat-view-title">Schedule</div>
+          <!-- Tasks / Events segment toggle -->
+          <div class="sched-seg-wrap">
+            <button class="sched-seg-btn active" id="schedTabTasks" onclick="switchScheduleTab('tasks')">Tasks</button>
+            <button class="sched-seg-btn" id="schedTabEvents" onclick="switchScheduleTab('events')">Events</button>
+          </div>
+          <!-- Task-only controls (hidden on Events tab) -->
+          <div id="catTaskControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="cat-chips" id="catChips"></div>
+            <button class="add-cat-btn" onclick="openAddCatModal()">+ Category</button>
+            <button class="show-done-btn" id="sdBtn" onclick="toggleSD()">Show Completed</button>
+          </div>
+          <!-- Event-only controls -->
+          <div id="catEventControls" style="display:none;align-items:center;gap:8px">
+            <button class="show-done-btn" id="pastEventsBtn" onclick="togglePastEvents()">Show Past</button>
+          </div>
         </div>
-        <div class="cat-scroll" id="catContent"></div>
+        <!-- Tasks area -->
+        <div id="catTasksArea" class="cat-scroll"></div>
+        <!-- Events area -->
+        <div id="catEventsArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
+          <div id="catEventsContent"></div>
+        </div>
       </div>
     </div>
 

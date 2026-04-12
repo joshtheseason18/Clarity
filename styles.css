@@ -642,7 +642,7 @@ header{
 }
 .year-month-card:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-pale);transform:translateY(-1px)}
 .year-month-card.has-today{border-color:var(--accent)}
-.ym-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.ym-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .ym-name{font-family:'DM Serif Display',serif;font-size:15px;color:var(--text)}
 .ym-count{font-size:10px;color:var(--text3);font-weight:500}
 .ym-count.has-tasks{color:var(--accent);font-weight:600}
@@ -736,14 +736,19 @@ header{
   padding:8px 0 2px;
 }
 .allday-pill{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:3px 10px;border-radius:99px;
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 11px;border-radius:99px;
   border:1.5px solid;font-size:11px;font-weight:600;
   cursor:pointer;white-space:nowrap;
   transition:opacity .15s,box-shadow .15s;
 }
 .allday-pill:hover{opacity:.8;box-shadow:0 1px 6px rgba(0,0,0,.1)}
 .allday-pill.done{opacity:.4;text-decoration:line-through}
+.allday-pill-type{
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  opacity:.65;
+}
+.allday-pill-edit{font-size:10px;opacity:.5;margin-left:2px}
 
 .day-scroll{flex:1;overflow-y:auto;overflow-x:hidden} /* overflow-x:hidden forces grid 1fr to reflow when sidebar toggles */
 
@@ -1185,7 +1190,45 @@ header{
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
 
 
-/* ══ HABIT ROW (Categories view) ════════════════ */
+/* ══ WEEK ALLDAY ROW ══════════════════════════ */
+.week-allday-row{flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border)}
+.wk-allday-row{display:grid;grid-template-columns:68px repeat(7,1fr)}
+.wk-allday-gutter{display:flex;align-items:center;justify-content:flex-end;padding:4px 8px 4px 0;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-right:1px solid var(--border)}
+.wk-allday-cell{padding:3px 2px;border-right:1px solid var(--border);min-height:26px;display:flex;flex-direction:column;gap:2px}
+.wk-allday-pill{
+  font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  transition:opacity .12s;
+}
+.wk-allday-pill:hover{opacity:.8}
+
+/* ══ MONTH ALLDAY CHIP ════════════════════════ */
+.m-chip-allday{
+  font-weight:700;color:#fff!important;
+  border-left-width:0!important;
+  border-radius:4px;
+}
+
+/* ══ YEAR COUNT PILLS ════════════════════════ */
+.ym-counts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.ym-count-tasks{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.12);color:var(--accent)}
+.ym-count-events{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(139,92,246,.12);color:#8b5cf6}
+.ym-day.has-event::after{content:'';display:block;width:4px;height:4px;border-radius:50%;background:#8b5cf6;margin:0 auto;margin-top:-3px}
+
+/* ══ SCHEDULE TAB TOGGLE ════════════════════ */
+.sched-seg-wrap{
+  display:flex;background:var(--surface2);border-radius:8px;padding:2px;gap:2px;flex-shrink:0;
+}
+.sched-seg-btn{
+  padding:5px 16px;border:none;border-radius:6px;font-family:'DM Sans',sans-serif;
+  font-size:12px;font-weight:500;cursor:pointer;
+  background:transparent;color:var(--text3);transition:all .15s;
+}
+.sched-seg-btn.active{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ══ EVENT ROW in Schedule tab ═══════════════ */
+.event-row .event-row-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.event-row.past-event{opacity:.55}
 /* ══ IDEA MODAL ══════════════════════════════ */
 .idea-modal-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:2px}
 .idea-modal-color-bar{width:4px;border-radius:99px;flex-shrink:0;align-self:stretch;min-height:36px}
@@ -1857,6 +1900,7 @@ header{
   /* ── Week grid ── */
   .week-hdr-row{grid-template-columns:42px repeat(7,1fr)}
   .week-grid{grid-template-columns:42px repeat(7,1fr)}
+  .wk-allday-row{grid-template-columns:42px repeat(7,1fr)}
   .wk-day-head{padding:5px 2px}
   .wdh-name{font-size:9px}
   .wdh-num{font-size:12px}
@@ -1934,5 +1978,6 @@ header{
   .month-cell{min-height:70px}
   .week-hdr-row{grid-template-columns:32px repeat(7,1fr)}
   .week-grid{grid-template-columns:32px repeat(7,1fr)}
+  .wk-allday-row{grid-template-columns:32px repeat(7,1fr)}
   .wdh-name{font-size:8px}.wdh-num{font-size:10px}
 }

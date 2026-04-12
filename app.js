@@ -378,7 +378,90 @@ let cursor=new Date();cursor.setDate(1);cursor.setHours(0,0,0,0);
 let selDate=new Date();
 let sidebarOpen=true,activeSide='braindump';
 // Close sidebar by default on mobile
-let catFilter='all',showDone=false;
+let _scheduleTab='tasks'; // 'tasks' or 'events'
+function switchScheduleTab(tab){
+  _scheduleTab=tab;
+  document.getElementById('schedTabTasks').classList.toggle('active',tab==='tasks');
+  document.getElementById('schedTabEvents').classList.toggle('active',tab==='events');
+  document.getElementById('catTasksArea').style.display=tab==='tasks'?'':'none';
+  document.getElementById('catEventsArea').style.display=tab==='events'?'flex':'none';
+  const taskControls=document.getElementById('catTaskControls');
+  if(taskControls)taskControls.style.display=tab==='tasks'?'flex':'none';
+  const evControls=document.getElementById('catEventControls');
+  if(evControls)evControls.style.display=tab==='events'?'flex':'none';
+  if(tab==='events')renderEvents();
+  else renderCat();
+}
+let showPastEvents=false;
+function togglePastEvents(){
+  showPastEvents=!showPastEvents;
+  const btn=document.getElementById('pastEventsBtn');
+  if(btn)btn.textContent=showPastEvents?'Hide Past':'Show Past';
+  renderEvents();
+}
+function renderEvents(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const far=addDays(today,365);
+  const past=addDays(today,-365);
+  const allEvents=expandedTasks(showPastEvents?past:today,far)
+    .filter(t=>(t.type||'task')==='event')
+    .sort((a,b)=>(a._instanceDate+(a.time||'')).localeCompare(b._instanceDate+(b.time||'')));
+  // Deduplicate by id+instanceDate
+  const seen=new Set();
+  const events=allEvents.filter(t=>{const k=t.id+'|'+(t._instanceDate||'');if(seen.has(k))return false;seen.add(k);return true;});
+  const todayKey=dk(today);
+  let html='';
+  if(!events.length){
+    html=`<div class="cat-empty" style="padding:40px 0;text-align:center">
+      <div style="font-size:28px;margin-bottom:8px">📅</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text)">No events yet</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Create an event from the Day or Week view</div>
+    </div>`;
+  } else {
+    // Group by upcoming vs today vs past
+    const upcoming=events.filter(t=>t._instanceDate>todayKey);
+    const todayEvs=events.filter(t=>t._instanceDate===todayKey);
+    const pastEvs=events.filter(t=>t._instanceDate<todayKey);
+    if(todayEvs.length){
+      html+=`<div class="cat-section"><div class="cat-sec-title">📅 Today</div>`;
+      todayEvs.forEach(t=>{html+=eventRow(t)});
+      html+=`</div>`;
+    }
+    if(upcoming.length){
+      html+=`<div class="cat-section"><div class="cat-sec-title">Upcoming</div>`;
+      upcoming.forEach(t=>{html+=eventRow(t)});
+      html+=`</div>`;
+    }
+    if(showPastEvents&&pastEvs.length){
+      html+=`<div class="cat-section"><div class="cat-sec-title" style="opacity:.6">Past</div>`;
+      [...pastEvs].reverse().forEach(t=>{html+=eventRow(t,true)});
+      html+=`</div>`;
+    }
+  }
+  const el=document.getElementById('catEventsContent');
+  if(el)el.innerHTML=html;
+}
+function eventRow(t,isPast=false){
+  const cc=catColor(t.category);
+  const idate=t._instanceDate||t.date||'';
+  const d=idate?fromDk(idate):null;
+  const dateLabel=d?DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate():'';
+  const timeLabel=t.allday?'All Day':t.time?fmtT(t.time):'';
+  return`<div class="cat-task-row event-row${isPast?' past-event':''}" style="border-left-color:${cc};cursor:pointer"
+    onclick="openCatEdit('${t.id}','${idate}',event)">
+    <div class="event-row-dot" style="background:${cc}"></div>
+    <div class="cat-task-info" style="flex:1;min-width:0">
+      <div class="cat-task-name">${esc(t.name)}${t.recur?' <span style="opacity:.5;font-size:10px">↻</span>':''}</div>
+      <div class="cat-task-meta">
+        ${dateLabel?`<span>${dateLabel}</span>`:''}
+        ${timeLabel?`<span style="font-weight:600;color:var(--accent)">${timeLabel}</span>`:''}
+        ${t.location?`<span>📍 ${esc(t.location)}</span>`:''}
+        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${catById(t.category)?.name||t.category}</span>`:''}
+      </div>
+    </div>
+    <div class="cat-edit-hint" onclick="event.stopPropagation();openCatEdit('${t.id}','${idate}',event)">Edit</div>
+  </div>`;
+}
 let tasks=[],brainDump=[];
 let categories=[
   {id:'work',name:'Work',color:'#3b82f6',locked:true},
@@ -612,6 +695,7 @@ function renderAll(){
   else if(curView==='month')renderMonth();
   else if(curView==='week')renderWeek();
   else if(curView==='day')renderDay();
+  else if(_scheduleTab==='events')renderEvents();
   else renderCat();
   // Only render sidebar panels if sidebar is visible
   if(sidebarOpen){
@@ -639,24 +723,48 @@ function updateLabel(){
 // ══ YEAR ═════════════════════════════════════
 function renderYear(){
   const todayKey=dk(new Date());
+  const todayMo=new Date().getMonth();
+  const todayYr=new Date().getFullYear();
   const yStart=new Date(curYear,0,1),yEnd=new Date(curYear,11,31);
   const allYT=expandedTasks(yStart,yEnd);
   let html='';
   for(let mo=0;mo<12;mo++){
     const first=(new Date(curYear,mo,1).getDay()-weekStartDay+7)%7,dim=new Date(curYear,mo+1,0).getDate(),dip=new Date(curYear,mo,0).getDate();
     const dayCount={};
-    allYT.forEach(t=>{if(t.date){const d=fromDk(t.date);if(d.getFullYear()===curYear&&d.getMonth()===mo)dayCount[d.getDate()]=(dayCount[d.getDate()]||0)+1;}});
-    const total=Object.values(dayCount).reduce((a,b)=>a+b,0);
+    const eventDayCount={};
+    allYT.forEach(t=>{
+      if(t.date){
+        const d=fromDk(t.date);
+        if(d.getFullYear()===curYear&&d.getMonth()===mo){
+          const isEvent=(t.type||'task')==='event';
+          if(isEvent){eventDayCount[d.getDate()]=(eventDayCount[d.getDate()]||0)+1;}
+          else{dayCount[d.getDate()]=(dayCount[d.getDate()]||0)+1;}
+        }
+      }
+    });
+    const taskTotal=Object.values(dayCount).reduce((a,b)=>a+b,0);
+    const eventTotal=Object.values(eventDayCount).reduce((a,b)=>a+b,0);
+    const total=taskTotal+eventTotal;
     const hasToday=todayKey.startsWith(`${curYear}-${pad(mo+1)}-`);
+    const isCurrentMonth=curYear===todayYr&&mo===todayMo;
+    // Current month shows both task + event counts; other months show just tasks
+    let countHtml='';
+    if(isCurrentMonth){
+      if(taskTotal>0)countHtml+=`<span class="ym-count-tasks has-tasks">${taskTotal} task${taskTotal!==1?'s':''}</span>`;
+      if(eventTotal>0)countHtml+=`<span class="ym-count-events">${eventTotal} event${eventTotal!==1?'s':''}</span>`;
+    } else if(taskTotal>0){
+      countHtml=`<span class="ym-count has-tasks">${taskTotal} task${taskTotal!==1?'s':''}</span>`;
+    }
     html+=`<div class="year-month-card${hasToday?' has-today':''}" onclick="onYearMonthClick(${curYear},${mo})">
-      <div class="ym-header"><div class="ym-name">${MONTHS_LONG[mo]}</div><div class="ym-count${total>0?' has-tasks':''}">${total>0?total+' task'+(total!==1?'s':''):''}</div></div>
+      <div class="ym-header"><div class="ym-name">${MONTHS_LONG[mo]}</div><div class="ym-counts">${countHtml}</div></div>
       <div class="ym-days-hdr">${orderedDayLabels().map(d=>`<div class="ym-day-lbl">${d[0]}</div>`).join('')}</div>
       <div class="ym-cal-grid">`;
     for(let i=0;i<first;i++)html+=`<div class="ym-day other"></div>`;
     for(let d=1;d<=dim;d++){
-      const key=`${curYear}-${pad(mo+1)}-${pad(d)}`,n=dayCount[d]||0,isT=key===todayKey;
+      const key=`${curYear}-${pad(mo+1)}-${pad(d)}`,n=(dayCount[d]||0)+(eventDayCount[d]||0),isT=key===todayKey;
+      const hasEv=(eventDayCount[d]||0)>0;
       let dotCls=n===1?'d1':n===2?'d2':n<=4?'d3':n>4?'d4':'';
-      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0&&!isT?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
+      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0&&!isT?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
     }
     const rem=(first+dim)%7;if(rem>0)for(let i=0;i<7-rem;i++)html+=`<div class="ym-day other"></div>`;
     html+=`</div></div>`;
@@ -689,11 +797,13 @@ function renderMonth(){
     let chips=sorted.map(t=>{
       const cc=catColor(t.category);
       const isEvent=(t.type||'task')==='event';
+      const isAllday=isEvent&&t.allday;
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||key);
-      let c='m-chip'+(isDone?' done':'')+(isEvent?' m-chip-event':'');
+      let c='m-chip'+(isDone?' done':'')+(isEvent?' m-chip-event':'')+(isAllday?' m-chip-allday':'');
       const priDot=!isEvent&&t.priority&&t.priority!=='none'?`<span class="m-chip-pri pri-${t.priority[0]}"></span>`:'';
-      const timeStr=t.time?`<span class="m-chip-time">${fmtT(t.time)}</span>`:'';
-      return`<span class="${c}" style="border-left-color:${isEvent?'var(--accent)':cc}${isEvent?';background:var(--accent-pale)':''}" draggable="true"
+      const timeStr=isAllday?`<span class="m-chip-time">All Day</span>`:t.time?`<span class="m-chip-time">${fmtT(t.time)}</span>`:'';
+      const chipStyle=isAllday?`background:${cc};border-left-color:${cc};color:#fff`:`border-left-color:${isEvent?'var(--accent)':cc}${isEvent?';background:var(--accent-pale)':''}`;
+      return`<span class="${c}" style="${chipStyle}" draggable="true"
         ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||key}')" ondragend="onTaskDragEnd(event)"
         onclick="openEdit('${t.id}','${t._instanceDate||key}',event)">${priDot}${timeStr}${esc(t.name)}${t.recur?' ↻':''}</span>`;
     }).join('')+(dt.length>5?`<span class="more-chip">+${dt.length-5}</span>`:'');
@@ -711,21 +821,43 @@ function renderWeek(){
   let hdr=`<div class="wk-gutter"></div>`;
   days.forEach(d=>{const k=dk(d);hdr+=`<div class="wk-day-head${k===todayKey?' today':''}" onclick="onWkDay('${k}')"><div class="wdh-name">${DAYS_S[d.getDay()]}</div><div class="wdh-num">${d.getDate()}</div></div>`;});
   document.getElementById('weekHdr').innerHTML=hdr;
+
+  // ── All-day row ────────────────────────────────────────────────────────────
+  const alldayTasks={};
+  days.forEach(d=>{
+    const k=dk(d);
+    alldayTasks[k]=tasksOn(k).filter(t=>t.allday===true);
+  });
+  const hasAnyAllday=days.some(d=>alldayTasks[dk(d)].length>0);
+  let alldayRowHtml='';
+  if(hasAnyAllday){
+    alldayRowHtml=`<div class="wk-allday-row">`;
+    alldayRowHtml+=`<div class="wk-allday-gutter">All-day</div>`;
+    days.forEach(d=>{
+      const k=dk(d);
+      const pills=alldayTasks[k].map(t=>{
+        const cc=catColor(t.category);
+        return`<div class="wk-allday-pill" style="background:${cc};color:#fff" onclick="openEdit('${t.id}','${k}',event)" title="${esc(t.name)} · All Day">${esc(t.name)}</div>`;
+      }).join('');
+      alldayRowHtml+=`<div class="wk-allday-cell">${pills}</div>`;
+    });
+    alldayRowHtml+=`</div>`;
+  }
+  document.getElementById('weekAlldayRow').innerHTML=alldayRowHtml;
+
   const sl=slots();
   const WK_SLOT_H=48;
   let g=`<div class="wk-time-col">${sl.map(s=>`<div class="time-lbl">${s.m===0?fmtT(sk(s.h,s.m)):''}</div>`).join('')}</div>`;
   days.forEach(d=>{
     const k=dk(d);
-    // Slots (no tasks inside — tasks go in overlay)
     let colSlots=sl.map(s=>{
       const sk2=sk(s.h,s.m);
       return`<div class="wk-slot${s.m===30?' half':''}" onclick="onWkSlot('${k}','${sk2}',event)"
         ondragover="onDO(event,'${k}','${sk2}')" ondragleave="onDL(event)" ondrop="onDropSlot(event,'${k}','${sk2}')"></div>`;
     }).join('');
-    // Task overlay
     const dayTasks=tasksOn(k);
     let taskBlocks=dayTasks.map(t=>{
-      if(!t.time)return'';
+      if(!t.time)return''; // allday events handled in allday row above
       const [th,tm]=t.time.split(':').map(Number);
       const topPx=(th*60+tm)/30*WK_SLOT_H;
       const dur=t.duration||30;
@@ -733,7 +865,6 @@ function renderWeek(){
       const cc=catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       const isEvent=(t.type||'task')==='event';
-
       if(isEvent){
         return`<div class="wk-task-block event-block" data-id="${t.id}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
@@ -744,7 +875,6 @@ function renderWeek(){
           <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
         </div>`;
       }
-
       return`<div class="wk-task-block${isDone?' done-block':''}" data-id="${t.id}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
@@ -757,7 +887,6 @@ function renderWeek(){
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
       </div>`;
     }).join('');
-    // Routine bands for this day
     const WK_SLOT_H_R=48;
     let routineBandsHtml='';
     getRoutineForDay(k).forEach(b=>{
@@ -875,8 +1004,10 @@ function renderDay(){
         const cc=catColor(t.category);
         const isDone=t.done;
         return`<span class="allday-pill${isDone?' done':''}" style="background:${cc}22;border-color:${cc};color:${cc}"
-          onclick="openEdit('${t.id}','${key}',event)">
-          ${esc(t.name)}${t.recur?' ↻':''}
+          onclick="openEdit('${t.id}','${key}',event)" title="Click to edit">
+          <span class="allday-pill-type">Event</span>
+          ${esc(t.name)}${t.recur?' ↻':''} · All Day
+          <span class="allday-pill-edit">✎</span>
         </span>`;
       }).join('');
       alldayBar.style.display='flex';
@@ -1052,8 +1183,8 @@ function renderCat(){
           habitMap.set(t.id,t);
         }
       }
-      // completed instances of habits are ignored from the list entirely
-    } else {
+    } else if((t.type||'task')!=='event'){
+      // Events are shown in the Events tab, not in the Tasks To Do list
       normalTasks.push(t);
     }
   });
@@ -1085,7 +1216,7 @@ function renderCat(){
     html+=`</div>`;
   }
 
-  const el=document.getElementById('catContent');if(el)el.innerHTML=html;
+  const el=document.getElementById('catTasksArea');if(el)el.innerHTML=html;
 }
 
 function calcStreak(t){
