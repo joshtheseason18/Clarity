@@ -410,6 +410,8 @@ let selDate=new Date();
 let sidebarOpen=true,activeSide='braindump';
 // Close sidebar by default on mobile
 let _scheduleTab='tasks'; // 'tasks' or 'events'
+let catFilter='all';
+let showDone=false;
 function switchScheduleTab(tab){
   _scheduleTab=tab;
   document.getElementById('schedTabTasks').classList.toggle('active',tab==='tasks');
