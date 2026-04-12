@@ -1491,61 +1491,6 @@ header{
 [data-dark="true"] .tf-btn.active{background:rgba(var(--accent-rgb),.18)}
 
 /* ══ TIP BAR ══════════════════════════════════════ */
-.tip-bar{
-  position:fixed;bottom:64px;left:50%;transform:translateX(-50%);
-  z-index:800;max-width:520px;width:calc(100% - 40px);
-  background:var(--surface);border:1px solid var(--accent-light);
-  border-radius:14px;padding:14px 16px;
-  box-shadow:0 8px 32px rgba(0,0,0,.12);
-  display:none;align-items:flex-start;gap:12px;
-  animation:tipSlideUp .3s cubic-bezier(.34,1.56,.64,1);
-}
-.tip-bar.visible{display:flex}
-@keyframes tipSlideUp{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.tip-icon{font-size:22px;flex-shrink:0;margin-top:1px}
-.tip-content{flex:1;min-width:0}
-.tip-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
-.tip-body{font-size:12px;color:var(--text2);line-height:1.55}
-.tip-nav{display:flex;align-items:center;gap:6px;margin-top:8px}
-.tip-nav-btn{
-  width:26px;height:26px;border-radius:6px;border:1px solid var(--border);
-  background:var(--surface2);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;font-size:12px;color:var(--text2);transition:all .12s;
-  font-family:'DM Sans',sans-serif;
-}
-.tip-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
-.tip-counter{font-size:10px;color:var(--text3);font-weight:500;min-width:36px;text-align:center}
-.tip-close{
-  position:absolute;top:10px;right:12px;
-  width:22px;height:22px;border-radius:6px;border:none;
-  background:none;cursor:pointer;display:flex;align-items:center;
-  justify-content:center;font-size:14px;color:var(--text3);transition:all .12s;
-}
-.tip-close:hover{background:var(--surface2);color:var(--text)}
-/* Tip spotlight highlight */
-.tip-highlight{
-  position:relative;z-index:801;
-  outline:2.5px solid var(--accent)!important;
-  outline-offset:4px;
-  border-radius:8px;
-  animation:tipPulse 1.6s ease-in-out infinite;
-}
-@keyframes tipPulse{
-  0%,100%{outline-color:var(--accent);box-shadow:0 0 0 0 rgba(var(--accent-rgb),.3)}
-  50%{outline-color:var(--accent-dim);box-shadow:0 0 0 8px rgba(var(--accent-rgb),0)}
-}
-.tip-highlight-label{
-  position:fixed;
-  background:var(--accent);color:#fff;font-size:10px;font-weight:700;
-  padding:3px 10px;border-radius:99px;white-space:nowrap;z-index:9999;
-  pointer-events:none;animation:tipLabelBounce .6s cubic-bezier(.34,1.56,.64,1) both;
-  letter-spacing:.3px;
-}
-@keyframes tipLabelBounce{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-[data-dark="true"] .tip-bar{
-  border-color:rgba(var(--accent-rgb),.25);
-  box-shadow:0 8px 32px rgba(0,0,0,.35);
-}
 
 /* ══ JOURNAL PANEL ══════════════════════════════════ */
 
@@ -1890,13 +1835,6 @@ header{
   .search-bar{width:calc(100vw - 16px);top:48px}
   .sidebar-toggle-btn{width:28px;height:28px}
 
-  /* ── Tip bar ── */
-  .tip-bar{bottom:68px}
-  .tip-close{
-    width:44px;height:44px;top:4px;right:4px;
-    border-radius:10px;
-  }
-
   /* ── Sidebar backdrop ── */
   #sidebarBackdrop{
     position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:299;
@@ -2032,3 +1970,47 @@ header{
   .wk-allday-row{grid-template-columns:32px repeat(7,1fr)}
   .wdh-name{font-size:8px}.wdh-num{font-size:10px}
 }
+
+/* ══ AI BRAIN DUMP CHIPS ═══════════════════════ */
+.ai-bd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.ai-bd-chip{
+  padding:5px 12px;border-radius:99px;font-size:11px;font-weight:500;
+  cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);
+  color:var(--text2);transition:all .15s;font-family:'DM Sans',sans-serif;
+  display:inline-flex;align-items:center;gap:3px;
+}
+.ai-bd-chip.selected{color:#fff;font-weight:600}
+.ai-bd-chip:hover{opacity:.85}
+
+/* ══ AI PREFERENCE CHIPS ═══════════════════════ */
+.ai-pref-row{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.ai-pref-chip{
+  padding:4px 10px;border-radius:99px;font-size:10px;font-weight:500;
+  cursor:pointer;border:1.5px solid var(--border);background:var(--surface);
+  color:var(--text3);transition:all .15s;font-family:'DM Sans',sans-serif;
+}
+.ai-pref-chip.on{background:var(--accent-pale);border-color:var(--accent);color:var(--accent);font-weight:600}
+
+/* ══ DAY JOURNAL SECTION ═══════════════════════ */
+.day-journal-section{
+  margin:16px 12px 40px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);
+  overflow:hidden;
+}
+.day-journal-hdr{
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  cursor:pointer;user-select:none;transition:background .15s;
+}
+.day-journal-hdr:hover{background:var(--surface2)}
+.day-journal-hdr-icon{font-size:16px}
+.day-journal-hdr-title{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+.day-journal-hdr-arrow{font-size:11px;color:var(--text3);transition:transform .15s}
+.day-journal-body{padding:0 16px 16px}
+.day-journal-body .mood-row{margin-bottom:12px}
+.day-journal-body .journal-prompt{margin-bottom:8px}
+.day-journal-body .journal-ta{
+  width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:12px;
+  color:var(--text);background:var(--surface2);resize:vertical;line-height:1.6;
+}
+.day-journal-body .journal-save-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}

@@ -76,6 +76,15 @@
           <button class="routine-day-btn on" onclick="toggleRoutineDay(this,5)">F</button>
           <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
         </div>
+        <div class="toggle-row" style="margin:4px 0" id="routineSchedRow">
+          <span class="toggle-label" style="font-size:11px">Can Clarity schedule tasks here?</span>
+          <button class="toggle-track" id="routineSchedToggle" onclick="this.classList.toggle('on')">
+            <div class="toggle-thumb"></div>
+          </button>
+        </div>
+        <div style="font-size:9px;color:var(--text3);line-height:1.4;margin-bottom:4px" id="routineSchedHint">
+          <strong>No</strong> = blocked time (gym, class). <strong>Yes</strong> = scheduling window (work hours).
+        </div>
         <button class="drawer-btn" onclick="addRoutineBlock()" style="margin-top:2px">+ Add Block</button>
       </div>
     </div>
@@ -138,23 +147,17 @@
           <div class="toggle-thumb"></div>
         </button>
       </div>
-      <div class="toggle-row">
-        <span class="toggle-label"><span class="toggle-icon">📓</span> Show Journal Tab</span>
-        <button class="toggle-track on" id="journalToggle" onclick="toggleJournalTab()">
-          <div class="toggle-thumb"></div>
-        </button>
-      </div>
     </div>
 
     <div class="drawer-section">
-      <div class="drawer-section-title">Help</div>
+      <div class="drawer-section-title">Weekly Review</div>
       <div class="toggle-row">
-        <span class="toggle-label"><span class="toggle-icon">📖</span> Show Tips</span>
-        <button class="toggle-track" id="tipsToggle" onclick="toggleTips()">
+        <span class="toggle-label"><span class="toggle-icon">📊</span> Auto-show on Sundays</span>
+        <button class="toggle-track on" id="wrapupAutoToggle" onclick="toggleWrapupAuto()">
           <div class="toggle-thumb"></div>
         </button>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5">Quick tips to help you get the most out of Clarity. Great for new users.</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5">Show your weekly review automatically on Sunday evenings.</div>
     </div>
 
     <div class="drawer-section">
@@ -165,13 +168,6 @@
         <button class="drawer-btn" onclick="document.getElementById('importFile').click()">📤 Import</button>
         <input type="file" id="importFile" class="drawer-file-input" accept=".json" onchange="importData(event)">
       </div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">📚 Import from Canvas</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;line-height:1.5">Paste your assignments from Canvas LMS. One per line: "Assignment Name — Due Apr 15 at 11:59pm"</div>
-      <textarea class="fi" id="canvasInput" placeholder="Paste assignments here…" rows="3" style="font-size:11px;line-height:1.5;min-height:60px;resize:vertical"></textarea>
-      <button class="drawer-btn" onclick="importCanvas()" style="margin-top:4px">Import Assignments</button>
     </div>
 
   </div>
@@ -202,7 +198,6 @@
         <div class="more-sep"></div>
         <div class="more-item" onclick="openWrapup();closeMoreMenu()"><span class="more-icon">▤</span> Weekly Review</div>
         <div class="more-item" onclick="openWeekPlan();closeMoreMenu()"><span class="more-icon">▦</span> Plan My Week</div>
-        <div class="more-item" onclick="shareMyDay();closeMoreMenu()"><span class="more-icon">↗</span> Share My Day</div>
         <div class="more-sep"></div>
         <div class="more-item" onclick="openClearModal();closeMoreMenu()"><span class="more-icon" style="color:var(--red)">✕</span> Clear Schedule</div>
       </div>
@@ -276,7 +271,38 @@
           <div class="day-allday-bar" id="dayAlldayBar"></div>
           <div class="upcoming-events" id="upcomingEvents"></div>
         </div>
-        <div class="day-scroll"><div class="day-timeline" id="dayTimeline"></div></div>
+        <div class="day-scroll">
+          <div class="day-timeline" id="dayTimeline"></div>
+          <!-- Journal section at bottom of day view -->
+          <div class="day-journal-section" id="dayJournalSection">
+            <div class="day-journal-hdr" onclick="toggleDayJournal()">
+              <span class="day-journal-hdr-icon">📓</span>
+              <span class="day-journal-hdr-title">Journal</span>
+              <span class="day-journal-hdr-arrow" id="dayJournalArrow">▸</span>
+            </div>
+            <div class="day-journal-body" id="dayJournalBody" style="display:none">
+              <div class="journal-date-bar">
+                <div class="mood-label">How are you feeling?</div>
+                <div class="mood-row" id="moodRow">
+                  <button class="mood-btn" onclick="setMood('😔')" title="Rough day" id="mood-0">😔</button>
+                  <button class="mood-btn" onclick="setMood('😐')" title="Meh" id="mood-1">😐</button>
+                  <button class="mood-btn" onclick="setMood('🙂')" title="Pretty good" id="mood-2">🙂</button>
+                  <button class="mood-btn" onclick="setMood('😊')" title="Good day" id="mood-3">😊</button>
+                  <button class="mood-btn" onclick="setMood('🌟')" title="Amazing!" id="mood-4">🌟</button>
+                </div>
+              </div>
+              <div class="journal-prompt" id="journalPrompt"></div>
+              <textarea class="journal-ta" id="journalTa"
+                placeholder="What happened today? How are you feeling?"
+                oninput="onJournalInput()"></textarea>
+              <div class="journal-save-row">
+                <span class="journal-saved-hint" id="journalSavedHint">✓ Saved</span>
+                <button class="journal-save-btn" onclick="saveJournalEntry()">Save Entry</button>
+              </div>
+              <div id="journalPastEntries"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -329,9 +355,6 @@
       </button>
       <button class="side-tab" id="suggTab" data-tip="Ideas" onclick="switchSide('suggestions')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M6 10v2a2 2 0 004 0v-2" stroke="currentColor" stroke-width="1.3"/><line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="6" y1="5.5" x2="8" y2="4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
-      </button>
-      <button class="side-tab" id="journalTab" data-tip="Journal" onclick="switchSide('journal')">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1" width="10" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><line x1="6" y1="4" x2="11" y2="4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="7" x2="11" y2="7" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="10" x2="9" y2="10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
       </button>
     </div>
     <div class="side-panel active" id="panel-braindump">
@@ -393,36 +416,6 @@
     </div>
     <div class="side-panel" id="panel-suggestions" style="overflow:hidden">
       <div id="suggestionsPanel" style="flex:1;overflow-y:auto;display:flex;flex-direction:column"></div>
-    </div>
-
-    <div class="side-panel" id="panel-journal">
-      <div class="journal-wrap">
-        <div class="journal-date-bar">
-          <div class="journal-date-label" id="journalDateLabel">Today</div>
-          <div class="journal-date-sub" id="journalDateSub">How did your day go?</div>
-          <div class="mood-label">How are you feeling?</div>
-          <div class="mood-row" id="moodRow">
-            <button class="mood-btn" onclick="setMood('😔')" title="Rough day" id="mood-0">😔</button>
-            <button class="mood-btn" onclick="setMood('😐')" title="Meh"        id="mood-1">😐</button>
-            <button class="mood-btn" onclick="setMood('🙂')" title="Pretty good" id="mood-2">🙂</button>
-            <button class="mood-btn" onclick="setMood('😊')" title="Good day"   id="mood-3">😊</button>
-            <button class="mood-btn" onclick="setMood('🌟')" title="Amazing!"   id="mood-4">🌟</button>
-          </div>
-        </div>
-        <div class="journal-body">
-          <div class="journal-prompt" id="journalPrompt"></div>
-          <div class="journal-entry-wrap">
-            <textarea class="journal-ta" id="journalTa"
-              placeholder="Write anything — what happened today, how you're feeling, something you're grateful for, or a thought you want to hold onto…"
-              oninput="onJournalInput()"></textarea>
-            <div class="journal-save-row">
-              <span class="journal-saved-hint" id="journalSavedHint">✓ Saved</span>
-              <button class="journal-save-btn" onclick="saveJournalEntry()">Save Entry</button>
-            </div>
-          </div>
-          <div id="journalPastEntries"></div>
-        </div>
-      </div>
     </div>
 
   </div>
@@ -568,20 +561,6 @@
   </div>
 </div>
 
-<!-- TIP BAR -->
-<div class="tip-bar" id="tipBar">
-  <div class="tip-icon" id="tipIcon"></div>
-  <div class="tip-content">
-    <div class="tip-title" id="tipTitle"></div>
-    <div class="tip-body" id="tipBody"></div>
-    <div class="tip-nav">
-      <button class="tip-nav-btn" onclick="prevTip()">←</button>
-      <span class="tip-counter" id="tipCounter"></span>
-      <button class="tip-nav-btn" onclick="nextTip()">→</button>
-    </div>
-  </div>
-  <button class="tip-close" onclick="toggleTips()" title="Close tips">✕</button>
-</div>
 
 
 <!-- ADD IDEA MODAL -->
@@ -805,13 +784,24 @@
 <div class="modal-overlay" id="aiScheduleOverlay" onclick="if(event.target===this)closeAISchedule()">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
     <div>
-      <div class="modal-title">Let Clarity Plan Your Day ✨</div>
-      <div class="modal-sub">Tell me everything you need to do — I'll build your schedule</div>
+      <div class="modal-title">Plan My Day ✨</div>
+      <div class="modal-sub">Clarity will build your schedule around your routine</div>
     </div>
+    <!-- Brain Dump chips -->
+    <div class="fg" id="aiBdChipsWrap" style="display:none">
+      <label class="flbl">From your Brain Dump <span style="font-weight:400;color:var(--text3)">(tap to include/exclude)</span></label>
+      <div class="ai-bd-chips" id="aiBdChips"></div>
+    </div>
+    <!-- Additional input -->
     <div class="fg">
-      <label class="flbl">What's on your plate?</label>
-      <textarea class="fi auto-expand" id="aiInput" placeholder="• Study for bio exam 2 hours&#10;• Gym in the afternoon&#10;• Call mom&#10;• Grocery run&#10;• Work on project for 3 hours" rows="5" oninput="autoExpand(this)" style="line-height:1.6;min-height:120px"></textarea>
-      <button onclick="fillAIFromBD()" style="margin-top:4px;background:none;border:1px dashed var(--border2);border-radius:7px;padding:5px 10px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text2);cursor:pointer;transition:all .15s;width:fit-content" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📋 Pull from Brain Dump</button>
+      <label class="flbl">Anything else?</label>
+      <textarea class="fi auto-expand" id="aiInput" placeholder="e.g. dentist at 2pm, study for 2 hours (subtasks: geography, calculus), call mom sometime today, birthday party 6pm" rows="3" oninput="autoExpand(this)" style="line-height:1.6;min-height:80px"></textarea>
+    </div>
+    <!-- Preference chips -->
+    <div class="ai-pref-row">
+      <button class="ai-pref-chip on" id="aiPrefBreaks" onclick="this.classList.toggle('on')">☕ Include breaks</button>
+      <button class="ai-pref-chip" id="aiPrefMorning" onclick="toggleAiPref(this,'morning')">🌅 Prioritize morning</button>
+      <button class="ai-pref-chip" id="aiPrefAfternoon" onclick="toggleAiPref(this,'afternoon')">🌇 Prioritize afternoon</button>
     </div>
     <div class="frow">
       <div class="fg">

@@ -372,27 +372,25 @@ function dismissSuggestions(){
   showToast('Ideas tab hidden — re-enable in Settings');
 }
 
-// ══ JOURNAL TAB VISIBILITY ══════════════════
-let journalTabVisible=localStorage.getItem('clarity_journal_tab')!=='false';
-function applyJournalTabVisibility(){
-  const tab=document.getElementById('journalTab');
-  const panel=document.getElementById('panel-journal');
-  const toggle=document.getElementById('journalToggle');
-  if(tab)tab.style.display=journalTabVisible?'':'none';
-  if(panel&&!journalTabVisible){panel.classList.remove('active');if(activeSide==='journal'){activeSide='braindump';switchSide('braindump');}}
-  if(toggle)toggle.classList.toggle('on',journalTabVisible);
-}
-function toggleJournalTab(){
-  journalTabVisible=!journalTabVisible;
-  localStorage.setItem('clarity_journal_tab',journalTabVisible?'true':'false');
-  applyJournalTabVisibility();
+// ══ DAY JOURNAL (collapsed section in day view) ══════
+let _dayJournalOpen=false;
+function toggleDayJournal(){
+  _dayJournalOpen=!_dayJournalOpen;
+  const body=document.getElementById('dayJournalBody');
+  const arrow=document.getElementById('dayJournalArrow');
+  if(body)body.style.display=_dayJournalOpen?'':'none';
+  if(arrow)arrow.textContent=_dayJournalOpen?'▾':'▸';
+  if(_dayJournalOpen){
+    openJournalForDate(dk(selDate));
+    renderJournalPrompt();
+  }
 }
 
 // ══ SPLASH ══════════════════════════════════
 function enterApp(){
   const splash=document.getElementById('splash');
   splash.classList.add('hiding');
-  setTimeout(()=>{splash.style.display='none';renderAll();renderTip();},500);
+  setTimeout(()=>{splash.style.display='none';renderAll();},500);
 }
 
 // ══ CONSTANTS ══════════════════════════════
@@ -691,13 +689,12 @@ function switchView(v){
 }
 function switchSide(tab){
   activeSide=tab;
-  document.querySelectorAll('.side-tab').forEach((b,i)=>b.classList.toggle('active',['braindump','priority','focus','suggestions','journal'][i]===tab));
+  document.querySelectorAll('.side-tab').forEach((b,i)=>b.classList.toggle('active',['braindump','priority','focus','suggestions'][i]===tab));
   document.querySelectorAll('.side-panel').forEach(p=>p.classList.remove('active'));
   const panel=document.getElementById('panel-'+tab);
   if(panel)panel.classList.add('active');
   if(tab==='priority')renderPri();
   if(tab==='suggestions')renderSuggestions();
-  if(tab==='journal')openJournalForDate(dk(selDate));
   if(tab==='focus')switchSideFocus();
 }
 function toggleSidebar(){
@@ -740,7 +737,6 @@ function renderAll(){
     renderBD();
     if(activeSide==='priority')renderPri();
     if(activeSide==='suggestions')renderSuggestions();
-    if(activeSide==='journal')openJournalForDate(dk(selDate));
   }
   if(curView==='categories'){renderCatChips();buildAllCatSelects();}
   else buildAllCatSelects();
@@ -1433,18 +1429,18 @@ function rIcon(letter,color){
   return`<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="10" fill="${color}" opacity=".15"/><circle cx="11" cy="11" r="10" stroke="${color}" stroke-width="1.2" opacity=".4"/><text x="11" y="15" text-anchor="middle" font-size="10" font-weight="600" font-family="DM Sans,sans-serif" fill="${color}">${letter}</text></svg>`;
 }
 const ROUTINE_TYPES={
-  work:{icon:()=>rIcon('W','#3b82f6'),label:'Work',color:'#3b82f6',busy:true},
-  class:{icon:()=>rIcon('C','#8b5cf6'),label:'Class',color:'#8b5cf6',busy:true},
-  gym:{icon:()=>rIcon('G','#10b981'),label:'Gym / Exercise',color:'#10b981',busy:true},
-  meals:{icon:()=>rIcon('M','#f59e0b'),label:'Meals',color:'#f59e0b',busy:true},
-  sleep:{icon:()=>rIcon('Z','#64748b'),label:'Sleep',color:'#64748b',busy:true},
-  commute:{icon:()=>rIcon('D','#6366f1'),label:'Commute',color:'#6366f1',busy:true},
-  church:{icon:()=>rIcon('+','#a855f7'),label:'Church',color:'#a855f7',busy:true},
-  family:{icon:()=>rIcon('F','#ec4899'),label:'Family Time',color:'#ec4899',busy:true},
-  free:{icon:()=>rIcon('·','#10b981'),label:'Free Time',color:'#10b981',busy:false},
-  focus:{icon:()=>rIcon('!','#f43f5e'),label:'Focus / Deep Work',color:'#f43f5e',busy:true},
-  selfcare:{icon:()=>rIcon('S','#14b8a6'),label:'Self-Care',color:'#14b8a6',busy:true},
-  custom:{icon:()=>rIcon('?','#78716c'),label:'Custom',color:'#78716c',busy:true},
+  work:{icon:()=>rIcon('W','#3b82f6'),label:'Work',color:'#3b82f6',busy:true,schedulable:true},
+  class:{icon:()=>rIcon('C','#8b5cf6'),label:'Class',color:'#8b5cf6',busy:true,schedulable:false},
+  gym:{icon:()=>rIcon('G','#10b981'),label:'Gym / Exercise',color:'#10b981',busy:true,schedulable:false},
+  meals:{icon:()=>rIcon('M','#f59e0b'),label:'Meals',color:'#f59e0b',busy:true,schedulable:false},
+  sleep:{icon:()=>rIcon('Z','#64748b'),label:'Sleep',color:'#64748b',busy:true,schedulable:false},
+  commute:{icon:()=>rIcon('D','#6366f1'),label:'Commute',color:'#6366f1',busy:true,schedulable:false},
+  church:{icon:()=>rIcon('+','#a855f7'),label:'Church',color:'#a855f7',busy:true,schedulable:false},
+  family:{icon:()=>rIcon('F','#ec4899'),label:'Family Time',color:'#ec4899',busy:true,schedulable:false},
+  free:{icon:()=>rIcon('·','#10b981'),label:'Free Time',color:'#10b981',busy:false,schedulable:true},
+  focus:{icon:()=>rIcon('!','#f43f5e'),label:'Focus / Deep Work',color:'#f43f5e',busy:true,schedulable:true},
+  selfcare:{icon:()=>rIcon('S','#14b8a6'),label:'Self-Care',color:'#14b8a6',busy:true,schedulable:false},
+  custom:{icon:()=>rIcon('?','#78716c'),label:'Custom',color:'#78716c',busy:true,schedulable:false},
 };
 let routineBlocks=[];
 try{routineBlocks=JSON.parse(localStorage.getItem('clarity_routine')||'[]')}catch{routineBlocks=[]}
@@ -1452,6 +1448,10 @@ function saveRoutine(){localStorage.setItem('clarity_routine',JSON.stringify(rou
 function onRoutineTypeChange(){
   const v=document.getElementById('routineType').value;
   document.getElementById('routineName').style.display=v==='custom'?'':'none';
+  // Set schedulable toggle default based on type
+  const rt=ROUTINE_TYPES[v]||ROUTINE_TYPES.custom;
+  const toggle=document.getElementById('routineSchedToggle');
+  if(toggle)toggle.classList.toggle('on',rt.schedulable||false);
 }
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
@@ -1460,13 +1460,14 @@ function renderRoutineList(){
     const dayLabels=['S','M','T','W','T','F','S'];
     const daysStr=b.days.map(d=>dayLabels[d]).join(' ');
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-    const busyLabel=b.type==='free'?'<span style="color:var(--accent);font-weight:600">FREE</span>':'<span style="opacity:.5">BUSY</span>';
+    const isWindow=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
+    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:600;font-size:9px">WINDOW</span>':'<span style="opacity:.5;font-size:9px">BLOCK</span>';
     return`<div class="routine-block" style="border-left:3px solid ${rt.color}">
       ${rt.icon()}
       <div class="routine-block-label">${esc(b.customName||rt.label)}</div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
         <div class="routine-block-time">${fmtT(b.start)} – ${fmtT(b.end)}</div>
-        <div style="font-size:8px;letter-spacing:.5px">${busyLabel} · ${daysStr}</div>
+        <div style="font-size:8px;letter-spacing:.5px">${modeLabel} · ${daysStr}</div>
       </div>
       <button class="routine-block-del" onclick="delRoutine(${i})">✕</button>
     </div>`;
@@ -1482,7 +1483,8 @@ function addRoutineBlock(){
   const dayBtns=document.querySelectorAll('#routineDays .routine-day-btn');
   const days=[];dayBtns.forEach((b,i)=>{if(b.classList.contains('on'))days.push(i);});
   if(!days.length){showToast('Select at least one day');return;}
-  routineBlocks.push({type,customName,start,end,days});
+  const schedulable=document.getElementById('routineSchedToggle').classList.contains('on');
+  routineBlocks.push({type,customName,start,end,days,schedulable});
   saveRoutine();renderRoutineList();
   document.getElementById('routineName').value='';
   showToast('Routine block added');
@@ -1498,13 +1500,23 @@ function getRoutineForDay(dateKey){
 function routineContextStr(dateKey){
   const blocks=getRoutineForDay(dateKey);
   if(!blocks.length)return'';
-  const busy=blocks.filter(b=>b.type!=='free');
-  const free=blocks.filter(b=>b.type==='free');
+  const windows=blocks.filter(b=>{
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    return b.schedulable!==undefined?b.schedulable:rt.schedulable;
+  });
+  const blocked=blocks.filter(b=>{
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    return b.schedulable!==undefined?!b.schedulable:!rt.schedulable;
+  });
   let str='';
-  if(busy.length)str+='\n\nUser\'s routine — BUSY blocks (do NOT schedule over these):\n'+
-    busy.map(b=>`${b.start} - ${b.end}: ${esc(b.customName||(ROUTINE_TYPES[b.type]?.label||b.type))}`).join('\n');
-  if(free.length)str+='\n\nUser\'s FREE blocks (prefer scheduling here):\n'+
-    free.map(b=>`${b.start} - ${b.end}: Free time`).join('\n');
+  if(windows.length)str+='\n\nScheduling windows (place tasks INTO these, matching category when possible):\n'+
+    windows.map(b=>{
+      const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+      const label=esc(b.customName||rt.label);
+      return`${b.start} - ${b.end}: ${label} window — prioritize ${label.toLowerCase()}-related tasks here`;
+    }).join('\n');
+  if(blocked.length)str+='\n\nBlocked time (do NOT schedule over these):\n'+
+    blocked.map(b=>`${b.start} - ${b.end}: ${esc(b.customName||(ROUTINE_TYPES[b.type]?.label||b.type))}`).join('\n');
   return str;
 }
 
@@ -1750,86 +1762,6 @@ function doReflow(mode){
   _reflowTask=null;_reflowOverflow=0;
 }
 
-// ══ SHARE MY DAY ════════════════════════════════
-function shareMyDay(){
-  const key=dk(selDate);
-  const dayTasks=tasksOn(key).filter(t=>t.time).sort((a,b)=>a.time.localeCompare(b.time));
-  const d=selDate;
-  const title=DLONG[d.getDay()]+', '+MONTHS_LONG[d.getMonth()]+' '+d.getDate();
-  
-  const W=400,rowH=36,padTop=80,padBot=30;
-  const H=padTop+Math.max(dayTasks.length,3)*rowH+padBot;
-  const canvas=document.createElement('canvas');
-  canvas.width=W*2;canvas.height=H*2;
-  const ctx=canvas.getContext('2d');
-  ctx.scale(2,2);
-  
-  // Background
-  ctx.fillStyle=isDark?'#1a1a1a':'#fafaf9';
-  ctx.fillRect(0,0,W,H);
-  
-  // Header
-  ctx.fillStyle=isDark?'#f5f5f4':'#1c1917';
-  ctx.font='600 20px DM Sans,sans-serif';
-  ctx.fillText(title,20,35);
-  ctx.fillStyle=isDark?'#78716c':'#a8a29e';
-  ctx.font='400 12px DM Sans,sans-serif';
-  const doneCount=dayTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(key)).length;
-  ctx.fillText(dayTasks.length+' tasks · '+doneCount+' done',20,54);
-  
-  // Divider
-  ctx.strokeStyle=isDark?'#2e2e2e':'#e7e5e4';
-  ctx.beginPath();ctx.moveTo(20,66);ctx.lineTo(W-20,66);ctx.stroke();
-  
-  // Tasks
-  dayTasks.forEach((t,i)=>{
-    const y=padTop+i*rowH;
-    const isDone=t.done||(t.doneOverrides||[]).includes(key);
-    // Time
-    ctx.fillStyle=isDark?'#10b981':'#059669';
-    ctx.font='700 11px DM Sans,sans-serif';
-    ctx.fillText(fmtT(t.time),20,y+14);
-    // Name
-    ctx.fillStyle=isDone?(isDark?'#78716c':'#a8a29e'):(isDark?'#f5f5f4':'#1c1917');
-    ctx.font=(isDone?'400':'500')+' 13px DM Sans,sans-serif';
-    ctx.fillText(t.name.slice(0,35)+(t.name.length>35?'…':''),90,y+14);
-    // Duration
-    ctx.fillStyle=isDark?'#78716c':'#a8a29e';
-    ctx.font='400 10px DM Sans,sans-serif';
-    ctx.fillText(durLabel(t.duration||30),90,y+28);
-    // Done check
-    if(isDone){
-      ctx.fillStyle='#10b981';
-      ctx.font='12px sans-serif';
-      ctx.fillText('✓',W-30,y+16);
-    }
-  });
-  
-  if(!dayTasks.length){
-    ctx.fillStyle=isDark?'#78716c':'#a8a29e';
-    ctx.font='italic 13px DM Sans,sans-serif';
-    ctx.fillText('Nothing scheduled',W/2-50,padTop+20);
-  }
-  
-  // Footer
-  ctx.fillStyle=isDark?'#3a3a3a':'#d6d3d1';
-  ctx.font='400 9px DM Sans,sans-serif';
-  ctx.fillText('Made with Clarity',W/2-35,H-12);
-  
-  canvas.toBlob(blob=>{
-    if(navigator.share&&navigator.canShare){
-      const file=new File([blob],'my-day-'+key+'.png',{type:'image/png'});
-      navigator.share({title:'My schedule — '+title,files:[file]}).catch(()=>{});
-    } else {
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      a.download='clarity-'+key+'.png';
-      a.click();URL.revokeObjectURL(a.href);
-      showToast('Schedule image downloaded');
-    }
-  },'image/png');
-}
-
 // ══ SMART RESCHEDULE ════════════════════════════
 function checkOverdueTasks(){
   const todayKey=dk(new Date());
@@ -1907,57 +1839,6 @@ window.enterApp=function(){
   // renderGreeting is already called inside renderAll→renderDay; no need to call again
 };
 
-// ══ CANVAS LMS IMPORT ════════════════════════════
-function importCanvas(){
-  const raw=document.getElementById('canvasInput').value.trim();
-  if(!raw){showToast('Paste your assignments first');return;}
-  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
-  let added=0;
-  const monthMap={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-  lines.forEach(line=>{
-    // Try to parse "Name — Due Apr 15 at 11:59pm" or "Name - Due: April 15, 2026"
-    let name=line,dateStr='',timeStr='23:59';
-    // Split on common separators
-    const parts=line.split(/\s*[—–-]\s*(?:due:?\s*)/i);
-    if(parts.length>=2){
-      name=parts[0].trim();
-      const rest=parts.slice(1).join(' ').trim();
-      // Parse date from rest
-      const dateMatch=rest.match(/(\w{3,9})\.?\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?/i);
-      if(dateMatch){
-        const mon=dateMatch[1].toLowerCase().slice(0,3);
-        const day=parseInt(dateMatch[2]);
-        const year=dateMatch[3]?parseInt(dateMatch[3]):new Date().getFullYear();
-        if(monthMap[mon]!==undefined){
-          dateStr=year+'-'+pad(monthMap[mon]+1)+'-'+pad(day);
-        }
-      }
-      // Parse time
-      const timeMatch=rest.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
-      if(timeMatch){
-        let h=parseInt(timeMatch[1]),m=parseInt(timeMatch[2]);
-        if(timeMatch[3]){
-          if(timeMatch[3].toLowerCase()==='pm'&&h!==12)h+=12;
-          if(timeMatch[3].toLowerCase()==='am'&&h===12)h=0;
-        }
-        timeStr=pad(h)+':'+pad(m);
-      }
-    }
-    if(!name)return;
-    if(!dateStr)dateStr=dk(addDays(new Date(),7)); // default to 1 week out
-    tasks.push({
-      id:genId(),name,date:dateStr,time:timeStr,duration:60,
-      priority:'high',category:'work',notes:'Imported from Canvas',
-      scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
-      doneOverrides:[],deletedOccurrences:[]
-    });
-    added++;
-  });
-  save();renderAll();
-  document.getElementById('canvasInput').value='';
-  showToast(`${added} assignment${added!==1?'s':''} imported`);
-  closeDrawer();
-}
 
 // ══ WEEKLY PLANNING MODE ═════════════════════════
 function openWeekPlan(){
@@ -2094,6 +1975,12 @@ function openWrapup(){
   document.getElementById('wrapupOverlay').classList.add('open');
 }
 function closeWrapup(){document.getElementById('wrapupOverlay').classList.remove('open')}
+function toggleWrapupAuto(){
+  const cur=localStorage.getItem('clarity_wrapup_auto')!=='false';
+  localStorage.setItem('clarity_wrapup_auto',cur?'false':'true');
+  const toggle=document.getElementById('wrapupAutoToggle');
+  if(toggle)toggle.classList.toggle('on',!cur);
+}
 
 // ══ AI SCHEDULE ═════════════════════════════════
 let _aiTasks=[];
@@ -2109,24 +1996,57 @@ function openAISchedule(){
   document.getElementById('aiGenLabel').textContent='Generate Schedule';
   document.getElementById('aiSpinner').style.display='none';
   _aiTasks=[];
+  _aiBdSelected=new Set();
+  renderAiBdChips();
   document.getElementById('aiScheduleOverlay').classList.add('open');
   setTimeout(()=>{
     const ta=document.getElementById('aiInput');
-    ta.focus();autoExpand(ta);
+    if(!brainDump.length)ta.focus();
+    autoExpand(ta);
   },150);
 }
+
+// ── AI Brain Dump chips ──
+let _aiBdSelected=new Set();
+function renderAiBdChips(){
+  const wrap=document.getElementById('aiBdChipsWrap');
+  const el=document.getElementById('aiBdChips');
+  if(!wrap||!el)return;
+  if(!brainDump.length){wrap.style.display='none';return;}
+  wrap.style.display='';
+  // Pre-select all by default
+  if(!_aiBdSelected.size)brainDump.forEach(t=>_aiBdSelected.add(t.id));
+  el.innerHTML=brainDump.map(t=>{
+    const sel=_aiBdSelected.has(t.id);
+    const cc=catColor(t.category);
+    return`<button class="ai-bd-chip${sel?' selected':''}" style="${sel?`background:${cc};border-color:${cc};color:#fff`:`border-color:var(--border)`}" onclick="toggleAiBdChip('${t.id}')">
+      ${sel?'✓ ':''}${esc(t.name)}${t.priority&&t.priority!=='none'?` · ${t.priority}`:''}
+    </button>`;
+  }).join('');
+}
+function toggleAiBdChip(id){
+  if(_aiBdSelected.has(id))_aiBdSelected.delete(id);
+  else _aiBdSelected.add(id);
+  renderAiBdChips();
+}
+
+// ── AI Preference chips ──
+function toggleAiPref(btn,group){
+  // Make morning/afternoon mutually exclusive
+  if(group==='morning'){
+    document.getElementById('aiPrefAfternoon').classList.remove('on');
+    btn.classList.toggle('on');
+  } else if(group==='afternoon'){
+    document.getElementById('aiPrefMorning').classList.remove('on');
+    btn.classList.toggle('on');
+  }
+}
+
 function fillAIFromBD(){
-  if(!brainDump.length){showToast('Brain Dump is empty');return;}
-  const ta=document.getElementById('aiInput');
-  const existing=ta.value.trim();
-  const bdText=brainDump.map(t=>{
-    let line='• '+t.name;
-    if(t.priority&&t.priority!=='none')line+=` (${t.priority} priority)`;
-    if(t.notes)line+=` - ${t.notes}`;
-    return line;
-  }).join('\n');
-  ta.value=existing?(existing+'\n'+bdText):bdText;
-  autoExpand(ta);
+  // Select all BD chips
+  brainDump.forEach(t=>_aiBdSelected.add(t.id));
+  renderAiBdChips();
+  showToast('All Brain Dump items selected');
 }
 // Bullet point behavior for AI input
 function closeAISchedule(){
@@ -2134,12 +2054,31 @@ function closeAISchedule(){
 }
 
 async function generateAISchedule(){
-  const input=document.getElementById('aiInput').value.trim();
+  // Build input from BD chips + textarea
+  const selectedBd=brainDump.filter(t=>_aiBdSelected.has(t.id));
+  const bdText=selectedBd.map(t=>{
+    let line=t.name;
+    if(t.priority&&t.priority!=='none')line+=` (${t.priority} priority)`;
+    if(t.category&&t.category!=='none'){const c=catById(t.category);if(c)line+=` [${c.name}]`;}
+    if(t.notes)line+=` — ${t.notes}`;
+    return line;
+  }).join('\n');
+  const extraInput=document.getElementById('aiInput').value.trim();
+  const input=[bdText,extraInput].filter(Boolean).join('\n');
   if(!input){document.getElementById('aiInput').focus();return;}
   const dateVal=document.getElementById('aiDate').value;
   const startTime=document.getElementById('aiStartTime').value||'08:00';
   const d=fromDk(dateVal);
   const dayName=DLONG[d.getDay()];
+
+  // Preferences
+  const includeBreaks=document.getElementById('aiPrefBreaks').classList.contains('on');
+  const prefMorning=document.getElementById('aiPrefMorning').classList.contains('on');
+  const prefAfternoon=document.getElementById('aiPrefAfternoon').classList.contains('on');
+  let prefStr='';
+  if(includeBreaks)prefStr+='\n- Include 10-15 minute breaks between focused work blocks';
+  if(prefMorning)prefStr+='\n- Front-load important/difficult tasks in the morning';
+  if(prefAfternoon)prefStr+='\n- Schedule important/difficult tasks in the afternoon';
 
   // Get existing tasks for that day
   const existing=tasksOn(dateVal).filter(t=>t.time).map(t=>
@@ -2158,26 +2097,27 @@ async function generateAISchedule(){
   document.getElementById('aiError').style.display='none';
   document.getElementById('aiPreviewWrap').style.display='none';
 
-  const prompt=`You are a scheduling assistant. The user wants to plan their ${dayName}, ${dateVal}. Their day starts at ${startTime}.${existingStr}${routineStr}
+  const prompt=`You are Clarity, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}
 
-The user says:
+The user wants to schedule:
 "${input}"
 
-Create a realistic schedule. Assign each task a specific start time (24h format HH:MM), estimated duration in minutes (15 min increments), and a priority (high/medium/low/none). Also assign a category from: work, personal, health, or none.
-
 Rules:
-- Don't overlap with existing tasks or routine blocks
-- Leave reasonable gaps (meals, breaks)
-- Put time-specific requests where asked ("at noon", "in the morning")
-- Estimate realistic durations: quick tasks (emails, calls) ~15m, medium tasks ~30-45m, deep work ~60-120m
-- If the user specifies a duration (e.g. "~15m", "1 hour"), use that exact duration
-- If something sounds like an event (class, meeting, appointment, church), set type to "event"
-- For tasks over 60 minutes, add a "subtasks" array breaking the time into focused blocks with breaks
+- Schedule tasks INTO scheduling windows (match task category to window type when possible)
+- Do NOT schedule over blocked time
+- Don't overlap with existing tasks${prefStr}
+- Put time-specific requests at the exact time asked ("at noon", "at 2pm")
+- Estimate realistic durations: quick tasks ~15m, medium ~30-45m, deep work ~60-120m
+- If the user specifies a duration, use it exactly
+- If something is clearly an event (birthday, meeting, appointment, class, church, party), set type:"event"
+- If it's a birthday or anniversary, set allday:true with recur/recurN:1/recurU:"year"
+- If the user lists sub-items after a task (e.g. "study: geography, calculus" or "meeting prep — slides, handouts"), create a subtasks array with proportional durations
+- For tasks over 60 minutes, break into subtasks with focused blocks and breaks
 - Order by logical flow of the day
 
-Respond with ONLY a JSON array, no markdown, no backticks, no explanation:
-[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","subtasks":[]}]
-For long tasks with subtasks: {"name":"Study Block","time":"14:00","duration":120,"type":"task","subtasks":[{"name":"Review notes","duration":50},{"name":"Break","duration":10},{"name":"Practice problems","duration":50}]}`;
+Respond with ONLY a JSON array, no markdown, no backticks:
+[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","allday":false,"recur":false,"recurN":1,"recurU":"day","subtasks":[]}]
+Subtask format: {"name":"Review notes","duration":25}`;
 
   try{
     const response=await fetch("https://api.anthropic.com/v1/messages",{
@@ -2228,12 +2168,14 @@ function acceptAISchedule(){
   const dateVal=document.getElementById('aiDate').value;
   _aiTasks.forEach(t=>{
     const subs=(t.subtasks||[]).map(s=>({id:genId(),name:s.name,duration:s.duration||0,done:false}));
+    const isAllday=!!(t.allday);
     tasks.push({
       id:genId(),
       name:t.name,
       type:t.type||'task',
       date:dateVal,
-      time:t.time,
+      time:isAllday?null:t.time,
+      allday:isAllday,
       duration:t.duration||30,
       priority:t.priority||'none',
       category:t.category||'none',
@@ -2243,10 +2185,15 @@ function acceptAISchedule(){
       subtasks:subs,
       scheduled:true,
       done:false,
-      recur:false,recurN:1,recurU:'day',
+      recur:!!(t.recur),recurN:t.recurN||1,recurU:t.recurU||'day',
       doneOverrides:[],deletedOccurrences:[]
     });
   });
+  // Remove accepted Brain Dump items
+  if(_aiBdSelected.size){
+    brainDump=brainDump.filter(t=>!_aiBdSelected.has(t.id));
+    _aiBdSelected.clear();
+  }
   save();closeAISchedule();
   selDate=fromDk(dateVal);
   switchView('day');
@@ -3288,88 +3235,7 @@ function showUndoToast(msg,undoFn){
   _undoTimer=setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(-50%) translateY(8px)'},5000);
 }
 
-// ══ TIPS SYSTEM ═════════════════════════════════
-const APP_TIPS=[
-  {icon:'👋',title:'Welcome to Clarity',body:'This is your personal scheduler. Use the tabs at the bottom to switch between Day, Week, Month, Year, and Tasks views.',
-    target:'.bottom-nav',label:'View tabs'},
-  {icon:'🧠',title:'Brain Dump',body:'Got something on your mind? Click this button to open the sidebar. Type any thought and hit Add — organize it later.',
-    target:'.sidebar-toggle-btn',label:'Open sidebar'},
-  {icon:'✋',title:'Drag to Schedule',body:'Grab any Brain Dump card and drag it onto a day in Month view, or onto a specific time slot in Week or Day view.',
-    target:'#bdList',label:'Drag from here',pre:function(){if(!sidebarOpen)toggleSidebar();switchSide('braindump');}},
-  {icon:'📅',title:'Click Any Time Slot',body:'In Week or Day view, click on any empty time slot to create a new task right there. Fill in the name, set a priority, and you\'re done.',
-    target:'.bnav-tab:nth-child(1)',label:'Day view'},
-  {icon:'⌨️',title:'Quick Add Shortcut',body:'Press the N key anywhere (when you\'re not typing) to pop open a quick-add bar. Type a task name, pick a time, and hit Save.',
-    target:'header',label:'Press N anywhere'},
-  {icon:'🔁',title:'Recurring Habits',body:'When creating or editing a task, check "Recurring" to make it repeat daily, weekly, or monthly. Great for habits like exercise or check-ins.',
-    target:null},
-  {icon:'🏷️',title:'Categories',body:'See all your tasks organized in one place. Create custom categories with colors to keep things sorted.',
-    target:'.bnav-tab:nth-child(5)',label:'Tasks tab'},
-  {icon:'↕️',title:'Resize Tasks',body:'In Week or Day view, grab the bottom edge of any task block and drag up or down to change how long it takes.',
-    target:null},
-  {icon:'✅',title:'Check Things Off',body:'Click the checkbox on any task to mark it done. You\'ll hear a little chime and see a satisfying strikethrough. Click again to undo.',
-    target:null},
-  {icon:'🎨',title:'Make It Yours',body:'Click the Clarity logo to open Settings. Switch dark/light mode, pick a theme color, and toggle 12h/24h time.',
-    target:'.logo-btn',label:'Open settings'},
-];
-let _tipIdx=0;
-let _tipsOn=localStorage.getItem('clarity_tips')===null?true:localStorage.getItem('clarity_tips')==='true';
-let _tipHighlightEl=null;
 
-function clearTipHighlight(){
-  if(_tipHighlightEl){
-    _tipHighlightEl.classList.remove('tip-highlight');
-    _tipHighlightEl=null;
-  }
-  document.querySelectorAll('.tip-highlight').forEach(el=>el.classList.remove('tip-highlight'));
-  document.querySelectorAll('.tip-highlight-label').forEach(el=>el.remove());
-}
-
-function renderTip(){
-  clearTipHighlight();
-  const bar=document.getElementById('tipBar');if(!bar)return;
-  if(!_tipsOn){bar.classList.remove('visible');return;}
-  const tip=APP_TIPS[_tipIdx];
-  document.getElementById('tipIcon').textContent=tip.icon;
-  document.getElementById('tipTitle').textContent=tip.title;
-  document.getElementById('tipBody').textContent=tip.body;
-  document.getElementById('tipCounter').textContent=(_tipIdx+1)+' / '+APP_TIPS.length;
-  bar.classList.add('visible');
-  // Run pre-action if any (e.g. open sidebar)
-  if(tip.pre)tip.pre();
-  // Highlight target element
-  if(tip.target){
-    setTimeout(()=>{
-      const el=document.querySelector(tip.target);
-      if(el){
-        _tipHighlightEl=el;
-        el.classList.add('tip-highlight');
-        if(tip.label){
-          const rect=el.getBoundingClientRect();
-          const lbl=document.createElement('span');
-          lbl.className='tip-highlight-label';
-          lbl.textContent=tip.label;
-          document.body.appendChild(lbl);
-          // Position: try above, fall back to below if clipped
-          const lblH=24;
-          let top=rect.top-lblH-8;
-          if(top<4)top=rect.bottom+8;
-          lbl.style.top=top+'px';
-          lbl.style.left=(rect.left+rect.width/2)+'px';
-          lbl.style.transform='translateX(-50%)';
-        }
-      }
-    },120);
-  }
-}
-function nextTip(){_tipIdx=(_tipIdx+1)%APP_TIPS.length;renderTip();}
-function prevTip(){_tipIdx=(_tipIdx-1+APP_TIPS.length)%APP_TIPS.length;renderTip();}
-function toggleTips(){
-  _tipsOn=!_tipsOn;
-  localStorage.setItem('clarity_tips',_tipsOn?'true':'false');
-  document.getElementById('tipsToggle').classList.toggle('on',_tipsOn);
-  if(!_tipsOn)clearTipHighlight();
-  renderTip();
-}
 // ══ EXPORT / IMPORT ═════════════════════════════
 function exportData(){
   const data={
@@ -4469,9 +4335,6 @@ function clarityInit(){
   // Suggestions tab visibility
   applySuggTabVisibility();
 
-  // Journal tab visibility
-  applyJournalTabVisibility();
-
   // Mobile: close sidebar by default
   if(window.innerWidth<=640){
     sidebarOpen=false;
@@ -4481,18 +4344,18 @@ function clarityInit(){
 
   // Render routine blocks in settings
   renderRoutineList();
-
-  // Tips toggle state (don't render tip yet — enterApp handles that)
-  const tipsToggle=document.getElementById('tipsToggle');
-  if(tipsToggle)tipsToggle.classList.toggle('on',_tipsOn);
+  onRoutineTypeChange(); // set initial schedulable toggle state
 
   // Apply bullet behavior to textareas
   addBulletBehavior(document.getElementById('aiInput'));
   addBulletBehavior(document.getElementById('journalTa'));
 
-  // Sunday evening wrap-up auto-show
+  // Sunday evening wrap-up auto-show (guarded by setting)
+  const wrapupAuto=localStorage.getItem('clarity_wrapup_auto')!=='false';
+  const wrapupToggle=document.getElementById('wrapupAutoToggle');
+  if(wrapupToggle)wrapupToggle.classList.toggle('on',wrapupAuto);
   const now=new Date();
-  if(now.getDay()===0&&now.getHours()>=17){
+  if(wrapupAuto&&now.getDay()===0&&now.getHours()>=17){
     const lastShown=localStorage.getItem('clarity_wrapup_last');
     const todayKey=dk(now);
     if(lastShown!==todayKey){
