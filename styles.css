@@ -1222,19 +1222,6 @@ header{
   /* Subtle label above the divider */
   position:relative;
 }
-/* Column header labels — "Tasks" left, "Events" right */
-.day-slot-tasks-col::before{
-  content:'Tasks';
-  display:block;font-size:8px;font-weight:700;letter-spacing:.5px;
-  text-transform:uppercase;color:var(--text3);
-  padding:3px 8px 1px;opacity:.7;
-}
-.day-slot-events-col::before{
-  content:'Events';
-  display:block;font-size:8px;font-weight:700;letter-spacing:.5px;
-  text-transform:uppercase;color:var(--text3);
-  padding:3px 8px 1px;opacity:.7;
-}
 /* Make blocks inside split columns fill width correctly */
 .day-slot-split-col .day-task-slot-wrap{width:100%}
 .day-slot-split-col .day-task-block{margin:2px 4px 2px 4px}

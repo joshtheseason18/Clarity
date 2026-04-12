@@ -860,9 +860,28 @@ function renderWeek(){
       return`<div class="wk-slot${s.m===30?' half':''}" onclick="onWkSlot('${k}','${sk2}',event)"
         ondragover="onDO(event,'${k}','${sk2}')" ondragleave="onDL(event)" ondrop="onDropSlot(event,'${k}','${sk2}')"></div>`;
     }).join('');
-    const dayTasks=tasksOn(k);
+    const dayTasks=tasksOn(k).filter(t=>t.time&&!t.allday);
+
+    // Detect event-task overlaps for this day (same logic as day view)
+    const wkSplitTaskIds=new Set();
+    const wkSplitEventIds=new Set();
+    dayTasks.forEach((a,ai)=>{
+      const[ah,am]=a.time.split(':').map(Number);
+      const aStart=ah*60+am, aEnd=aStart+(a.duration||30);
+      const aIsEvent=(a.type||'task')==='event';
+      dayTasks.forEach((b,bi)=>{
+        if(ai>=bi)return;
+        const[bh,bm]=b.time.split(':').map(Number);
+        const bStart=bh*60+bm, bEnd=bStart+(b.duration||30);
+        const bIsEvent=(b.type||'task')==='event';
+        if(aStart<bEnd&&bStart<aEnd){
+          if(aIsEvent&&!bIsEvent){wkSplitEventIds.add(a.id);wkSplitTaskIds.add(b.id);}
+          else if(!aIsEvent&&bIsEvent){wkSplitTaskIds.add(a.id);wkSplitEventIds.add(b.id);}
+        }
+      });
+    });
+
     let taskBlocks=dayTasks.map(t=>{
-      if(!t.time)return''; // allday events handled in allday row above
       const [th,tm]=t.time.split(':').map(Number);
       const topPx=(th*60+tm)/30*WK_SLOT_H;
       const dur=t.duration||30;
@@ -870,10 +889,14 @@ function renderWeek(){
       const cc=catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       const isEvent=(t.type||'task')==='event';
+      // Split positioning: tasks go left half, events go right half when overlapping
+      const inSplit=wkSplitTaskIds.has(t.id)||wkSplitEventIds.has(t.id);
+      const leftVal=inSplit?(isEvent?'calc(50% + 1px)':'2px'):'2px';
+      const rightVal=inSplit?(isEvent?'2px':'calc(50% + 1px)'):'2px';
       if(isEvent){
         return`<div class="wk-task-block event-block" data-id="${t.id}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
-          style="top:${topPx}px;height:${hPx}px;background:${cc}"
+          style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <span class="wk-task-block-name">${esc(t.name)}</span>
           ${dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
@@ -882,7 +905,7 @@ function renderWeek(){
       }
       return`<div class="wk-task-block${isDone?' done-block':''}" data-id="${t.id}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
-        style="top:${topPx}px;height:${hPx}px;border-left-color:${cc};background:${taskBlockBg(t.category)}"
+        style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
         <div style="display:flex;align-items:center;gap:2px;min-width:0">
           <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>
