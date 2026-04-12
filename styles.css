@@ -819,6 +819,8 @@ header{
 /* ── Absolute task blocks (week only now; day blocks are in-flow) ── */
 .wk-day-col{position:relative}
 .wk-task-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:2}
+.wk-routine-band{position:absolute;left:0;right:0;opacity:.1;border-radius:3px;pointer-events:none;z-index:0}
+.wk-routine-lbl{position:absolute;top:2px;left:3px;font-size:9px;font-weight:600;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 6px)}
 .wk-task-block{
   position:absolute;left:2px;right:2px;
   border-radius:4px;border-left:3px solid var(--accent);
@@ -1563,6 +1565,12 @@ header{
 }
 .day-empty-icon{font-size:36px;margin-bottom:8px;opacity:.7}
 .day-empty-text{font-size:13px;color:var(--text3);line-height:1.6;font-weight:400}
+.routine-slot-label{
+  font-size:11px;font-weight:600;opacity:.55;padding:2px 6px;
+  display:flex;align-items:center;gap:5px;pointer-events:none;
+  letter-spacing:.2px;
+}
+.routine-slot-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:.8}
 
 /* ══ TASK TOOLTIP ══════════════════════════════════ */
 .task-tooltip{

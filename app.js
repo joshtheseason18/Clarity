@@ -742,7 +742,8 @@ function renderAll(){
     if(activeSide==='suggestions')renderSuggestions();
     if(activeSide==='journal')openJournalForDate(dk(selDate));
   }
-  renderCatChips();buildAllCatSelects();
+  if(curView==='categories'){renderCatChips();buildAllCatSelects();}
+  else buildAllCatSelects();
   updateOverdueBadge();
   // Only render now-line in views that use it
   if(curView==='day'||curView==='week'){
@@ -895,24 +896,37 @@ function renderWeek(){
     }).join('');
     const dayTasks=tasksOn(k).filter(t=>t.time&&!t.allday);
 
-    // Detect event-task overlaps for this day (same logic as day view)
-    const wkSplitTaskIds=new Set();
-    const wkSplitEventIds=new Set();
-    dayTasks.forEach((a,ai)=>{
-      const[ah,am]=a.time.split(':').map(Number);
-      const aStart=ah*60+am, aEnd=aStart+(a.duration||30);
-      const aIsEvent=(a.type||'task')==='event';
-      dayTasks.forEach((b,bi)=>{
-        if(ai>=bi)return;
-        const[bh,bm]=b.time.split(':').map(Number);
-        const bStart=bh*60+bm, bEnd=bStart+(b.duration||30);
-        const bIsEvent=(b.type||'task')==='event';
-        if(aStart<bEnd&&bStart<aEnd){
-          if(aIsEvent&&!bIsEvent){wkSplitEventIds.add(a.id);wkSplitTaskIds.add(b.id);}
-          else if(!aIsEvent&&bIsEvent){wkSplitTaskIds.add(a.id);wkSplitEventIds.add(b.id);}
+    // ── Overlap column layout (handles task-task, event-event, AND task-event) ──
+    const wkColMap=new Map();
+    (function(){
+      const items=dayTasks.map(t=>{
+        const[h,m]=t.time.split(':').map(Number);
+        return{id:t.id,start:h*60+m,end:h*60+m+(t.duration||30),isEvent:(t.type||'task')==='event'};
+      }).sort((a,b)=>a.start-b.start||b.end-a.end);
+      // Build overlap clusters
+      const clusters=[];
+      items.forEach(item=>{
+        let merged=false;
+        for(const cl of clusters){
+          if(cl.some(c=>item.start<c.end&&c.start<item.end)){cl.push(item);merged=true;break;}
         }
+        if(!merged)clusters.push([item]);
       });
-    });
+      // Assign columns within each cluster (tasks first → left, events → right)
+      clusters.forEach(cl=>{
+        if(cl.length===1){wkColMap.set(cl[0].id,{col:0,total:1});return;}
+        // Sort: tasks before events, then by start time
+        cl.sort((a,b)=>(a.isEvent?1:0)-(b.isEvent?1:0)||a.start-b.start);
+        const cols=[];
+        cl.forEach(item=>{
+          let c=cols.findIndex(end=>item.start>=end);
+          if(c===-1){c=cols.length;cols.push(0);}
+          cols[c]=item.end;
+          wkColMap.set(item.id,{col:c,total:0});
+        });
+        cl.forEach(item=>{wkColMap.get(item.id).total=cols.length;});
+      });
+    })();
 
     let taskBlocks=dayTasks.map(t=>{
       const [th,tm]=t.time.split(':').map(Number);
@@ -922,10 +936,14 @@ function renderWeek(){
       const cc=catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       const isEvent=(t.type||'task')==='event';
-      // Split positioning: tasks go left half, events go right half when overlapping
-      const inSplit=wkSplitTaskIds.has(t.id)||wkSplitEventIds.has(t.id);
-      const leftVal=inSplit?(isEvent?'calc(50% + 1px)':'2px'):'2px';
-      const rightVal=inSplit?(isEvent?'2px':'calc(50% + 1px)'):'2px';
+      // Column positioning from overlap layout
+      const ci=wkColMap.get(t.id)||{col:0,total:1};
+      let leftVal='2px',rightVal='2px';
+      if(ci.total>1){
+        const pct=100/ci.total;
+        leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
+        rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
+      }
       if(isEvent){
         return`<div class="wk-task-block event-block" data-id="${t.id}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
@@ -956,7 +974,10 @@ function renderWeek(){
       const[eh,em]=b.end.split(':').map(Number);
       const topPx=(sh*60+sm)/30*WK_SLOT_H_R;
       const hPx=(eh*60+em)/30*WK_SLOT_H_R-topPx;
-      routineBandsHtml+=`<div style="position:absolute;top:${topPx}px;height:${hPx}px;left:0;right:0;background:${rt.color};opacity:.06;border-radius:3px;pointer-events:none;z-index:0"></div>`;
+      const rName=esc(b.customName||rt.label);
+      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}">
+        <span class="wk-routine-lbl" style="color:${rt.color}">${rName}</span>
+      </div>`;
     });
     g+=`<div class="wk-day-col">${colSlots}<div class="wk-task-layer">${routineBandsHtml}${taskBlocks}</div></div>`;
   });
@@ -1080,26 +1101,22 @@ function renderDay(){
 
   // ── Conflict detection ─────────────────────────────────────────────────────
   const conflictIds=new Set();
-  // Also track which task IDs overlap with an event (for the split column layout)
-  const splitTaskIds=new Set();   // non-event tasks that overlap an event
-  const splitEventIds=new Set();  // events that overlap a non-event task
+  // Track ALL overlapping task IDs (any type) for split column layout
+  const splitIds=new Set();
   _timedTasks.forEach((a,ai)=>{
     const[ah,am]=a.time.split(':').map(Number);
     const aStart=ah*60+am;
     const aEnd=aStart+(a.duration||30);
-    const aIsEvent=(a.type||'task')==='event';
     _timedTasks.forEach((b,bi)=>{
       if(ai>=bi)return;
       const[bh,bm]=b.time.split(':').map(Number);
       const bStart=bh*60+bm;
       const bEnd=bStart+(b.duration||30);
-      const bIsEvent=(b.type||'task')==='event';
       if(aStart<bEnd&&bStart<aEnd){
         conflictIds.add(a.id);
         conflictIds.add(b.id);
-        // If one is an event and the other is a task, mark both for split rendering
-        if(aIsEvent&&!bIsEvent){splitEventIds.add(a.id);splitTaskIds.add(b.id);}
-        else if(!aIsEvent&&bIsEvent){splitTaskIds.add(a.id);splitEventIds.add(b.id);}
+        splitIds.add(a.id);
+        splitIds.add(b.id);
       }
     });
   });
@@ -1129,6 +1146,7 @@ function renderDay(){
 
   // Routine block lookup
   const routineBands=getRoutineForDay(key);
+  const _labeledRoutines=new Set(); // track which bands already have a label
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
   }
@@ -1159,28 +1177,31 @@ function renderDay(){
     const rb=routineAt(sk2);
     const rt=rb?ROUTINE_TYPES[rb.type]||ROUTINE_TYPES.custom:null;
     const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
-    const slotBg=rt&&!hasTask?`background:${rt.color}0d`:'';
+    const slotBg=rt&&!hasTask?`background:${rt.color}18`:'';
 
     // Slot min-height: proportional to scheduled duration
     const maxDur=hasTask?Math.max(...tasksHere.map(t=>t.duration||30)):30;
     const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
     const minH=slotsNeeded*DAY_SLOT_H;
 
-    // Split this slot if ANY item in it is involved in an event-task overlap.
-    // This catches both same-start and offset-start overlaps (e.g. task at 10:00,
-    // event at 10:30 — the task's slot at 10:00 contains a splitTaskId).
-    const slotHasSplitItem=tasksHere.some(t=>splitTaskIds.has(t.id)||splitEventIds.has(t.id));
+    // Split this slot if 2+ items start here and any are involved in overlaps.
+    // Tasks go left, events go right. If all same type, split evenly.
+    const slotHasSplitItem=tasksHere.some(t=>splitIds.has(t.id));
     const eventsInSlot=tasksHere.filter(t=>(t.type||'task')==='event');
     const tasksInSlot=tasksHere.filter(t=>(t.type||'task')!=='event');
-    // Only split if this slot actually has items from both sides OR has a split-flagged item
-    const shouldSplit=slotHasSplitItem&&(eventsInSlot.length>0||tasksInSlot.length>0);
+    const shouldSplit=slotHasSplitItem&&tasksHere.length>=2;
 
     let taskHtml;
     if(shouldSplit){
-      const leftItems=tasksInSlot.length>0?tasksInSlot:[];
-      const rightItems=eventsInSlot.length>0?eventsInSlot:[];
-      // If one column is empty (e.g. this slot only has the task, event starts later),
-      // still render the split structure so the layout is consistent across all split rows
+      let leftItems,rightItems;
+      if(eventsInSlot.length>0&&tasksInSlot.length>0){
+        // Mixed: tasks left, events right
+        leftItems=tasksInSlot;rightItems=eventsInSlot;
+      } else {
+        // Same type: split first half left, second half right
+        const mid=Math.ceil(tasksHere.length/2);
+        leftItems=tasksHere.slice(0,mid);rightItems=tasksHere.slice(mid);
+      }
       const leftHtml=leftItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
       const rightHtml=rightItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
       taskHtml=`<div class="day-slot-split">
@@ -1192,13 +1213,24 @@ function renderDay(){
       taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
     }
 
+    // Routine label — show on the first empty slot of each routine band
+    let routineLabelHtml='';
+    if(rt&&!hasTask&&rb){
+      const rKey=rb.type+'|'+rb.start+'|'+rb.end+(rb.customName||'');
+      if(!_labeledRoutines.has(rKey)){
+        _labeledRoutines.add(rKey);
+        const rName=esc(rb.customName||rt.label);
+        routineLabelHtml=`<div class="routine-slot-label" style="color:${rt.color}"><span class="routine-slot-dot" style="background:${rt.color}"></span>${rName}</div>`;
+      }
+    }
+
     html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="min-height:${minH}px;${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
            <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}${shouldSplit?' is-split':''}" data-time="${sk2}"
              style="min-height:${minH}px;${slotBg}"
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
              ondrop="onDropSlot(event,'${key}','${sk2}')">
-             ${taskHtml}
+             ${routineLabelHtml}${taskHtml}
            </div>`;
   });
 
@@ -1982,8 +2014,11 @@ function closeWeekPlan(){document.getElementById('weekPlanOverlay').classList.re
 function saveWeekIntention(){
   const today=new Date();today.setHours(0,0,0,0);
   const dow=today.getDay();
-  const nextMon=dow===0?addDays(today,1):dow===1?today:addDays(today,8-dow);
-  const key='clarity_intention_'+dk(nextMon);
+  const diff=(dow-weekStartDay+7)%7;
+  const thisWeekStart=addDays(today,-diff);
+  const nextWeekStart=addDays(thisWeekStart,7);
+  const planStart=diff<=1?thisWeekStart:nextWeekStart;
+  const key='clarity_intention_'+dk(planStart);
   const val=document.getElementById('wpIntention').value.trim();
   if(val)localStorage.setItem(key,val);
   else localStorage.removeItem(key);
@@ -2501,7 +2536,7 @@ function onDropDate(e,dateKey){
     if(slotFull(dateKey,defaultTime,null)){
       showWarnToast('That slot already has 2 tasks — pick a different time');dragBdId=null;return;
     }
-    tasks.push({...t,date:dateKey,time:defaultTime,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({...t,date:dateKey,time:defaultTime,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(e.currentTarget),100);
   }else if(dragTaskId){
@@ -2521,7 +2556,7 @@ function onDropSlot(e,dateKey,time){
     if(slotFull(dateKey,time,null)){
       showWarnToast('That slot already has 2 tasks — pick a different time');dragBdId=null;return;
     }
-    tasks.push({...t,date:dateKey,time,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({...t,date:dateKey,time,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
   }else if(dragTaskId){
@@ -3654,7 +3689,7 @@ function saveBDDetail(){
     const time=timeVal||'09:00';
     tasks.push({
       id:genId(),name,priority,category,notes,
-      date:dateVal,time,scheduled:true,done:false,
+      date:dateVal,time,duration:30,scheduled:true,done:false,
       recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
     });
     brainDump=brainDump.filter(t=>t.id!==bdDetailId);
@@ -4042,6 +4077,7 @@ function renderNowLine(){
     // Find the slot at the current half-hour boundary and interpolate within it
     const slotH=Math.floor(mins/30);
     const s=slots()[slotH];
+    const DAY_H_NOW=window.innerWidth<=640?64:76;
     let top=0;
     if(s){
       const slotEl=dayTimeline.querySelector(`[data-time="${sk(s.h,s.m)}"]`);
@@ -4049,12 +4085,15 @@ function renderNowLine(){
         const fracWithin=(mins%30)/30;
         top=slotEl.offsetTop+fracWithin*slotEl.offsetHeight;
       } else {
-        top=(mins/30)*52; // fallback if slot not in DOM
+        top=(mins/30)*DAY_H_NOW; // fallback using current slot height
       }
     }
+    // Detect time label column width dynamically
+    const firstLbl=dayTimeline.querySelector('.day-time-lbl');
+    const lblW=firstLbl?firstLbl.offsetWidth:80;
     const line=document.createElement('div');
     line.className='now-line';
-    line.style.cssText=`top:${top}px;grid-column:2;position:absolute;left:56px;right:0`;
+    line.style.cssText=`top:${top}px;position:absolute;left:${lblW}px;right:0`;
     line.innerHTML='<div class="now-line-dot"></div><div class="now-line-bar"></div>';
     dayTimeline.style.position='relative';
     dayTimeline.appendChild(line);
