@@ -77,20 +77,34 @@ function syncBottomNav(view){
 }
 
 // ══ ONBOARDING — SPLASH NAME ════════════════════
+const SPLASH_TAGLINES=[
+  'Your day, simplified.',
+  'Make today count.',
+  'One step at a time.',
+  'Focus on what matters.',
+  'Plan it. Do it. Done.',
+  'Small steps, big progress.',
+  'Today is a good day to be productive.',
+  'Clarity starts here.',
+  'Your goals, on your schedule.',
+  'Let\'s make it a great day.',
+];
 function initSplashName(){
   const name=localStorage.getItem('clarity_username');
   const onboarded=localStorage.getItem('clarity_onboarded');
+  // Rotate tagline daily
+  const dayIndex=Math.floor(Date.now()/86400000)%SPLASH_TAGLINES.length;
+  const sublineEl=document.getElementById('splashSubline');
+  if(sublineEl)sublineEl.textContent=SPLASH_TAGLINES[dayIndex];
   if(onboarded&&name){
-    // Returning user with name — show greeting
     const h=new Date().getHours();
     let greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
     document.getElementById('splashGreeting').textContent=greet+', '+name+'.';
     document.getElementById('splashGreeting').style.display='';
     document.getElementById('splashTagline').style.display='none';
   } else if(onboarded&&!name){
-    // Returning user without name — just show tagline (default)
+    // returning user without name — keep tagline, show subline
   } else {
-    // First-time user — show name input
     document.getElementById('splashNameWrap').style.display='';
   }
 }
@@ -296,9 +310,9 @@ function renderUpcomingEvents(){
       const d=fromDk(t._instanceDate);
       const isToday=t._instanceDate===todayKey;
       const dayLabel=isToday?'Today':DAYS_S[d.getDay()];
-      html+=`<div class="upcoming-item" onclick="selDate=fromDk('${t._instanceDate}');switchView('day')">
+      html+=`<div class="upcoming-item" onclick="openUpcomingEdit('${t.id}','${t._instanceDate}')" title="Click to view & edit">
         <span class="upcoming-item-day">${dayLabel}</span>
-        <span class="upcoming-item-time">${t.time?fmtT(t.time):''}</span>
+        <span class="upcoming-item-time">${t.time?fmtT(t.time):t.allday?'All Day':''}</span>
         <span class="upcoming-item-name">${esc(t.name)}</span>
         ${t.location?`<span class="upcoming-item-loc">📍 ${esc(t.location)}</span>`:''}
       </div>`;
@@ -307,6 +321,15 @@ function renderUpcomingEvents(){
     html+=`</div>`;
   }
   el.innerHTML=html;
+}
+function openUpcomingEdit(id, instanceDate){
+  // Navigate to the event's day, then open the edit modal once the day view has rendered
+  selDate=fromDk(instanceDate);
+  switchView('day');
+  setTimeout(()=>{
+    const fakeEvent={stopPropagation:()=>{}};
+    openEdit(id, instanceDate, fakeEvent);
+  }, 80);
 }
 
 // ══ DRAWER ══════════════════════════════════
