@@ -440,10 +440,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .splash-logo-text{font-family:'DM Serif Display',serif;font-size:42px;font-weight:400;letter-spacing:-.5px;color:var(--text)}
 .splash-tagline{font-size:15px;color:var(--text2);margin-top:14px;font-weight:400;letter-spacing:.1px;animation:splashFadeUp .6s ease .6s both}
 .splash-subline{
-  font-size:14px;color:var(--text3);margin-top:8px;font-weight:400;
-  font-style:italic;letter-spacing:.1px;
-  animation:splashFadeUp .6s ease .75s both;
-  min-height:22px; /* reserve space so button doesn't jump */
+  font-size:15px;color:var(--text2);margin-top:10px;font-weight:400;
+  letter-spacing:.1px;min-height:24px;
 }
 .splash-enter-btn{padding:14px 32px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,transform .1s,box-shadow .15s;animation:splashFadeUp .6s ease .8s both;box-shadow:0 4px 20px rgba(var(--accent-rgb),.35)}
 .splash-enter-btn:hover{background:var(--accent-dim);transform:translateY(-2px);box-shadow:0 8px 28px rgba(var(--accent-rgb),.4)}
@@ -1008,7 +1006,7 @@ header{
   padding-bottom:10px;
 }
 .cat-view-title{font-family:'DM Serif Display',serif;font-size:20px;font-weight:400;flex-shrink:0}
-.cat-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.cat-chips{display:flex;gap:6px;flex-wrap:wrap;padding:2px 0}
 .cat-chip{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid var(--border2);transition:all .15s;background:var(--surface2);color:var(--text2);display:flex;align-items:center;gap:4px}
 .cat-chip:hover{border-color:var(--border2)}
 /* Active chip: white text works on all coloured backgrounds except very light ones.

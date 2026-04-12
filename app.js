@@ -92,10 +92,13 @@ const SPLASH_TAGLINES=[
 function initSplashName(){
   const name=localStorage.getItem('clarity_username');
   const onboarded=localStorage.getItem('clarity_onboarded');
-  // Rotate tagline daily
+  // Rotate tagline daily — set immediately, no animation delay issue
   const dayIndex=Math.floor(Date.now()/86400000)%SPLASH_TAGLINES.length;
   const sublineEl=document.getElementById('splashSubline');
-  if(sublineEl)sublineEl.textContent=SPLASH_TAGLINES[dayIndex];
+  if(sublineEl){
+    sublineEl.textContent=SPLASH_TAGLINES[dayIndex];
+    sublineEl.style.opacity='1'; // ensure visible regardless of animation state
+  }
   if(onboarded&&name){
     const h=new Date().getHours();
     let greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
@@ -1237,6 +1240,7 @@ function isInfiniteHabit(task){
 }
 
 function renderCat(){
+  renderCatChips(); // always refresh chips when rendering the tasks panel
   const today=new Date();today.setHours(0,0,0,0);
   let all=expandedTasks(addDays(today,-365),addDays(today,180));
   brainDump.forEach(t=>all.push({...t,scheduled:false,_instanceDate:null}));
