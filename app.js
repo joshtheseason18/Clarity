@@ -45,8 +45,6 @@ function applyDark(d){
   document.documentElement.setAttribute('data-dark',d?'true':'false');
   const track=document.getElementById('darkToggle');
   if(track)track.classList.toggle('on',d);
-  const icon=document.getElementById('modeIcon');
-  if(icon)icon.textContent=d?'☀️':'🌙';
   localStorage.setItem('clarity_dark',d?'true':'false');
 }
 function toggleDark(){applyDark(!isDark);}
@@ -317,7 +315,7 @@ function renderUpcomingEvents(){
     shown.forEach(t=>{
       const d=fromDk(t._instanceDate);
       const isToday=t._instanceDate===todayKey;
-      const dayLabel=isToday?'Today':DAYS_S[d.getDay()];
+      const dayLabel=isToday?'Today':DAYS_S[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate();
       html+=`<div class="upcoming-item" onclick="openUpcomingEdit('${t.id}','${t._instanceDate}')" title="Click to view & edit">
         <span class="upcoming-item-day">${dayLabel}</span>
         <span class="upcoming-item-time">${t.time?fmtT(t.time):t.allday?'All Day':''}</span>
@@ -348,6 +346,15 @@ function openDrawer(){
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawerBackdrop').classList.remove('open');
+}
+function toggleDrawerAcc(el){
+  // Don't toggle if clicking inside the body (inputs, buttons, etc.)
+  if(event.target.closest('.drawer-acc-body'))return;
+  const wasOpen=el.classList.contains('open');
+  // Close all accordion sections
+  document.querySelectorAll('.drawer-acc').forEach(a=>a.classList.remove('open'));
+  // Open this one if it wasn't already open
+  if(!wasOpen)el.classList.add('open');
 }
 
 // ══ SUGGESTIONS TAB VISIBILITY ═══════════════
@@ -414,9 +421,11 @@ function switchScheduleTab(tab){
   _scheduleTab=tab;
   document.getElementById('schedTabTasks').classList.toggle('active',tab==='tasks');
   document.getElementById('schedTabEvents').classList.toggle('active',tab==='events');
+  document.getElementById('schedTabRoutine').classList.toggle('active',tab==='routine');
   document.getElementById('catTasksArea').style.display=tab==='tasks'?'':'none';
   document.getElementById('catEventsArea').style.display=tab==='events'?'flex':'none';
-  // Chips row: visible on tasks, hidden on events
+  document.getElementById('catRoutineArea').style.display=tab==='routine'?'flex':'none';
+  // Chips row: visible on tasks only
   const chipsRow=document.getElementById('catChips');
   if(chipsRow)chipsRow.style.display=tab==='tasks'?'flex':'none';
   // Task action buttons (+ Category, Show Completed)
@@ -426,6 +435,7 @@ function switchScheduleTab(tab){
   const evControls=document.getElementById('catEventControls');
   if(evControls)evControls.style.display=tab==='events'?'flex':'none';
   if(tab==='events')renderEvents();
+  else if(tab==='routine')renderRoutineList();
   else renderCat();
 }
 let showPastEvents=false;
@@ -449,7 +459,7 @@ function renderEvents(){
   let html='';
   if(!events.length){
     html=`<div class="cat-empty" style="padding:40px 0;text-align:center">
-      <div style="font-size:28px;margin-bottom:8px">📅</div>
+      <div style="font-size:28px;margin-bottom:8px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg></div>
       <div style="font-size:13px;font-weight:500;color:var(--text)">No events yet</div>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Create an event from the Day or Week view</div>
     </div>`;
@@ -459,7 +469,7 @@ function renderEvents(){
     const todayEvs=events.filter(t=>t._instanceDate===todayKey);
     const pastEvs=events.filter(t=>t._instanceDate<todayKey);
     if(todayEvs.length){
-      html+=`<div class="cat-section"><div class="cat-sec-title">📅 Today</div>`;
+      html+=`<div class="cat-section"><div class="cat-sec-title">Today</div>`;
       todayEvs.forEach(t=>{html+=eventRow(t)});
       html+=`</div>`;
     }
@@ -731,6 +741,7 @@ function renderAll(){
   else if(curView==='week')renderWeek();
   else if(curView==='day')renderDay();
   else if(_scheduleTab==='events')renderEvents();
+  else if(_scheduleTab==='routine')renderRoutineList();
   else renderCat();
   // Only render sidebar panels if sidebar is visible
   if(sidebarOpen){
@@ -1081,7 +1092,7 @@ function renderDay(){
       alldayBar.innerHTML=_alldayTasks.map(t=>{
         const cc=catColor(t.category);
         const isDone=t.done;
-        return`<span class="allday-pill${isDone?' done':''}" style="background:${cc}22;border-color:${cc};color:${cc}"
+        return`<span class="allday-pill${isDone?' done':''}" style="background:${cc}30;border-color:${cc};color:${cc}"
           onclick="openEdit('${t.id}','${key}',event)" title="Click to edit">
           <span class="allday-pill-type">Event</span>
           ${esc(t.name)}${t.recur?' ↻':''} · All Day
@@ -1180,23 +1191,31 @@ function renderDay(){
     const slotsNeeded=hasTask?Math.ceil(maxDur/30):1;
     const minH=slotsNeeded*DAY_SLOT_H;
 
-    // Split this slot if 2+ items start here and any are involved in overlaps.
-    // Tasks go left, events go right. If all same type, split evenly.
+    // Split this slot if ANY item is involved in an overlap.
+    // Even if only 1 item is here, if it overlaps with something in another slot,
+    // render it at half width so the overlapping item in the adjacent slot
+    // lines up visually (tasks left column, events right column).
     const slotHasSplitItem=tasksHere.some(t=>splitIds.has(t.id));
     const eventsInSlot=tasksHere.filter(t=>(t.type||'task')==='event');
     const tasksInSlot=tasksHere.filter(t=>(t.type||'task')!=='event');
-    const shouldSplit=slotHasSplitItem&&tasksHere.length>=2;
+    const shouldSplit=slotHasSplitItem;
 
     let taskHtml;
     if(shouldSplit){
       let leftItems,rightItems;
       if(eventsInSlot.length>0&&tasksInSlot.length>0){
-        // Mixed: tasks left, events right
+        // Mixed in same slot: tasks left, events right
         leftItems=tasksInSlot;rightItems=eventsInSlot;
-      } else {
-        // Same type: split first half left, second half right
+      } else if(tasksHere.length>=2){
+        // 2+ same-type items in one slot: split evenly
         const mid=Math.ceil(tasksHere.length/2);
         leftItems=tasksHere.slice(0,mid);rightItems=tasksHere.slice(mid);
+      } else if(eventsInSlot.length>0){
+        // Single event overlapping a task in another slot — event goes right
+        leftItems=[];rightItems=eventsInSlot;
+      } else {
+        // Single task overlapping an event in another slot — task goes left
+        leftItems=tasksInSlot;rightItems=[];
       }
       const leftHtml=leftItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
       const rightHtml=rightItems.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
@@ -1237,7 +1256,7 @@ function renderDay(){
   if(!_dayTotal){
     const empty=document.createElement('div');
     empty.className='day-empty-state';
-    empty.innerHTML=`<div class="day-empty-icon">📭</div><div class="day-empty-text">Nothing scheduled yet<br><span style="font-size:11px">Click a time slot or press <strong>N</strong> to add a task</span></div>`;
+    empty.innerHTML=`<div class="day-empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg></div><div class="day-empty-text">Nothing scheduled yet<br><span style="font-size:11px">Click a time slot or press <strong>N</strong> to add a task</span></div>`;
     tl.appendChild(empty);
   }
 }
@@ -1320,7 +1339,7 @@ function renderCat(){
   }
 
   // ── To Do section ────────────────────────────────────────
-  html+=`<div class="cat-section"><div class="cat-sec-title">📋 To Do <span style="font-weight:400;opacity:.6;margin-left:4px">${pending.length}</span></div>`;
+  html+=`<div class="cat-section"><div class="cat-sec-title">To Do <span style="font-weight:400;opacity:.6;margin-left:4px">${pending.length}</span></div>`;
   if(!pending.length)html+=`<div class="cat-empty">All clear! 🎉</div>`;
   pending.forEach(t=>{html+=catRow(t)});
   html+=`</div>`;
