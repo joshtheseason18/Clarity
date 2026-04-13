@@ -930,6 +930,25 @@ function updateMonthNotesPreview(){
 // ══ WEEK ════════════════════════════════════
 function renderWeek(){
   const mon=wkStart(selDate),days=Array.from({length:7},(_,i)=>addDays(mon,i)),todayKey=dk(new Date());
+
+  // ── Pre-scan: find max overlap per day for adaptive column widths ──
+  const dayMaxCols=days.map(d=>{
+    const dayTasks=tasksOn(dk(d)).filter(t=>t.time&&!t.allday);
+    if(dayTasks.length<=1)return 1;
+    const items=dayTasks.map(t=>{const[h,m]=t.time.split(':').map(Number);return{start:h*60+m,end:h*60+m+(t.duration||30)};}).sort((a,b)=>a.start-b.start);
+    const clusters=[];
+    items.forEach(item=>{
+      let merged=false;
+      for(const cl of clusters){if(cl.some(c=>item.start<c.end&&c.start<item.end)){cl.push(item);merged=true;break;}}
+      if(!merged)clusters.push([item]);
+    });
+    return Math.max(1,...clusters.map(c=>c.length));
+  });
+  // Build adaptive fr values: base 1fr, scale up for busy days
+  const gutterW=window.innerWidth<=380?'32px':window.innerWidth<=640?'42px':'68px';
+  const colFrs=dayMaxCols.map(mc=>mc<=1?'1fr':Math.min(3,mc*0.75).toFixed(1)+'fr');
+  const gridCols=`${gutterW} ${colFrs.join(' ')}`;
+
   let hdr=`<div class="wk-gutter"></div>`;
   days.forEach(d=>{const k=dk(d);hdr+=`<div class="wk-day-head${k===todayKey?' today':''}" onclick="onWkDay('${k}')"><div class="wdh-name">${DAYS_S[d.getDay()]}</div><div class="wdh-num">${d.getDate()}</div></div>`;});
   document.getElementById('weekHdr').innerHTML=hdr;
@@ -1056,6 +1075,14 @@ function renderWeek(){
     g+=`<div class="wk-day-col">${colSlots}<div class="wk-task-layer">${routineBandsHtml}${taskBlocks}</div></div>`;
   });
   document.getElementById('weekGrid').innerHTML=g;
+
+  // ── Apply adaptive column widths ──
+  const hdrEl=document.getElementById('weekHdr');
+  const gridEl=document.getElementById('weekGrid');
+  const alldayEl=document.getElementById('weekAlldayRow');
+  [hdrEl,gridEl].forEach(el=>{if(el)el.style.gridTemplateColumns=gridCols;});
+  const alldayGrid=alldayEl?.querySelector('.wk-allday-row');
+  if(alldayGrid)alldayGrid.style.gridTemplateColumns=gridCols;
 }
 function onWkDay(k){selDate=fromDk(k);switchView('day')}
 function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
@@ -1395,7 +1422,7 @@ function renderDay(){
         }
 
         let blockHtml;
-        const durStep=ci.total<=2?`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`:`<span class="day-task-dur-pill">${durLabel(dur)}</span>`;
+        const durStep=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
@@ -1406,7 +1433,7 @@ function renderDay(){
               ${ci.total<=2?`<button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>`:''}
               ${ci.total<=3?timeRB:''}
             </div>
-            ${ci.total<=3&&dur>15?`<div class="day-task-meta-row">${durStep}${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?' ↻':''}</div>`:''}
+            ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}</div>`:''}
             ${ci.total<=2?buildSubtaskHtml(t.id,subs,true):''}
           </div>`;
         } else {
@@ -1422,10 +1449,10 @@ function renderDay(){
               ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
               ${ci.total<=3?timeRB:''}
             </div>
-            ${ci.total<=3&&dur>15?`<div class="day-task-meta-row">
+            ${dur>15?`<div class="day-task-meta-row">
               ${durStep}
               ${focusPill2}
-              ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
+              ${ci.total<=3&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:ci.total<=3&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
             </div>`:''}
             ${ci.total<=2?buildSubtaskHtml(t.id,subs,false):''}
           </div>`;
@@ -1764,7 +1791,7 @@ function toggleRoutineForm(){
   const toggle=document.getElementById('routineAddToggle');
   if(form)form.style.display=_routineFormOpen?'flex':'none';
   if(toggle){
-    toggle.textContent=_routineFormOpen?'Cancel':'+ Add';
+    toggle.textContent=_routineFormOpen?'Cancel':'+ Add block';
     toggle.classList.toggle('routine-add-active',_routineFormOpen);
   }
   if(_routineFormOpen)resetRoutineForm();
@@ -1777,7 +1804,7 @@ function cancelRoutineForm(){
   const toggle=document.getElementById('routineAddToggle');
   if(form)form.style.display='none';
   if(toggle){
-    toggle.textContent='+ Add';
+    toggle.textContent='+ Add block';
     toggle.classList.remove('routine-add-active');
   }
 }
