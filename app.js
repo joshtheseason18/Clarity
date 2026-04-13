@@ -828,7 +828,7 @@ function renderYear(){
       const key=`${curYear}-${pad(mo+1)}-${pad(d)}`,n=(dayCount[d]||0)+(eventDayCount[d]||0),isT=key===todayKey;
       const hasEv=(eventDayCount[d]||0)>0;
       let dotCls=n===1?'d1':n===2?'d2':n<=4?'d3':n>4?'d4':'';
-      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0&&!isT?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
+      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
     }
     const rem=(first+dim)%7;if(rem>0)for(let i=0;i<7-rem;i++)html+=`<div class="ym-day other"></div>`;
     html+=`</div></div>`;

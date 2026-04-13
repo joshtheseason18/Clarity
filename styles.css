@@ -693,10 +693,16 @@ header{
 .ym-dot.d2{background:rgba(var(--accent-rgb),.55)}
 .ym-dot.d3{background:rgba(var(--accent-rgb),.75)}
 .ym-dot.d4{background:var(--accent)}
+/* On today's accent circle: dots become white for contrast */
+.ym-day.today .ym-dot{background:rgba(255,255,255,.5)}
+.ym-day.today .ym-dot.d2{background:rgba(255,255,255,.65)}
+.ym-day.today .ym-dot.d3{background:rgba(255,255,255,.8)}
+.ym-day.today .ym-dot.d4{background:#fff}
+/* When today has both task dot and event dot, offset task dot left */
+.ym-day.today.has-event .ym-dot{left:calc(50% - 3px)}
+.ym-day.today.has-event::after{background:rgba(255,255,255,.7);bottom:3px}
 /* Event indicator dot — uses a complementary offset from accent */
 .ym-day.has-event::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent-dim);position:absolute;bottom:2px;left:calc(50% + 4px)}
-/* On today circle: event dot should be white to contrast against accent bg */
-.ym-day.today.has-event::after{background:rgba(255,255,255,.7);bottom:3px}
 
 /* ══════════════════════════════════════════
    MONTH VIEW
