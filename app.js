@@ -1699,11 +1699,33 @@ let _routineStripTab='all';
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
   if(!routineBlocks.length){
-    el.innerHTML=`<div class="routine-hero"><div class="routine-hero-top"><div class="routine-hero-title">My Routine</div></div>
+    el.innerHTML=`<div class="routine-hero">
+      <div class="routine-hero-top"><div class="routine-hero-title">My Routine</div></div>
       <div class="routine-hero-desc">Tell Luclaro about your typical day so the AI can plan around it.</div>
-      <div class="routine-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="opacity:.35;margin-bottom:6px"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <span>No routine blocks yet</span><span style="font-size:10px;color:var(--text3);margin-top:2px">Add your first block to get started</span></div></div>
-    <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>`;
+      <div class="rt-strip-wrap">
+        <div class="rt-strip rt-strip-empty">
+          <div class="rt-strip-empty-hint">Your routine blocks will appear here</div>
+        </div>
+        <div class="rt-strip-times"><span>12am</span><span>3am</span><span>6am</span><span>9am</span><span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span></div>
+      </div>
+    </div>
+    <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>
+    <div class="routine-lower">
+      <div class="routine-instr">
+        <div class="routine-instr-title">How routines work</div>
+        <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--accent)"></span><div><strong>Window</strong> — Luclaro can schedule tasks during this time</div></div>
+        <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time the AI won't schedule over</div></div>
+        <div class="routine-instr-hint">Add blocks like Work, Gym, Sleep, or Church. The AI will build your schedule around them.</div>
+      </div>
+      <div class="routine-blocks-list">
+        <div class="routine-blocks-title">Your blocks</div>
+        <div class="routine-empty-list">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="opacity:.3;margin-bottom:6px"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="13" x2="12" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="15" x2="14" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>No blocks yet</span>
+          <span style="font-size:10px;color:var(--text3);margin-top:2px">Tap the button above to add your first routine block</span>
+        </div>
+      </div>
+    </div>`;
     return;
   }
   // ── Group blocks by day pattern for tabs ──

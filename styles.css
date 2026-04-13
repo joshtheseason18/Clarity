@@ -1817,6 +1817,13 @@ header{
 
 /* Empty state */
 .routine-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;color:var(--text3);font-size:12px;text-align:center;line-height:1.5}
+.rt-strip-empty{display:flex;align-items:center;justify-content:center;border-style:dashed}
+.rt-strip-empty-hint{font-size:12px;color:var(--text3);font-style:italic}
+.routine-empty-list{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:40px 16px;color:var(--text3);font-size:12px;text-align:center;line-height:1.5;
+  background:var(--surface2);border-radius:10px;border:1px dashed var(--border);
+}
 
 /* Mode badges */
 .routine-mode-badge{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:4px;flex-shrink:0}
