@@ -1020,6 +1020,8 @@ function renderWeek(){
       });
     })();
 
+    // Routine bands for this day (used for task nesting inset)
+    const wkRoutines=getRoutineForDay(k);
     let taskBlocks=dayTasks.map(t=>{
       const [th,tm]=t.time.split(':').map(Number);
       const topPx=(th*60+tm)/30*WK_SLOT_H;
@@ -1030,11 +1032,19 @@ function renderWeek(){
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       // Column positioning from overlap layout
       const ci=wkColMap.get(t.id)||{col:0,total:1};
-      let leftVal='2px',rightVal='2px';
+      // Check if task is within a routine band for nesting inset
+      const tMins=th*60+tm;
+      const wkInRoutine=wkRoutines.some(b=>{
+        const[bsh2,bsm2]=b.start.split(':').map(Number);
+        const[beh2,bem2]=b.end.split(':').map(Number);
+        return tMins>=bsh2*60+bsm2&&tMins<beh2*60+bem2;
+      });
+      const wkRI=wkInRoutine?3:0;
+      let leftVal=(2+wkRI)+'px',rightVal=(2+wkRI)+'px';
       if(ci.total>1){
         const pct=100/ci.total;
-        leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
-        rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
+        leftVal=ci.col===0?(2+wkRI)+'px':`calc(${(ci.col*pct).toFixed(1)}% + ${1+wkRI}px)`;
+        rightVal=ci.col===ci.total-1?(2+wkRI)+'px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + ${1+wkRI}px)`;
       }
       const narrowCls=ci.total>=3?' wk-task-narrow':'';
       const wkDurStep=dur>30?`<div class="wk-dur-stepper"><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',-15,event)">−</button><span class="wk-task-block-dur">${durLabel(dur)}</span><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',15,event)">+</button></div>`:'';
@@ -1067,8 +1077,8 @@ function renderWeek(){
       const topPx=(sh*60+sm)/30*WK_SLOT_H_R;
       const hPx=(eh*60+em)/30*WK_SLOT_H_R-topPx;
       const rName=esc(b.customName||rt.label);
-      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}22">
-        <span class="wk-routine-lbl" style="color:${rt.color}">${rName}</span>
+      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}0c;--rb-color:${rt.color};--rb-dim:${rt.color}18;border-left-color:${rt.color}">
+        <span class="wk-routine-lbl" style="color:${rt.color}"><span class="wk-routine-dot" style="background:${rt.color}"></span>${rName}</span>
       </div>`;
     });
     g+=`<div class="wk-day-col">${colSlots}<div class="wk-task-layer">${routineBandsHtml}${taskBlocks}</div></div>`;
@@ -1084,7 +1094,7 @@ function renderWeek(){
   if(alldayGrid)alldayGrid.style.gridTemplateColumns=gridCols;
 }
 function onWkDay(k){selDate=fromDk(k);switchView('day')}
-function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
+function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check'))return;openNew(k,t)}
 
 // ══ DAY ═════════════════════════════════════
 
@@ -1209,6 +1219,7 @@ function buildDayTaskBlock(t, key, conflictIds){
   </div>`;
 }
 
+let _overlapWarnShown=false;
 function renderDay(){
   renderGreeting();
   renderUpcomingEvents();
@@ -1288,6 +1299,16 @@ function renderDay(){
       });
       cl.forEach(item=>{dayColMap.get(item.id).total=cols.length;});
     });
+    // ── Overlap warning ──
+    const maxCols=Math.max(0,...[...dayColMap.values()].map(v=>v.total));
+    if(maxCols>=3&&!_overlapWarnShown){
+      _overlapWarnShown=true;
+      const msg=maxCols>=4
+        ?`You have ${maxCols} tasks overlapping — that's hard to read! Try using subtasks to group related items under one task.`
+        :`${maxCols} tasks overlap at the same time. Consider using subtasks to keep things organized.`;
+      setTimeout(()=>showWarnToast(msg),300);
+    }
+    if(maxCols<3)_overlapWarnShown=false;
   }
 
   const sl=slots();
@@ -1301,23 +1322,30 @@ function renderDay(){
     taskMap[t.time].push(t);
   });
 
-  // Mark slots interior to a multi-slot NON-overlapping task (collapse them)
-  // Overlapping items are excluded — their slots stay open to provide height for the absolute overlay
+  // Mark slots interior to a multi-slot NON-overlapping task
+  // For tasks > 2 hours, only collapse :30 half-hour slots — keep :00 hour slots
+  // visible at reduced height so time labels, routine shading, and now-line still work.
   const interiorSlots=new Set();
+  const interiorHourSlots=new Set(); // :00 slots inside long tasks — reduced height, not collapsed
   _timedTasks.filter(t=>(t.duration||30)>30&&!overlapIds.has(t.id)).forEach(t=>{
     const[h,m]=t.time.split(':').map(Number);
     const startMins=h*60+m;
     const dur=t.duration||30;
+    const isLong=dur>120; // > 2 hours
     for(let offset=30;offset<dur;offset+=30){
       const mins=startMins+offset;
       if(mins>=1440)break;
-      interiorSlots.add(pad(Math.floor(mins/60))+':'+pad(mins%60));
+      const slotKey=pad(Math.floor(mins/60))+':'+pad(mins%60);
+      if(isLong&&mins%60===0){
+        interiorHourSlots.add(slotKey);
+      } else {
+        interiorSlots.add(slotKey);
+      }
     }
   });
 
   // Routine block lookup
   const routineBands=getRoutineForDay(key);
-  const _labeledRoutines=new Set(); // track which bands already have a label
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
   }
@@ -1328,10 +1356,23 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — collapsed normally, but expand during drag to accept drops
+    // Interior slots — collapsed :30 slots (expand during drag)
     if(interiorSlots.has(sk2)&&!tasksHere.length){
       html+=`<div class="day-time-lbl day-lbl-interior">${!isHalf?fmtT(sk2):''}</div>
              <div class="day-slot day-slot-interior" data-time="${sk2}"
+               ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
+               ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
+      return;
+    }
+
+    // Interior hour slots — reduced height markers inside long tasks (keep time labels + routine visible)
+    if(interiorHourSlots.has(sk2)&&!tasksHere.length){
+      const rb2=routineAt(sk2);
+      const rt2=rb2?ROUTINE_TYPES[rb2.type]||ROUTINE_TYPES.custom:null;
+      const hrBorder=rt2?`border-right:2px solid ${rt2.color}`:'';
+      const hrBg=rt2?`background:${rt2.color}18`:'';
+      html+=`<div class="day-time-lbl day-lbl-hour-interior" style="${hrBorder}">${fmtT(sk2)}</div>
+             <div class="day-slot day-slot-hour-interior" data-time="${sk2}" style="${hrBg}"
                ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
                ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
       return;
@@ -1353,24 +1394,21 @@ function renderDay(){
     // Render in-flow task blocks (overlapping items are excluded — they render in the absolute overlay)
     const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
 
-    // Routine label — show on the first empty slot of each routine band
-    let routineLabelHtml='';
-    if(rt&&!hasTask&&rb){
-      const rKey=rb.type+'|'+rb.start+'|'+rb.end+(rb.customName||'');
-      if(!_labeledRoutines.has(rKey)){
-        _labeledRoutines.add(rKey);
-        const rName=esc(rb.customName||rt.label);
-        routineLabelHtml=`<div class="routine-slot-label" style="color:${rt.color}"><span class="routine-slot-dot" style="background:${rt.color}"></span>${rName}</div>`;
-      }
+    // Routine data attribute for container nesting + open-window hint
+    const routineAttr=rb?` data-routine="${rb.type}"`:'';
+    let windowHintHtml='';
+    if(rb&&!hasTask){
+      const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
+      if(isWin){windowHintHtml=`<div class="routine-window-hint" style="color:${rt.color}">open</div>`;}
     }
 
     html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="min-height:${minH}px;${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
-           <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}" data-time="${sk2}"
+           <div class="day-slot${isHalf?' half':''}${hasTask?' has-task':''}" data-time="${sk2}"${routineAttr}
              style="min-height:${minH}px;${slotBg}"
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
              ondrop="onDropSlot(event,'${key}','${sk2}')">
-             ${routineLabelHtml}${taskHtml}
+             ${windowHintHtml}${taskHtml}
            </div>`;
   });
 
@@ -1399,11 +1437,19 @@ function renderDay(){
         const hPx=Math.max(36,dur/30*DAY_SLOT_H);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
-        let leftVal='2px',rightVal='2px';
+        // Check if task falls within a routine band for inset nesting
+        const tStartMins=h*60+m;
+        const _inRoutine=routineBands.some(b=>{
+          const[bsh,bsm]=b.start.split(':').map(Number);
+          const[beh,bem]=b.end.split(':').map(Number);
+          return tStartMins>=bsh*60+bsm&&tStartMins<beh*60+bem;
+        });
+        const rInset=_inRoutine?4:0;
+        let leftVal=(2+rInset)+'px',rightVal=(2+rInset)+'px';
         if(ci.total>1){
           const pct=100/ci.total;
-          leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
-          rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
+          leftVal=ci.col===0?(2+rInset)+'px':`calc(${(ci.col*pct).toFixed(1)}% + ${1+rInset}px)`;
+          rightVal=ci.col===ci.total-1?(2+rInset)+'px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + ${1+rInset}px)`;
         }
 
         const idate=t._instanceDate||key;
@@ -1473,6 +1519,51 @@ function renderDay(){
     });
   }
 
+  // ── Routine container nesting overlays ──────────────────────────────────────
+  if(routineBands.length){
+    requestAnimationFrame(()=>{
+      const firstLbl2=tl.querySelector('.day-time-lbl');
+      const lblW2=firstLbl2?firstLbl2.offsetWidth:80;
+      tl.style.position='relative';
+
+      routineBands.forEach(b=>{
+        const rtC=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+        const isW=b.schedulable!==undefined?b.schedulable:(rtC.schedulable||false);
+
+        // Find start slot element
+        const startSlot=tl.querySelector(`.day-slot[data-time="${b.start}"]`);
+        if(!startSlot)return;
+
+        // Find the last visible slot within this routine's range
+        const[eH,eM]=b.end.split(':').map(Number);
+        const endMins3=eH*60+eM;
+        let endSlot=null;
+        for(let mm=endMins3-30;mm>=0;mm-=30){
+          const sk3=pad(Math.floor(mm/60))+':'+pad(mm%60);
+          const el=tl.querySelector(`.day-slot[data-time="${sk3}"]`);
+          if(el&&el.offsetHeight>0){endSlot=el;break;}
+        }
+        if(!endSlot)endSlot=startSlot;
+
+        const topPx2=startSlot.offsetTop;
+        const bottomPx2=endSlot.offsetTop+endSlot.offsetHeight;
+        const hPx2=bottomPx2-topPx2;
+        if(hPx2<=0)return;
+
+        const container=document.createElement('div');
+        container.className='routine-container';
+        container.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;--rc-bg:${rtC.color}06;top:${topPx2}px;height:${hPx2}px;left:${lblW2}px;right:0`;
+
+        const rName2=esc(b.customName||rtC.label);
+        const badgeCls=isW?'window':'block';
+        const badgeText=isW?'Window':'Block';
+        container.innerHTML=`<div class="routine-container-hdr"><span class="routine-container-dot" style="background:${rtC.color}"></span><span class="routine-container-name">${rName2}</span><span class="routine-container-badge ${badgeCls}">${badgeText}</span></div>`;
+
+        tl.appendChild(container);
+      });
+    });
+  }
+
   // Empty-day state
   if(!_dayTotal){
     const empty=document.createElement('div');
@@ -1483,7 +1574,7 @@ function renderDay(){
   // Update journal if expanded
   if(_dayJournalOpen)openJournalForDate(dk(selDate));
 }
-function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check,.task-resize-handle'))return;openNew(k,t)}
+function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;openNew(k,t)}
 
 // ══ CATEGORIES ════════════════════════════════
 function renderCatChips(){
@@ -2956,7 +3047,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
 
   function findDraggable(el){
     // Don't start drag on checkboxes or resize handles
-    if(el.closest('.task-check,.task-resize-handle'))return null;
+    if(el.closest('.task-check'))return null;
     const bd=el.closest('.bd-card[draggable]');if(bd)return{el:bd,type:'bd',id:bd.getAttribute('ondragstart')?.match(/'([^']+)'/)?.[1]};
     const task=el.closest('.cat-task-row[draggable],.cat-habit-row[draggable]');
     if(task){
@@ -3077,24 +3168,13 @@ function durLabel(m){if(m<60)return m+'m';const h=Math.floor(m/60),r=m%60;return
 function adjustDuration(id,idate,delta,e){
   if(e)e.stopPropagation();
   const t=tasks.find(t=>t.id===id);if(!t)return;
-  const newDur=Math.max(15,Math.min(480,(t.duration||30)+delta));
+  const newDur=Math.max(15,Math.min(720,(t.duration||30)+delta));
   if(newDur===(t.duration||30))return;
   t.duration=newDur;
   save();renderAll();
 }
 
 let _selDur=30;
-function buildDurSelect(val){
-  _selDur=val||30;
-  const wrap=document.getElementById('fDurSelect');if(!wrap)return;
-  wrap.innerHTML=DUR_OPTS.map(d=>
-    `<div class="dur-opt${d===_selDur?' selected':''}" onclick="pickDur(${d})">${durLabel(d)}</div>`
-  ).join('');
-}
-function pickDur(v){
-  _selDur=v;
-  buildDurSelect(v);
-}
 
 // Duration spinner for task modal
 function setDurSpinner(totalMin){
@@ -3109,97 +3189,18 @@ function setDurSpinner(totalMin){
 function onDurSpinnerChange(){
   const hr=parseInt(document.getElementById('fDurHr').value)||0;
   let mn=parseInt(document.getElementById('fDurMin').value)||0;
-  // Snap minutes to 15-min increments
   mn=Math.round(mn/15)*15;
   if(mn>=60){mn=45;}
   document.getElementById('fDurMin').value=mn;
-  _selDur=hr*60+mn;
-  if(_selDur<15)_selDur=15; // minimum 15 min
+  _selDur=Math.min(720,hr*60+mn); // cap at 12 hours
+  if(_selDur<15)_selDur=15;
+  // Clamp spinner display if over max
+  if(hr>12){document.getElementById('fDurHr').value=12;_selDur=720;}
 }
 function durToMin(lbl){
   // parse "1h 30m" or "45m" or "2h" back to minutes (for internal use)
   const mH=lbl.match(/(\d+)h/),mM=lbl.match(/(\d+)m/);
   return (mH?parseInt(mH[1])*60:0)+(mM?parseInt(mM[1]):0)||30;
-}
-
-// ══ RESIZE STATE ═════════════════════════════
-let _rzTask=null,_rzStartY=0,_rzStartDur=0,_rzView='';
-function onResizeStart(e,tid,idate,view){
-  e.stopPropagation();e.preventDefault();
-  const t=tasks.find(t=>t.id===tid);if(!t)return;
-  _rzTask=t;_rzStartY=e.clientY;_rzStartDur=t.duration||30;_rzView=view;
-  document.addEventListener('mousemove',onResizeMove);
-  document.addEventListener('mouseup',onResizeUp);
-  document.querySelector(`[data-rid="${tid}"]`)?.classList.add('active');
-  document.body.style.cursor='ns-resize';
-  document.body.style.userSelect='none';
-}
-function onResizeMove(e){
-  if(!_rzTask)return;
-  const slotH=_rzView==='week'?42:(window.innerWidth<=640?64:76);
-  const dy=e.clientY-_rzStartY;
-  const deltaMins=Math.round(dy/slotH*30/15)*15;
-  const newDur=Math.max(15,_rzStartDur+deltaMins);
-  const prevDur=_rzTask.duration||30;
-  _rzTask.duration=newDur;
-
-  if(_rzView==='week'){
-    const block=document.querySelector(`.wk-task-block[data-id="${_rzTask.id}"]`);
-    if(block){block.style.height=(newDur/30*slotH-1)+'px';}
-    const dl=block?.querySelector('.wk-task-block-dur');
-    if(dl)dl.textContent=durLabel(newDur);
-  } else {
-    // Re-render the day view when crossing a 30-min boundary so interior
-    // ghost time labels appear/disappear correctly and the slot row stretches
-    const prevSlots=Math.ceil(prevDur/30);
-    const newSlots=Math.ceil(newDur/30);
-    if(newSlots!==prevSlots){
-      renderDay(); // full re-render
-      // Re-apply drag cursor/select which renderDay doesn't disturb (they're on body)
-      document.body.style.cursor='ns-resize';
-      document.body.style.userSelect='none';
-    } else {
-      // Same slot count — update height and duration pill live
-      const block=document.querySelector(`.day-task-block[data-id="${_rzTask.id}"]`);
-      const wrap=block?.closest('.day-task-slot-wrap');
-      const DAY_H=window.innerWidth<=640?64:76;
-      const newSchedH=Math.max(36,newDur/30*DAY_H-8);
-      if(wrap){
-        // In-flow block: update wrapper min-height and reposition handle
-        wrap.style.minHeight=newSchedH+'px';
-        const handle=wrap.querySelector('.task-resize-handle');
-        if(handle)handle.style.top=(newSchedH-10)+'px';
-      } else {
-        // Overlay block: update the absolute container's height
-        const overlayWrap=block?.parentElement;
-        if(overlayWrap&&overlayWrap.style.position==='absolute'){
-          overlayWrap.style.height=Math.max(36,newDur/30*DAY_H)+'px';
-        }
-      }
-      const dl=block?.querySelector('.day-task-dur-pill');
-      if(dl)dl.textContent=durLabel(newDur);
-      // Update time range badge
-      if(block&&_rzTask.time){
-        const tr=block.querySelector('.day-time-range');
-        if(tr){
-          const[th,tm]=_rzTask.time.split(':').map(Number);
-          const endMins=(th*60+tm)+newDur;
-          const endH=Math.floor(endMins/60)%24;
-          const endM=endMins%60;
-          tr.textContent=fmtT(_rzTask.time)+' – '+fmtT(pad(endH)+':'+pad(endM));
-        }
-      }
-    }
-  }
-}
-function onResizeUp(){
-  if(_rzTask)save();
-  _rzTask=null;
-  document.removeEventListener('mousemove',onResizeMove);
-  document.removeEventListener('mouseup',onResizeUp);
-  document.querySelectorAll('.task-resize-handle.active').forEach(el=>el.classList.remove('active'));
-  document.body.style.cursor='';document.body.style.userSelect='';
-  renderAll();
 }
 
 let mMode=null,mDate=null,mTime=null,mId=null,mInstanceDate=null;
@@ -4414,18 +4415,36 @@ function renderNowLine(){
   const dayTimeline=document.getElementById('dayTimeline');
   if(dayTimeline&&isToday(selDate)){
     dayTimeline.querySelectorAll('.now-line').forEach(el=>el.remove());
-    // Find the slot at the current half-hour boundary and interpolate within it
     const slotH=Math.floor(mins/30);
     const s=slots()[slotH];
     const DAY_H_NOW=window.innerWidth<=640?64:76;
     let top=0;
     if(s){
       const slotEl=dayTimeline.querySelector(`[data-time="${sk(s.h,s.m)}"]`);
-      if(slotEl){
+      if(slotEl&&slotEl.offsetHeight>0){
         const fracWithin=(mins%30)/30;
         top=slotEl.offsetTop+fracWithin*slotEl.offsetHeight;
       } else {
-        top=(mins/30)*DAY_H_NOW; // fallback using current slot height
+        // Slot is collapsed — find nearest visible slot and interpolate
+        const allSlots=dayTimeline.querySelectorAll('.day-slot[data-time]');
+        let prevSlot=null,nextSlot=null;
+        const targetMins=mins;
+        allSlots.forEach(el=>{
+          if(el.offsetHeight===0)return;
+          const t=el.getAttribute('data-time');
+          const[h2,m2]=t.split(':').map(Number);
+          const sMins=h2*60+m2;
+          if(sMins<=targetMins)prevSlot={el,mins:sMins};
+          if(sMins>targetMins&&!nextSlot)nextSlot={el,mins:sMins};
+        });
+        if(prevSlot&&nextSlot){
+          const frac=(targetMins-prevSlot.mins)/(nextSlot.mins-prevSlot.mins);
+          top=prevSlot.el.offsetTop+prevSlot.el.offsetHeight+frac*(nextSlot.el.offsetTop-prevSlot.el.offsetTop-prevSlot.el.offsetHeight);
+        } else if(prevSlot){
+          top=prevSlot.el.offsetTop+prevSlot.el.offsetHeight;
+        } else {
+          top=(mins/30)*DAY_H_NOW;
+        }
       }
     }
     // Detect time label column width dynamically
