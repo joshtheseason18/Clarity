@@ -1328,10 +1328,12 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — fully collapsed (parent slot's min-height handles visual span)
+    // Interior slots — collapsed normally, but expand during drag to accept drops
     if(interiorSlots.has(sk2)&&!tasksHere.length){
-      html+=`<div class="day-time-lbl day-lbl-interior"></div>
-             <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
+      html+=`<div class="day-time-lbl day-lbl-interior">${!isHalf?fmtT(sk2):''}</div>
+             <div class="day-slot day-slot-interior" data-time="${sk2}"
+               ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
+               ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
       return;
     }
 
@@ -1429,11 +1431,11 @@ function renderDay(){
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
-              ${ci.total<=2?`<button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>`:''}
+              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
               ${ci.total<=3?timeRB:''}
             </div>
             ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}</div>`:''}
-            ${ci.total<=2?buildSubtaskHtml(t.id,subs,true):''}
+            ${ci.total<=3?buildSubtaskHtml(t.id,subs,true):''}
           </div>`;
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
@@ -1444,7 +1446,7 @@ function renderDay(){
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-              ${ci.total<=2?`<button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>`:''}
+              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
               ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
               ${ci.total<=3?timeRB:''}
             </div>
@@ -1453,7 +1455,7 @@ function renderDay(){
               ${focusPill2}
               ${ci.total<=3&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:ci.total<=3&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
             </div>`:''}
-            ${ci.total<=2?buildSubtaskHtml(t.id,subs,false):''}
+            ${ci.total<=3?buildSubtaskHtml(t.id,subs,false):''}
           </div>`;
         }
 
@@ -2726,15 +2728,16 @@ function cyclePriority(id,e){
 
 // ══ DRAG & DROP ════════════════════════════════
 let dragBdId=null,dragTaskId=null,dragInstanceDate=null;
-function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0)}
-function onBDE(e){e.target.classList.remove('dragging');dragBdId=null}
+function _setDragActive(on){const tl=document.getElementById('dayTimeline');if(tl)tl.classList.toggle('drag-active',on)}
+function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
+function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
 function onTaskDragStart(e,id,idate){
   dragTaskId=id;dragInstanceDate=idate;dragBdId=null;
   e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','task:'+id);
   setTimeout(()=>{const el=e.target.closest('.day-task,.slot-task,.m-chip,.cat-task-row,.cat-habit-row,.wk-task-block,.day-task-block');if(el)el.classList.add('dragging-task');},0);
-  e.stopPropagation();
+  e.stopPropagation();_setDragActive(true);
 }
-function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null}
+function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null;_setDragActive(false)}
 function onDO(e){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
 function onDL(e){e.currentTarget.classList.remove('drag-over')}
 function snapFlash(el){if(!el)return;el.classList.remove('snap-flash');void el.offsetWidth;el.classList.add('snap-flash');setTimeout(()=>el.classList.remove('snap-flash'),600)}
@@ -4183,10 +4186,12 @@ function onSuggDragStart(e,ci,ii){
   e.dataTransfer.effectAllowed='copy';
   e.dataTransfer.setData('text/plain','sugg');
   setTimeout(()=>e.target.classList.add('dragging'),0);
+  _setDragActive(true);
 }
 function onSuggDragEnd(e){
   e.target.classList.remove('dragging');
   suggDragId=null;
+  _setDragActive(false);
 }
 
 // Patch onDO, onDropDate, onDropSlot to also handle suggDragId

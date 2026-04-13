@@ -820,6 +820,18 @@ header{
 .day-slot.snap-flash{animation:snapFlash .5s ease-out}
 .day-slot-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0;pointer-events:none}
 
+/* During active drag: expand interior slots so they become valid drop targets */
+.drag-active .day-slot-interior{
+  min-height:32px!important;height:auto!important;pointer-events:all;
+  border-bottom:1px dashed var(--border);opacity:.6;
+  transition:min-height .15s;
+}
+.drag-active .day-lbl-interior{
+  min-height:32px!important;height:auto!important;overflow:visible;
+  font-size:10px;color:var(--text3);padding:4px 8px 0 0;
+  display:flex;align-items:flex-start;justify-content:flex-end;
+}
+
 /* Wrapper around each task block + its resize handle.
    position:relative so the handle can be absolutely positioned outside overflow:hidden.
    The slot (flex column) sizes to fit this wrapper, which sizes to fit the block. */
@@ -920,6 +932,8 @@ header{
 .day-overlay-narrow .dur-stepper{border-color:var(--border)}
 .day-overlay-narrow .dur-step-btn{opacity:1;width:16px;height:16px;font-size:10px;background:var(--surface2)}
 .day-overlay-narrow .day-task-dur-pill{font-size:8px;padding:0 3px}
+.day-overlay-narrow .day-add-sub-btn{width:16px;height:16px;font-size:10px;opacity:1}
+.day-overlay-xnarrow .day-add-sub-btn{width:14px;height:14px;font-size:9px}
 /* Week view narrow columns */
 .wk-task-narrow{
   padding:2px 3px 4px!important;border-left-width:2px!important;
