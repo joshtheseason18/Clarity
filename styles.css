@@ -782,19 +782,6 @@ header{
 .day-time-lbl.half-lbl{border-bottom:1px dashed var(--surface3)}
 .day-lbl-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0}
 /* Ghost label: on-the-hour ticks inside a multi-slot task — visible but subordinate */
-.day-lbl-ghost{
-  min-height:0!important;
-  height:24px!important; /* just enough to show the time */
-  overflow:hidden;
-  font-size:10px!important;
-  color:var(--text3)!important;
-  font-weight:500!important;
-  opacity:.55;
-  border-right:1px dashed var(--border)!important; /* lighter than the solid border */
-  padding:4px 10px 0 0;
-  align-items:flex-start;
-}
-
 /* Slot: in-flow container.
    Empty slots: min-height from CSS (76px/64px mobile) — always consistent.
    Task slots: the task block's inline min-height drives the row height via flex.
@@ -814,13 +801,6 @@ header{
 .day-slot.drag-over{background:var(--accent-pale)!important;outline:1px dashed var(--accent)}
 .day-slot.snap-flash{animation:snapFlash .5s ease-out}
 .day-slot-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0;pointer-events:none}
-/* Ghost slot: on-the-hour interior slots that are clickable for adding tasks */
-.day-slot-ghost{
-  min-height:0!important;height:24px!important;
-  overflow:hidden;border:none;padding:0;
-  cursor:pointer;transition:background .12s;
-}
-.day-slot-ghost:hover{background:var(--accent-pale)}
 
 /* Wrapper around each task block + its resize handle.
    position:relative so the handle can be absolutely positioned outside overflow:hidden.
@@ -836,8 +816,8 @@ header{
 /* ── Absolute task blocks (week only now; day blocks are in-flow) ── */
 .wk-day-col{position:relative}
 .wk-task-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:2}
-.wk-routine-band{position:absolute;left:0;right:0;opacity:.15;border-radius:3px;pointer-events:none;z-index:0}
-.wk-routine-lbl{position:absolute;top:2px;left:3px;font-size:9px;font-weight:600;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 6px)}
+.wk-routine-band{position:absolute;left:0;right:0;border-radius:3px;pointer-events:none;z-index:0}
+.wk-routine-lbl{position:absolute;top:2px;left:3px;font-size:10px;font-weight:700;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 6px)}
 .wk-task-block{
   position:absolute;left:2px;right:2px;
   border-radius:4px;border-left:3px solid var(--accent);
@@ -1512,7 +1492,7 @@ header{
 .day-empty-icon{font-size:36px;margin-bottom:8px;opacity:.7}
 .day-empty-text{font-size:13px;color:var(--text3);line-height:1.6;font-weight:400}
 .routine-slot-label{
-  font-size:11px;font-weight:600;opacity:.55;padding:2px 6px;
+  font-size:12px;font-weight:700;opacity:.75;padding:2px 8px;
   display:flex;align-items:center;gap:5px;pointer-events:none;
   letter-spacing:.2px;
 }
@@ -1691,11 +1671,14 @@ header{
 
 /* ══ MY ROUTINE ═══════════════════════════════════ */
 .routine-block{
-  display:flex;align-items:center;gap:6px;padding:7px 10px;
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
   background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-  margin-bottom:5px;font-size:11px;
+  margin-bottom:6px;font-size:12px;
 }
-.routine-block-label{flex:1;font-weight:500;color:var(--text)}
+.routine-block-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text2)}
+.routine-block-info{flex:1;min-width:0}
+.routine-block-label{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.routine-block-meta{font-size:10px;color:var(--text3);margin-top:2px}
 .routine-block-time{font-size:10px;color:var(--text2)}
 .routine-block-del{
   background:none;border:none;cursor:pointer;color:var(--text3);

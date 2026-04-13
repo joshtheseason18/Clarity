@@ -1043,7 +1043,7 @@ function renderWeek(){
       const topPx=(sh*60+sm)/30*WK_SLOT_H_R;
       const hPx=(eh*60+em)/30*WK_SLOT_H_R-topPx;
       const rName=esc(b.customName||rt.label);
-      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}">
+      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}22">
         <span class="wk-routine-lbl" style="color:${rt.color}">${rName}</span>
       </div>`;
     });
@@ -1253,20 +1253,10 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — collapsed to ghost labels, UNLESS they contain a task
+    // Interior slots — fully collapsed (parent slot's min-height handles visual span)
     if(interiorSlots.has(sk2)&&!tasksHere.length){
-      const isInteriorHalfHour=s.m===30;
-      if(!isInteriorHalfHour){
-        // On-the-hour ghost: show time label + clickable slot (so users can add tasks inside events)
-        html+=`<div class="day-time-lbl day-lbl-ghost">${fmtT(sk2)}</div>
-               <div class="day-slot day-slot-ghost" data-time="${sk2}"
-                 onclick="onDaySlot('${key}','${sk2}',event)"
-                 ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
-                 ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
-      } else {
-        html+=`<div class="day-time-lbl day-lbl-interior"></div>
-               <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
-      }
+      html+=`<div class="day-time-lbl day-lbl-interior"></div>
+             <div class="day-slot day-slot-interior" data-time="${sk2}"></div>`;
       return;
     }
 
@@ -1344,6 +1334,16 @@ function renderDay(){
         const cc=isEvent?eventColor(t.category):catColor(t.category);
         const isDone=t.done||(t.doneOverrides||[]).includes(idate);
         const subs=t.subtasks||[];
+        const subsDone=subs.filter(s=>s.done).length;
+        const subsTotal=subs.length;
+
+        // Time range badge
+        let timeRB='';
+        if(t.time){
+          const[th2,tm2]=t.time.split(':').map(Number);
+          const endMins2=(th2*60+tm2)+dur;
+          timeRB=`<span class="day-time-range">${fmtT(t.time)} – ${fmtT(pad(Math.floor(endMins2/60)%24)+':'+pad(endMins2%60))}</span>`;
+        }
 
         let blockHtml;
         const resizeH=`<div class="task-resize-handle" data-rid="${t.id}" style="position:absolute;bottom:0;left:8px;right:6px;top:auto" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
@@ -1354,11 +1354,14 @@ function renderDay(){
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
+              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+              ${timeRB}
             </div>
-            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · ${IC_PIN} ${esc(t.location)}`:''}${t.recur?' ↻':''}</div>
-            ${subs.length?`<div class="day-task-divider"></div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+            ${dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?' ↻':''}</div>`:''}
+            ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
           </div>${resizeH}`;
         } else {
+          const focusPill2=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
           blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="border-left-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:6px"
@@ -1366,10 +1369,16 @@ function renderDay(){
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
+              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
               ${t.recur?`<span class="recur-icon">↻</span>`:''}
+              ${timeRB}
             </div>
-            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span></div>
-            ${subs.length?`<div class="day-task-divider"></div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+            ${dur>15?`<div class="day-task-meta-row">
+              <span class="day-task-dur-pill">${durLabel(dur)}</span>
+              ${focusPill2}
+              ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
+            </div>`:''}
+            ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
           </div>${resizeH}`;
         }
 
@@ -1614,13 +1623,12 @@ function renderRoutineList(){
     const daysStr=b.days.map(d=>dayLabels[d]).join(' ');
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
     const isWindow=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
-    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:600;font-size:9px">WINDOW</span>':'<span style="opacity:.5;font-size:9px">BLOCK</span>';
+    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:700;font-size:9px;letter-spacing:.3px">WINDOW</span>':'<span style="color:var(--text3);font-weight:600;font-size:9px;letter-spacing:.3px">BLOCK</span>';
     return`<div class="routine-block" style="border-left:3px solid ${rt.color}">
-      ${rt.icon()}
-      <div class="routine-block-label">${esc(b.customName||rt.label)}</div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-        <div class="routine-block-time">${fmtT(b.start)} – ${fmtT(b.end)}</div>
-        <div style="font-size:8px;letter-spacing:.5px">${modeLabel} · ${daysStr}</div>
+      <div class="routine-block-icon">${rt.icon()}</div>
+      <div class="routine-block-info">
+        <div class="routine-block-label">${esc(b.customName||rt.label)}</div>
+        <div class="routine-block-meta">${fmtT(b.start)} – ${fmtT(b.end)} · ${daysStr} · ${modeLabel}</div>
       </div>
       <button class="routine-block-del" onclick="delRoutine(${i})">✕</button>
     </div>`;
