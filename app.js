@@ -1306,7 +1306,7 @@ function renderDay(){
       const msg=maxCols>=4
         ?`You have ${maxCols} tasks overlapping — that's hard to read! Try using subtasks to group related items under one task.`
         :`${maxCols} tasks overlap at the same time. Consider using subtasks to keep things organized.`;
-      setTimeout(()=>showWarnToast(msg),300);
+      setTimeout(()=>showWarnToast(msg,true),300);
     }
     if(maxCols<3)_overlapWarnShown=false;
   }
@@ -1537,6 +1537,8 @@ function renderDay(){
         // Find the last visible slot within this routine's range
         const[eH,eM]=b.end.split(':').map(Number);
         const endMins3=eH*60+eM;
+        const[sH,sM]=b.start.split(':').map(Number);
+        const startMins3=sH*60+sM;
         let endSlot=null;
         for(let mm=endMins3-30;mm>=0;mm-=30){
           const sk3=pad(Math.floor(mm/60))+':'+pad(mm%60);
@@ -1547,19 +1549,29 @@ function renderDay(){
 
         const topPx2=startSlot.offsetTop;
         const bottomPx2=endSlot.offsetTop+endSlot.offsetHeight;
-        const hPx2=bottomPx2-topPx2;
+        // Use MAX of DOM measurement and time-proportional height
+        // This prevents collapsed interior slots from squishing the container
+        const durationSlots=Math.ceil((endMins3-startMins3)/30);
+        const timeH=durationSlots*DAY_SLOT_H;
+        const domH=bottomPx2-topPx2;
+        const hPx2=Math.max(domH,timeH);
         if(hPx2<=0)return;
 
+        // ── Container frame (z-index 1, behind tasks) ──
         const container=document.createElement('div');
         container.className='routine-container';
         container.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;--rc-bg:${rtC.color}06;top:${topPx2}px;height:${hPx2}px;left:${lblW2}px;right:0`;
+        tl.appendChild(container);
 
+        // ── Floating header pill (z-index 5, above tasks) ──
         const rName2=esc(b.customName||rtC.label);
         const badgeCls=isW?'window':'block';
         const badgeText=isW?'Window':'Block';
-        container.innerHTML=`<div class="routine-container-hdr"><span class="routine-container-dot" style="background:${rtC.color}"></span><span class="routine-container-name">${rName2}</span><span class="routine-container-badge ${badgeCls}">${badgeText}</span></div>`;
-
-        tl.appendChild(container);
+        const hdr=document.createElement('div');
+        hdr.className='routine-container-hdr-float';
+        hdr.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;top:${topPx2}px;left:${lblW2+4}px`;
+        hdr.innerHTML=`<span class="routine-container-dot" style="background:${rtC.color}"></span><span class="routine-container-name">${rName2}</span><span class="routine-container-badge ${badgeCls}">${badgeText}</span>`;
+        tl.appendChild(hdr);
       });
     });
   }
@@ -2852,7 +2864,7 @@ function duplicateInSlot(dateKey, time, taskName, excludeId){
   );
 }
 
-function showWarnToast(msg){
+function showWarnToast(msg,persist){
   let el=document.getElementById('slotWarnToast');
   if(!el){
     el=document.createElement('div');
@@ -2860,10 +2872,21 @@ function showWarnToast(msg){
     el.className='slot-warn-toast';
     document.body.appendChild(el);
   }
-  el.textContent=msg;
   clearTimeout(el._t);
-  el.classList.add('show');
-  el._t=setTimeout(()=>el.classList.remove('show'),2800);
+  // Build content with optional X button for persistent warnings
+  if(persist){
+    el.innerHTML=`<span class="warn-toast-msg">${msg}</span><button class="warn-toast-x" onclick="dismissWarnToast()" title="Dismiss">&times;</button>`;
+    el.classList.add('show','persistent');
+  } else {
+    el.innerHTML=`<span class="warn-toast-msg">${msg}</span>`;
+    el.classList.remove('persistent');
+    el.classList.add('show');
+    el._t=setTimeout(()=>el.classList.remove('show'),2800);
+  }
+}
+function dismissWarnToast(){
+  const el=document.getElementById('slotWarnToast');
+  if(el){el.classList.remove('show','persistent');}
 }
 
 // ══ RECUR RESCHEDULE DIALOG ═══════════════════
