@@ -386,6 +386,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .day-subtask.done .day-subtask-name{
   text-decoration:line-through;opacity:.4;
 }
+/* Subtask drag grip */
+.sub-grip{
+  font-size:10px;color:var(--text3);cursor:grab;opacity:0;transition:opacity .12s;
+  user-select:none;flex-shrink:0;letter-spacing:-2px;padding:0 2px;
+}
+.day-subtask:hover .sub-grip{opacity:.6}
+.sub-grip:active{cursor:grabbing}
+.day-subtask.sub-dragging{opacity:.3}
+.day-subtask.sub-drop-target{
+  box-shadow:0 -2px 0 0 var(--accent);
+}
+.event-block .sub-grip{color:rgba(255,255,255,.4)}
+.event-block .day-subtask:hover .sub-grip{opacity:.7}
 .day-subtask-dur{font-size:9px;color:var(--text3);flex-shrink:0}
 
 /* Event block subtasks (white text) */
@@ -394,6 +407,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .event-block .day-subtask-check.checked{background:rgba(255,255,255,.9);border-color:rgba(255,255,255,.9)}
 .event-block .day-subtask-check.checked::after{color:var(--accent)}
 .event-block .day-subtask-name{color:rgba(255,255,255,.85)}
+.event-block .day-subtask-name:focus{
+  color:var(--text);background:var(--surface);
+  box-shadow:0 0 0 1.5px var(--accent);
+}
+.event-block .day-subtask-name:empty::before{color:rgba(255,255,255,.4)}
 .event-block .day-subtask.done .day-subtask-name{color:rgba(255,255,255,.4)}
 
 /* ══════════════════════════════════════════
@@ -915,6 +933,28 @@ header{
   background:var(--surface2);padding:1px 6px;border-radius:4px;
   flex-shrink:0;
 }
+/* Duration stepper: − [30m] + */
+.dur-stepper{
+  display:inline-flex;align-items:center;gap:0;flex-shrink:0;
+  border-radius:5px;overflow:hidden;
+  border:1px solid transparent;transition:border-color .15s;
+}
+.dur-stepper:hover{border-color:var(--border2)}
+.dur-step-btn{
+  width:22px;height:20px;border:none;background:none;
+  color:var(--text3);font-size:12px;font-weight:500;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .12s;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;padding:0;
+}
+.dur-stepper:hover .dur-step-btn{opacity:1;background:var(--surface2)}
+.dur-step-btn:hover{color:var(--accent);background:var(--accent-pale)!important}
+.dur-step-btn:active{transform:scale(.9)}
+.event-block .dur-stepper:hover{border-color:rgba(255,255,255,.3)}
+.event-block .dur-step-btn{color:rgba(255,255,255,.5)}
+.event-block .dur-stepper:hover .dur-step-btn{opacity:1;background:rgba(255,255,255,.15)}
+.event-block .dur-step-btn:hover{color:#fff;background:rgba(255,255,255,.25)!important}
+.event-block .day-task-dur-pill{background:rgba(255,255,255,.2);color:rgba(255,255,255,.9)}
 /* Focus pill — replaces the old inline Focus button */
 .day-focus-pill{
   display:inline-flex;align-items:center;gap:3px;
@@ -1744,23 +1784,43 @@ header{
   text-align:center;line-height:1.5;
 }
 
-/* Routine card list */
-.routine-card{
-  display:flex;align-items:center;gap:10px;padding:10px 12px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:10px;margin-bottom:6px;cursor:pointer;
-  transition:box-shadow .15s,border-color .15s;
+/* ── Visual strip ── */
+.rt-strip-section{
+  background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px;
 }
-.routine-card:hover{border-color:var(--accent);box-shadow:0 2px 12px var(--shadow-color)}
-.routine-card-color{
-  width:4px;align-self:stretch;border-radius:99px;flex-shrink:0;
+.rt-strip-row{margin-bottom:8px}
+.rt-strip-row:last-of-type{margin-bottom:0}
+.rt-strip-label{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.3px;text-transform:uppercase;margin-bottom:3px}
+.rt-strip{position:relative;height:20px;border-radius:4px;background:var(--surface);overflow:visible}
+.rt-strip-block{
+  position:absolute;top:1px;height:18px;border-radius:3px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
 }
-.routine-card-body{flex:1;min-width:0}
-.routine-card-top{display:flex;align-items:center;gap:6px}
-.routine-card-label{
-  font-size:13px;font-weight:600;color:var(--text);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;
+.rt-strip-block span{font-size:7px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 3px}
+.rt-strip-times{display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-top:4px;padding:0 1px}
+
+/* ── Timeline list ── */
+.rt-tl-wrap{position:relative;padding-left:18px}
+.rt-tl-line{position:absolute;left:5px;top:8px;bottom:8px;width:1px;background:var(--border)}
+.rt-tl-item{
+  position:relative;display:flex;gap:10px;align-items:flex-start;
+  margin-bottom:10px;cursor:pointer;padding:4px 0;
+  border-radius:6px;transition:background .12s;
 }
+.rt-tl-item:last-child{margin-bottom:0}
+.rt-tl-item:hover{background:var(--surface2);margin-left:-4px;margin-right:-4px;padding-left:4px;padding-right:4px}
+.rt-tl-dot{
+  position:absolute;left:-18px;top:6px;width:9px;height:9px;
+  border-radius:50%;border:2px solid;background:var(--bg);flex-shrink:0;
+}
+.rt-tl-body{flex:1;min-width:0}
+.rt-tl-row1{display:flex;align-items:center;gap:6px}
+.rt-tl-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt-tl-row2{display:flex;align-items:center;gap:8px;margin-top:2px}
+.rt-tl-time{font-size:11px;color:var(--text2)}
+.rt-tl-days{display:flex;gap:0}
+.rt-tl-day{width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:var(--text3);opacity:.25}
+.rt-tl-day.on{opacity:1;color:var(--text2)}
 .routine-mode-badge{
   font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
   padding:2px 7px;border-radius:4px;flex-shrink:0;
@@ -1768,16 +1828,6 @@ header{
 .routine-mode-badge.window{color:var(--accent);background:var(--accent-pale)}
 .routine-mode-badge.block{color:var(--text3);background:var(--surface3)}
 [data-dark="true"] .routine-mode-badge.window{background:rgba(var(--accent-rgb),.15)}
-.routine-card-meta{
-  display:flex;align-items:center;gap:8px;margin-top:3px;
-  font-size:10px;color:var(--text3);
-}
-.routine-card-days-row{display:flex;gap:1px}
-.routine-card-day{
-  width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;
-  font-size:8px;font-weight:700;color:var(--text3);opacity:.35;
-}
-.routine-card-day.on{opacity:1;color:var(--text2)}
 .routine-card-del{
   background:none;border:none;cursor:pointer;color:var(--text3);
   padding:4px;border-radius:6px;transition:all .12s;flex-shrink:0;
@@ -2023,8 +2073,9 @@ header{
   .routine-header{flex-wrap:wrap;gap:8px}
   .routine-intro-title{font-size:14px}
   .routine-intro-desc{font-size:10px}
-  .routine-card{padding:8px 10px}
-  .routine-card-label{font-size:12px}
+  .rt-tl-name{font-size:12px}
+  .rt-tl-time{font-size:10px}
+  .rt-strip-section{padding:8px 10px}
 }
 
 /* ══════════════════════════════════════════
@@ -2036,6 +2087,15 @@ header{
   /* + subtask button on task blocks */
   .day-add-sub-btn{opacity:.7}
   .day-add-sub-btn::after{display:none}
+
+  /* Duration stepper buttons always visible on touch */
+  .dur-step-btn{opacity:1;background:var(--surface2)}
+  .dur-stepper{border-color:var(--border)}
+  .event-block .dur-step-btn{opacity:1;background:rgba(255,255,255,.15)}
+  .event-block .dur-stepper{border-color:rgba(255,255,255,.2)}
+
+  /* Subtask grip always visible on touch */
+  .sub-grip{opacity:.5}
 
   /* ✕ delete button on attachment items in modal */
   .attach-item-del{opacity:.6}
