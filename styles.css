@@ -59,8 +59,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 /* Splash greeting for returning users */
 .splash-greeting{
-  font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);
-  margin-top:18px;animation:splashFadeUp .5s ease 1s both;
+  font-family:'DM Serif Display',serif;font-size:24px;color:var(--text);
+  margin-top:20px;animation:splashFadeUp .5s ease 1s both;
 }
 
 /* ══ GUIDED TOUR (contextual onboarding) ═════════ */
@@ -426,12 +426,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 /* ── Splash dot ── */
 .splash-logo-dot{
-  width:18px;height:18px;border-radius:50%;background:var(--accent);flex-shrink:0;
+  width:24px;height:24px;border-radius:50%;background:var(--accent);flex-shrink:0;
   animation:splashDotPulse 1.4s ease-in-out infinite;
 }
 @keyframes splashDotPulse{
   0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(var(--accent-rgb),.35)}
-  50%{transform:scale(1.18);box-shadow:0 0 0 9px rgba(var(--accent-rgb),0)}
+  50%{transform:scale(1.18);box-shadow:0 0 0 12px rgba(var(--accent-rgb),0)}
 }
 
 /* header logo stacked layout */
@@ -454,11 +454,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   letter-spacing:-.2px;transition:color .3s;line-height:1;
 }
 
-.splash-logo-wrap{display:flex;align-items:center;gap:10px;animation:splashLogoIn .6s cubic-bezier(.34,1.56,.64,1) .3s both}
-.splash-logo-text{font-family:'DM Serif Display',serif;font-size:42px;font-weight:400;letter-spacing:-.5px;color:var(--text)}
-.splash-tagline{font-size:15px;color:var(--text2);margin-top:14px;font-weight:400;letter-spacing:.1px;animation:splashFadeUp .6s ease .6s both}
+.splash-logo-wrap{display:flex;align-items:center;gap:14px;animation:splashLogoIn .6s cubic-bezier(.34,1.56,.64,1) .3s both}
+.splash-logo-text{font-family:'DM Serif Display',serif;font-size:56px;font-weight:400;letter-spacing:-.5px;color:var(--text)}
+.splash-tagline{font-size:17px;color:var(--text2);margin-top:16px;font-weight:400;letter-spacing:.1px;animation:splashFadeUp .6s ease .6s both}
 .splash-subline{
-  font-size:15px;color:var(--text2);margin-top:10px;font-weight:500;
+  font-size:16px;color:var(--text2);margin-top:10px;font-weight:500;
   letter-spacing:.1px;min-height:24px;font-style:italic;
   animation:splashFadeUp .5s ease 1.3s both;
 }
@@ -688,11 +688,15 @@ header{
 .ym-day.other{opacity:.4}
 .ym-day.today{background:var(--accent);color:#fff;border-radius:50%;font-weight:700;font-size:10px}
 .ym-day.has-tasks{color:var(--text);font-weight:500}
-.ym-dot{width:3px;height:3px;border-radius:50%;position:absolute;bottom:0px;left:50%;transform:translateX(-50%)}
+.ym-dot{width:4px;height:4px;border-radius:50%;position:absolute;bottom:2px;left:50%;transform:translateX(-50%)}
 .ym-dot.d1{background:rgba(var(--accent-rgb),.3)}
 .ym-dot.d2{background:rgba(var(--accent-rgb),.55)}
 .ym-dot.d3{background:rgba(var(--accent-rgb),.75)}
 .ym-dot.d4{background:var(--accent)}
+/* Event indicator dot — uses a complementary offset from accent */
+.ym-day.has-event::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent-dim);position:absolute;bottom:2px;left:calc(50% + 4px)}
+/* On today circle: event dot should be white to contrast against accent bg */
+.ym-day.today.has-event::after{background:rgba(255,255,255,.7);bottom:3px}
 
 /* ══════════════════════════════════════════
    MONTH VIEW
@@ -1163,6 +1167,7 @@ header{
 .side-panel.active{display:flex}
 
 .bd-wrap{padding:10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.bd-guide{font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px;padding:0 2px}
 /* Auto-expanding textareas */
 .auto-expand{resize:none;overflow:hidden;min-height:36px}
 .bd-ta{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);background:var(--bg);outline:none;resize:none;overflow:hidden;min-height:58px;transition:border-color .15s,box-shadow .15s;line-height:1.5}
@@ -1332,8 +1337,7 @@ header{
 /* ══ YEAR COUNT PILLS ════════════════════════ */
 .ym-counts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .ym-count-tasks{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.12);color:var(--accent)}
-.ym-count-events{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(139,92,246,.12);color:#8b5cf6}
-.ym-day.has-event::after{content:'';width:4px;height:4px;border-radius:50%;background:#8b5cf6;position:absolute;bottom:1px;left:calc(50% + 4px)}
+.ym-count-events{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.08);color:var(--accent-dim)}
 
 /* ══ SCHEDULE TAB TOGGLE ════════════════════ */
 .sched-seg-wrap{
