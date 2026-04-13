@@ -324,7 +324,7 @@ function renderUpcomingEvents(){
         <span class="upcoming-item-day">${dayLabel}</span>
         <span class="upcoming-item-time">${t.time?fmtT(t.time):t.allday?'All Day':''}</span>
         <span class="upcoming-item-name">${esc(t.name)}</span>
-        ${t.location?`<span class="upcoming-item-loc">📍 ${esc(t.location)}</span>`:''}
+        ${t.location?`<span class="upcoming-item-loc">${IC_PIN} ${esc(t.location)}</span>`:''}
       </div>`;
     });
     if(upcoming.length>5)html+=`<div style="text-align:center;font-size:10px;color:var(--text3);padding:4px">+${upcoming.length-5} more</div>`;
@@ -410,6 +410,14 @@ const MONTHS_S=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const DAYS_S=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DLONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const CAT_COLORS=['#3b82f6','#8b5cf6','#10b981','#ec4899','#14b8a6','#f59e0b','#ef4444','#f97316','#06b6d4','#84cc16','#a855f7','#64748b'];
+
+// ── Inline SVG icons (replace emojis) ──
+const IC_PIN='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M8 1C5.2 1 3 3.1 3 5.8 3 9.5 8 15 8 15s5-5.5 5-9.2C13 3.1 10.8 1 8 1z" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="5.8" r="1.8" fill="currentColor"/></svg>';
+const IC_CLIP='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M7 3.5V11a2 2 0 004 0V4a1 1 0 00-2 0v6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+const IC_LINK='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M6.5 9.5l3-3M5 10l-1.4 1.4a2 2 0 002.8 2.8L8 12.8M8 3.2l1.6-1.4a2 2 0 012.8 2.8L11 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+const IC_FILE='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M4 2h5l3 3v9H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 2v3h3" stroke="currentColor" stroke-width="1.3"/></svg>';
+const IC_BREAK='<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".3"/><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg>';
+const IC_REST='<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 3 7 3 12s4 9 9 9 9-4 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M16 6l2-2M18 8l2-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg>';
 
 // ══ STATE ═══════════════════════════════════
 let curView='day';
@@ -505,7 +513,7 @@ function eventRow(t,isPast=false){
       <div class="cat-task-meta">
         ${dateLabel?`<span>${dateLabel}</span>`:''}
         ${timeLabel?`<span style="font-weight:600;color:var(--accent)">${timeLabel}</span>`:''}
-        ${t.location?`<span>📍 ${esc(t.location)}</span>`:''}
+        ${t.location?`<span>${IC_PIN} ${esc(t.location)}</span>`:''}
         ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${catById(t.category)?.name||t.category}</span>`:''}
       </div>
     </div>
@@ -619,6 +627,7 @@ function setWeekStart(day){
 function recurLbl(t){if(!t.recur)return'';return`Every ${t.recurN} ${t.recurU}${t.recurN>1?'s':''}`}
 function catById(id){return categories.find(c=>c.id===id)}
 function catColor(id){const c=catById(id);return c?c.color:'var(--border2)'}
+function eventColor(id){const c=catById(id);return c?c.color:'var(--accent)'}
 function hexToRgb(hex){
   if(!hex||!hex.startsWith('#'))return null;
   const h=hex.replace('#','');
@@ -845,8 +854,8 @@ function renderMonth(){
       ...dt.filter(t=>(t.type||'task')!=='event').sort((a,b)=>(priOrder[a.priority]||3)-(priOrder[b.priority]||3))
     ].slice(0,5);
     let chips=sorted.map(t=>{
-      const cc=catColor(t.category);
       const isEvent=(t.type||'task')==='event';
+      const cc=isEvent?eventColor(t.category):catColor(t.category);
       const isAllday=isEvent&&t.allday;
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||key);
       let c='m-chip'+(isDone?' done':'')+(isEvent?' m-chip-event':'')+(isAllday?' m-chip-allday':'');
@@ -934,7 +943,7 @@ function renderWeek(){
     days.forEach(d=>{
       const k=dk(d);
       const pills=alldayTasks[k].map(t=>{
-        const cc=catColor(t.category);
+        const cc=eventColor(t.category);
         return`<div class="wk-allday-pill" style="background:${cc};color:#fff" onclick="openEdit('${t.id}','${k}',event)" title="${esc(t.name)} · All Day">${esc(t.name)}</div>`;
       }).join('');
       alldayRowHtml+=`<div class="wk-allday-cell">${pills}</div>`;
@@ -992,9 +1001,9 @@ function renderWeek(){
       const topPx=(th*60+tm)/30*WK_SLOT_H;
       const dur=t.duration||30;
       const hPx=Math.max(14,dur/30*WK_SLOT_H-1);
-      const cc=catColor(t.category);
-      const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       const isEvent=(t.type||'task')==='event';
+      const cc=isEvent?eventColor(t.category):catColor(t.category);
+      const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       // Column positioning from overlap layout
       const ci=wkColMap.get(t.id)||{col:0,total:1};
       let leftVal='2px',rightVal='2px';
@@ -1051,9 +1060,9 @@ function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-che
 function buildDayTaskBlock(t, key, conflictIds){
   const idate=t._instanceDate||key;
   const dur=t.duration||30;
-  const cc=catColor(t.category);
-  const isDone=t.done||(t.doneOverrides||[]).includes(idate);
   const isEvent=(t.type||'task')==='event';
+  const cc=isEvent?eventColor(t.category):catColor(t.category);
+  const isDone=t.done||(t.doneOverrides||[]).includes(idate);
   const subs=t.subtasks||[];
   const subsDone=subs.filter(s=>s.done).length;
   const subsTotal=subs.length;
@@ -1088,8 +1097,8 @@ function buildDayTaskBlock(t, key, conflictIds){
           <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
           ${timeRangeBadge}
         </div>
-        ${dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">📍 ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
-        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">📎 ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗 Link</a>`:''}
+        ${dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">${IC_CLIP} ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK} Link</a>`:''}
         ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
         ${conflictBadge}
       </div>
@@ -1116,7 +1125,7 @@ function buildDayTaskBlock(t, key, conflictIds){
         <span class="day-task-dur-pill">${durLabel(dur)}</span>
         ${focusPill}
         ${t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
-        ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">📎 ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">🔗</a>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
         ${conflictBadge}
       </div>`:''}
       ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
@@ -1142,9 +1151,9 @@ function renderDay(){
   if(alldayBar){
     if(_alldayTasks.length){
       alldayBar.innerHTML=_alldayTasks.map(t=>{
-        const cc=catColor(t.category);
+        const cc=eventColor(t.category);
         const isDone=t.done;
-        return`<span class="allday-pill${isDone?' done':''}" style="background:${cc}30;border-color:${cc};color:${cc}"
+        return`<span class="allday-pill${isDone?' done':''}" style="background:${cc};border-color:${cc};color:#fff"
           onclick="openEdit('${t.id}','${key}',event)" title="Click to edit">
           <span class="allday-pill-type">Event</span>
           ${esc(t.name)}${t.recur?' ↻':''} · All Day
@@ -1331,9 +1340,9 @@ function renderDay(){
         }
 
         const idate=t._instanceDate||key;
-        const cc=catColor(t.category);
-        const isDone=t.done||(t.doneOverrides||[]).includes(idate);
         const isEvent=(t.type||'task')==='event';
+        const cc=isEvent?eventColor(t.category):catColor(t.category);
+        const isDone=t.done||(t.doneOverrides||[]).includes(idate);
         const subs=t.subtasks||[];
 
         let blockHtml;
@@ -1346,7 +1355,7 @@ function renderDay(){
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
             </div>
-            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · 📍 ${esc(t.location)}`:''}${t.recur?' ↻':''}</div>
+            <div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · ${IC_PIN} ${esc(t.location)}`:''}${t.recur?' ↻':''}</div>
             ${subs.length?`<div class="day-task-divider"></div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name">${esc(s.name)}</span></div>`).join('')}</div>`:''}
           </div>${resizeH}`;
         } else {
@@ -1837,7 +1846,7 @@ function onFocusComplete(){
   const breakMins=isLongBreak?15:5;
   document.getElementById('focusActive').innerHTML=`
     <div class="focus-break-msg">
-      <div class="focus-break-msg-icon">${isLongBreak?'🌿':'☕'}</div>
+      <div class="focus-break-msg-icon">${isLongBreak?'<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="currentColor" stroke-width="1.5" opacity=".4"/><path d="M9 12c1-2 2-3 3-3s2 1 3 3-2 3-3 3-2-1-3-3z" fill="currentColor" opacity=".3"/><path d="M8 8c1.5 0 2 1 2 2M14 8c-1.5 0-2 1-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>':'<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M16 11h1.5a2.5 2.5 0 010 5H16" stroke="currentColor" stroke-width="1.5"/><path d="M7 5c0-1 .5-2 1.5-2M10 5c0-1 .5-2 1.5-2M13 5c0-1 .5-2 1.5-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".4"/></svg>'}</div>
       <div class="focus-break-msg-text">${isLongBreak?'Long break — 15 min':'Nice work! Take a 5 min break'}</div>
       <div class="focus-break-msg-sub">${t?'"'+t.name+'" marked complete':'Session finished'}</div>
     </div>
@@ -3120,7 +3129,7 @@ function renderModalAttachments(){
   const list=document.getElementById('fAttachList');
   if(!_modalAttachments.length){list.innerHTML='';updateDetailBadges();return;}
   list.innerHTML=_modalAttachments.map((a,i)=>{
-    const icon=a.type==='file'?'📄':'🔗';
+    const icon=a.type==='file'?IC_FILE:IC_LINK;
     const display=a.type==='link'?a.url.replace(/^https?:\/\//,'').slice(0,40):a.name;
     return`<div class="attach-item">
       <span class="attach-item-icon">${icon}</span>
@@ -3785,7 +3794,7 @@ const SUGGESTIONS=[
     ]
   },
   {
-    category:'🌿 Self-Care',
+    category:'Self-Care',
     color:'#ec4899',
     items:[
       {name:'Skincare routine',sub:'Morning and evening care',priority:'low'},

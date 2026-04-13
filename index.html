@@ -521,7 +521,7 @@
         <div class="attach-add-row">
           <input class="fi attach-add-input" id="fAttachInput" placeholder="Paste a link…" onkeydown="if(event.key==='Enter'){event.preventDefault();addAttachment()}">
           <button class="attach-add-btn" onclick="addAttachment()" title="Add link">+</button>
-          <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)">📎</button>
+          <button class="attach-file-btn" onclick="showToast('File uploads available after sign-up')" title="Upload file (requires account)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:-2px"><path d="M7 3.5V11a2 2 0 004 0V4a1 1 0 00-2 0v6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
         </div>
       </div>
       <!-- Subtasks panel -->
@@ -832,7 +832,7 @@
     </div>
     <!-- Preference chips -->
     <div class="ai-pref-row">
-      <button class="ai-pref-chip on" id="aiPrefBreaks" onclick="this.classList.toggle('on')">☕ Include breaks</button>
+      <button class="ai-pref-chip on" id="aiPrefBreaks" onclick="this.classList.toggle('on')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><rect x="2" y="5" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M10 7h1.5a1.5 1.5 0 010 3H10" stroke="currentColor" stroke-width="1.2"/></svg> Include breaks</button>
       <button class="ai-pref-chip" id="aiPrefMorning" onclick="toggleAiPref(this,'morning')">🌅 Prioritize morning</button>
       <button class="ai-pref-chip" id="aiPrefAfternoon" onclick="toggleAiPref(this,'afternoon')">🌇 Prioritize afternoon</button>
     </div>
