@@ -112,7 +112,7 @@
         </div>
         <div class="toggle-row">
           <span class="toggle-label" style="font-size:12px">Weekly review on Sundays</span>
-          <button class="toggle-track on" id="wrapupAutoToggle" onclick="toggleWrapupAuto()">
+          <button class="toggle-track" id="wrapupAutoToggle" onclick="toggleWrapupAuto()">
             <div class="toggle-thumb"></div>
           </button>
         </div>
@@ -324,9 +324,15 @@
         </div>
         <!-- Routine area -->
         <div id="catRoutineArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5"><strong style="color:var(--text2)">Windows</strong> = Luclaro places tasks here. <strong style="color:var(--text2)">Blocks</strong> = protected, AI won't schedule over them.</div>
+          <!-- Routine intro + add button header -->
+          <div class="routine-header">
+            <div class="routine-intro">
+              <div class="routine-intro-title">My Routine</div>
+              <div class="routine-intro-desc">Tell Luclaro about your typical day. Mark time as a <strong>Window</strong> to let the AI schedule tasks there, or a <strong>Block</strong> to protect it.</div>
+            </div>
+            <button class="routine-add-btn-pill" id="routineAddToggle" onclick="toggleRoutineForm()">+ Add</button>
+          </div>
           <!-- Collapsible add/edit form -->
-          <button class="routine-add-toggle" id="routineAddToggle" onclick="toggleRoutineForm()">+ Add routine block</button>
           <div class="routine-form" id="routineForm" style="display:none">
             <div class="routine-form-title" id="routineFormTitle">New block</div>
             <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:12px;padding:7px 10px">
@@ -370,7 +376,7 @@
             </div>
           </div>
           <!-- Routine list -->
-          <div id="routineList" style="margin-top:8px"></div>
+          <div id="routineList" style="margin-top:10px"></div>
         </div>
       </div>
     </div>

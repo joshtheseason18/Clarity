@@ -1017,25 +1017,26 @@ function renderWeek(){
         leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
         rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
       }
+      const narrowCls=ci.total>=3?' wk-task-narrow':'';
       if(isEvent){
-        return`<div class="wk-task-block event-block" data-id="${t.id}"
+        return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <span class="wk-task-block-name">${esc(t.name)}</span>
-          ${dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
+          ${ci.total<=2&&dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
           <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
         </div>`;
       }
-      return`<div class="wk-task-block${isDone?' done-block':''}" data-id="${t.id}"
+      return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
         <div style="display:flex;align-items:center;gap:2px;min-width:0">
-          <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>
-          <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${t.recur?'<span class="recur-icon">↻</span>':''}
+          ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
+          <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${ci.total<=2&&t.recur?'<span class="recur-icon">↻</span>':''}
         </div>
-        ${dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
+        ${ci.total<=2&&dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
         <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
       </div>`;
     }).join('');
@@ -1093,7 +1094,7 @@ function buildDayTaskBlock(t, key, conflictIds){
 
   if(isEvent){
     return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
-      <div class="day-task-block event-block" data-id="${t.id}"
+      <div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
         style="background:${cc}"
         onclick="openEdit('${t.id}','${idate}',event)">
@@ -1115,7 +1116,7 @@ function buildDayTaskBlock(t, key, conflictIds){
   const focusPill=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
 
   return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
-    <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
+    <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
       style="border-left-color:${cc};background:${taskBlockBg(t.category)}"
       onclick="openEdit('${t.id}','${idate}',event)">
@@ -1351,43 +1352,46 @@ function renderDay(){
         }
 
         let blockHtml;
-        const resizeH=`<div class="task-resize-handle" data-rid="${t.id}" style="position:absolute;bottom:0;left:8px;right:6px;top:auto" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`;
+        const resizeH=ci.total<=3?`<div class="task-resize-handle" data-rid="${t.id}" style="position:absolute;bottom:0;left:8px;right:6px;top:auto" onmousedown="onResizeStart(event,'${t.id}','${idate}','day')"></div>`:'';
         if(isEvent){
-          blockHtml=`<div class="day-task-block event-block" data-id="${t.id}"
+          blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="background:${cc};height:100%;margin:0;border-radius:6px"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
-              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-              ${timeRB}
+              ${ci.total<=2?`<button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>`:''}
+              ${ci.total<=3?timeRB:''}
             </div>
-            ${dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?' ↻':''}</div>`:''}
-            ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+            ${ci.total<=3&&dur>15?`<div class="day-task-meta-row"><span class="day-task-dur-pill">${durLabel(dur)}</span>${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?' ↻':''}</div>`:''}
+            ${ci.total<=2&&subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr" style="color:rgba(255,255,255,.6)">SUBTASKS</span>${subsDone?`<span class="day-subtask-count" style="color:rgba(255,255,255,.5)">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
           </div>${resizeH}`;
         } else {
-          const focusPill2=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
-          blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}"
+          const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
+          blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="border-left-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:6px"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-              ${t.recur?`<span class="recur-icon">↻</span>`:''}
-              ${timeRB}
+              ${ci.total<=2?`<button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>`:''}
+              ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
+              ${ci.total<=3?timeRB:''}
             </div>
-            ${dur>15?`<div class="day-task-meta-row">
+            ${ci.total<=3&&dur>15?`<div class="day-task-meta-row">
               <span class="day-task-dur-pill">${durLabel(dur)}</span>
               ${focusPill2}
               ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
             </div>`:''}
-            ${subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
+            ${ci.total<=2&&subsTotal?`<div class="day-task-divider"></div><div class="day-subtask-hdr-row"><span class="day-subtask-hdr">SUBTASKS</span>${subsDone?`<span class="day-subtask-count">${subsDone}/${subsTotal}</span>`:''}</div><div class="day-subtask-list">${subs.map((s,si)=>`<div class="day-subtask${s.done?' done':''}"><div class="day-subtask-check${s.done?' checked':''}" onclick="event.stopPropagation();toggleSubtaskInline('${t.id}',${si})"></div><span class="day-subtask-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSubtaskInline('${t.id}',${si},this)" onkeydown="onSubtaskKeydown(event,'${t.id}',${si},this)">${esc(s.name)}</span></div>`).join('')}</div>`:''}
           </div>${resizeH}`;
         }
 
         const block=document.createElement('div');
+        block.setAttribute('data-cols',ci.total);
+        if(ci.total>=3)block.classList.add('day-overlay-narrow');
+        if(ci.total>=4)block.classList.add('day-overlay-xnarrow');
         block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow-y:auto;overflow-x:hidden`;
         block.innerHTML=blockHtml;
         overlay.appendChild(block);
@@ -1622,20 +1626,37 @@ function onRoutineTypeChange(){
 }
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
-  if(!routineBlocks.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);font-style:italic;padding:12px 0;text-align:center">No blocks yet — tap above to add your schedule.</div>';return;}
+  if(!routineBlocks.length){
+    el.innerHTML=`<div class="routine-empty">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="opacity:.35;margin-bottom:6px"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span>No routine blocks yet</span>
+      <span style="font-size:10px;color:var(--text3);margin-top:2px">Tap <strong>+ Add</strong> above to set up your schedule</span>
+    </div>`;
+    return;
+  }
   el.innerHTML=routineBlocks.map((b,i)=>{
     const dayLabels=['S','M','T','W','T','F','S'];
-    const daysStr=b.days.map(d=>dayLabels[d]).join(' ');
+    const daysStr=[0,1,2,3,4,5,6].map(d=>`<span class="routine-card-day${b.days.includes(d)?' on':''}">${dayLabels[d]}</span>`).join('');
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
     const isWindow=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
-    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:700">WINDOW</span>':'<span style="color:var(--text3)">BLOCK</span>';
-    return`<div class="routine-block" style="border-left:3px solid ${rt.color}" onclick="editRoutine(${i})">
-      <div class="routine-block-icon">${rt.icon()}</div>
-      <div class="routine-block-info">
-        <div class="routine-block-label">${esc(b.customName||rt.label)}</div>
-        <div class="routine-block-meta">${fmtT(b.start)} – ${fmtT(b.end)} · ${daysStr} · ${modeLabel}</div>
+    const modeLabel=isWindow
+      ?'<span class="routine-mode-badge window">Window</span>'
+      :'<span class="routine-mode-badge block">Block</span>';
+    return`<div class="routine-card" style="--routine-color:${rt.color}" onclick="editRoutine(${i})">
+      <div class="routine-card-color" style="background:${rt.color}"></div>
+      <div class="routine-card-body">
+        <div class="routine-card-top">
+          <span class="routine-card-label">${esc(b.customName||rt.label)}</span>
+          ${modeLabel}
+        </div>
+        <div class="routine-card-meta">
+          <span>${fmtT(b.start)} – ${fmtT(b.end)}</span>
+          <span class="routine-card-days-row">${daysStr}</span>
+        </div>
       </div>
-      <button class="routine-block-del" onclick="event.stopPropagation();delRoutine(${i})">✕</button>
+      <button class="routine-card-del" onclick="event.stopPropagation();delRoutine(${i})" title="Delete">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
     </div>`;
   }).join('');
 }
@@ -1649,7 +1670,10 @@ function toggleRoutineForm(){
   const form=document.getElementById('routineForm');
   const toggle=document.getElementById('routineAddToggle');
   if(form)form.style.display=_routineFormOpen?'flex':'none';
-  if(toggle)toggle.style.display=_routineFormOpen?'none':'';
+  if(toggle){
+    toggle.textContent=_routineFormOpen?'Cancel':'+ Add';
+    toggle.classList.toggle('routine-add-active',_routineFormOpen);
+  }
   if(_routineFormOpen)resetRoutineForm();
 }
 
@@ -1659,7 +1683,10 @@ function cancelRoutineForm(){
   const form=document.getElementById('routineForm');
   const toggle=document.getElementById('routineAddToggle');
   if(form)form.style.display='none';
-  if(toggle)toggle.style.display='';
+  if(toggle){
+    toggle.textContent='+ Add';
+    toggle.classList.remove('routine-add-active');
+  }
 }
 
 function resetRoutineForm(){
@@ -1685,7 +1712,10 @@ function editRoutine(idx){
   const form=document.getElementById('routineForm');
   const toggle=document.getElementById('routineAddToggle');
   if(form)form.style.display='flex';
-  if(toggle)toggle.style.display='none';
+  if(toggle){
+    toggle.textContent='Cancel';
+    toggle.classList.add('routine-add-active');
+  }
   // Populate form
   document.getElementById('routineType').value=b.type;
   onRoutineTypeChange();
@@ -2271,7 +2301,7 @@ function openWrapup(){
 }
 function closeWrapup(){document.getElementById('wrapupOverlay').classList.remove('open')}
 function toggleWrapupAuto(){
-  const cur=localStorage.getItem('clarity_wrapup_auto')!=='false';
+  const cur=localStorage.getItem('clarity_wrapup_auto')==='true';
   localStorage.setItem('clarity_wrapup_auto',cur?'false':'true');
   const toggle=document.getElementById('wrapupAutoToggle');
   if(toggle)toggle.classList.toggle('on',!cur);
@@ -3888,6 +3918,48 @@ function resetTextareaHeights(){
 }
 
 // ══ SUGGESTIONS DATA ══════════════════════════
+
+// Generate a palette of 6 harmonious colors based on the current theme accent
+function getSuggPalette(){
+  // Read the current accent color from CSS
+  const style=getComputedStyle(document.documentElement);
+  const accent=style.getPropertyValue('--accent').trim()||'#10b981';
+  // Parse hex to HSL
+  function hexToHsl(hex){
+    hex=hex.replace('#','');
+    const r=parseInt(hex.slice(0,2),16)/255;
+    const g=parseInt(hex.slice(2,4),16)/255;
+    const b=parseInt(hex.slice(4,6),16)/255;
+    const max=Math.max(r,g,b),min=Math.min(r,g,b);
+    let h,s,l=(max+min)/2;
+    if(max===min){h=s=0;}
+    else{
+      const d=max-min;
+      s=l>.5?d/(2-max-min):d/(max+min);
+      if(max===r)h=((g-b)/d+(g<b?6:0))/6;
+      else if(max===g)h=((b-r)/d+2)/6;
+      else h=((r-g)/d+4)/6;
+    }
+    return[Math.round(h*360),Math.round(s*100),Math.round(l*100)];
+  }
+  function hslToHex(h,s,l){
+    s/=100;l/=100;
+    const a=s*Math.min(l,1-l);
+    const f=n=>{const k=(n+h/30)%12;const c=l-a*Math.max(Math.min(k-3,9-k,1),-1);return Math.round(255*c).toString(16).padStart(2,'0');};
+    return'#'+f(0)+f(8)+f(4);
+  }
+  const[baseH,baseS,baseL]=hexToHsl(accent);
+  // Distribute 6 colors: anchor on the base hue, rotate in pleasing steps
+  const offsets=[0,45,90,155,210,270];
+  return offsets.map(o=>{
+    const h=(baseH+o)%360;
+    // Keep saturation similar but clamp lightness to a readable range
+    const s=Math.min(85,Math.max(40,baseS+(o>0?-5:0)));
+    const l=Math.min(52,Math.max(38,baseL));
+    return hslToHex(h,s,l);
+  });
+}
+
 const SUGGESTIONS=[
   {
     category:'🧘 Mindfulness & Wellness',
@@ -3974,16 +4046,18 @@ function renderSuggestions(){
 
   let html=`<div style="padding:10px">
     <div class="sugg-hint">Click "+ Add" to schedule a habit,<br>or drag directly to any time slot</div>`;
+  const palette=getSuggPalette();
   SUGGESTIONS.forEach((cat,ci)=>{
+    const catColor=palette[ci%palette.length];
     html+=`<div class="sugg-category">
-      <div class="sugg-cat-title"><span class="sugg-cat-icon">${cat.category.split(' ')[0]}</span>${cat.category.slice(cat.category.indexOf(' ')+1)}</div>`;
+      <div class="sugg-cat-title" style="border-bottom-color:${catColor}33"><span class="sugg-cat-icon">${cat.category.split(' ')[0]}</span>${cat.category.slice(cat.category.indexOf(' ')+1)}</div>`;
     cat.items.forEach((item,ii)=>{
       const alreadyAdded=habitNames.has(item.name.toLowerCase().trim());
       const warnClass=alreadyAdded?' sugg-card-warned':'';
       const actionBtn=alreadyAdded
         ?`<span class="sugg-already-badge">⚠ Already added</span>`
         :`<button class="sugg-add-btn" onclick="openIdeaModal(${ci},${ii})">+ Add</button>`;
-      html+=`<div class="sugg-card${warnClass}" draggable="true" style="border-left-color:${cat.color}"
+      html+=`<div class="sugg-card${warnClass}" draggable="true" style="border-left-color:${catColor}"
         ondragstart="onSuggDragStart(event,${ci},${ii})" ondragend="onSuggDragEnd(event)">
         <div class="sugg-card-info">
           <div class="sugg-card-name">${esc(item.name)}</div>
@@ -4016,8 +4090,9 @@ function showToast(msg){
 
 function onSuggDragStart(e,ci,ii){
   const cat=SUGGESTIONS[ci],item=cat.items[ii];
-  // Store as a special suggestion drag
-  suggDragId={ci,ii,color:cat.color};
+  const palette=getSuggPalette();
+  const catColor=palette[ci%palette.length];
+  suggDragId={ci,ii,color:catColor};
   dragBdId=null;dragTaskId=null;
   e.dataTransfer.effectAllowed='copy';
   e.dataTransfer.setData('text/plain','sugg');
@@ -4537,11 +4612,13 @@ let _ideaItem = null; // {name, sub, color, priority}
 
 function openIdeaModal(ci, ii) {
   const cat = SUGGESTIONS[ci], item = cat.items[ii];
-  _ideaItem = {name: item.name, sub: item.sub, color: cat.color, priority: item.priority};
+  const palette = getSuggPalette();
+  const catColor = palette[ci % palette.length];
+  _ideaItem = {name: item.name, sub: item.sub, color: catColor, priority: item.priority};
   _ideaPri = item.priority || 'none';
 
   // Populate header
-  document.getElementById('ideaColorBar').style.background = cat.color;
+  document.getElementById('ideaColorBar').style.background = catColor;
   document.getElementById('ideaModalName').textContent = item.name;
   document.getElementById('ideaModalSub').textContent = item.sub;
 
@@ -4665,7 +4742,7 @@ function clarityInit(){
   addBulletBehavior(document.getElementById('journalTa'));
 
   // Sunday evening wrap-up auto-show (guarded by setting)
-  const wrapupAuto=localStorage.getItem('clarity_wrapup_auto')!=='false';
+  const wrapupAuto=localStorage.getItem('clarity_wrapup_auto')==='true';
   const wrapupToggle=document.getElementById('wrapupAutoToggle');
   if(wrapupToggle)wrapupToggle.classList.toggle('on',wrapupAuto);
   const now=new Date();
