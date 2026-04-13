@@ -529,9 +529,14 @@ let categories=[
 
 function genId(){return Math.random().toString(36).slice(2,10)}
 function save(){
-  localStorage.setItem('clarity_t3',JSON.stringify(tasks));
-  localStorage.setItem('clarity_bd3',JSON.stringify(brainDump));
-  localStorage.setItem('clarity_cats',JSON.stringify(categories));
+  try{
+    localStorage.setItem('clarity_t3',JSON.stringify(tasks));
+    localStorage.setItem('clarity_bd3',JSON.stringify(brainDump));
+    localStorage.setItem('clarity_cats',JSON.stringify(categories));
+  }catch(e){
+    showToast('Storage full — export your data to free space');
+    console.error('localStorage save failed:',e);
+  }
 }
 function load(){
   try{tasks=JSON.parse(localStorage.getItem('clarity_t3')||'[]')}catch{tasks=[]}
@@ -1383,7 +1388,7 @@ function renderDay(){
         }
 
         const block=document.createElement('div');
-        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3`;
+        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow-y:auto;overflow-x:hidden`;
         block.innerHTML=blockHtml;
         overlay.appendChild(block);
       });
@@ -1606,7 +1611,7 @@ const ROUTINE_TYPES={
 };
 let routineBlocks=[];
 try{routineBlocks=JSON.parse(localStorage.getItem('clarity_routine')||'[]')}catch{routineBlocks=[]}
-function saveRoutine(){localStorage.setItem('clarity_routine',JSON.stringify(routineBlocks))}
+function saveRoutine(){try{localStorage.setItem('clarity_routine',JSON.stringify(routineBlocks))}catch(e){showToast('Storage full');console.error(e)}}
 function onRoutineTypeChange(){
   const v=document.getElementById('routineType').value;
   document.getElementById('routineName').style.display=v==='custom'?'':'none';
@@ -2530,7 +2535,11 @@ function addBD(){
   const raw=document.getElementById('bdInput').value.trim();if(!raw)return;
   // Parse bullet points into separate items
   const lines=raw.split('\n').map(l=>l.replace(/^[•\-\*]\s*/,'').trim()).filter(Boolean);
-  lines.forEach(name=>{
+  const remaining=30-brainDump.length;
+  if(remaining<=0){showToast('Brain Dump is full (max 30) — schedule or remove some items');return;}
+  const toAdd=lines.slice(0,remaining);
+  if(toAdd.length<lines.length)showToast(`Added ${toAdd.length} of ${lines.length} items (max 30)`);
+  toAdd.forEach(name=>{
     brainDump.push({id:genId(),name,priority:'none',category:'none'});
   });
   const ta=document.getElementById('bdInput');
@@ -3160,6 +3169,7 @@ function renderModalSubtasks(){
   updateDetailBadges();
 }
 function addSubtaskFromModal(){
+  if(_modalSubtasks.length>=20){showToast('Maximum 20 subtasks per task');return;}
   const input=document.getElementById('fSubtaskInput');
   const name=input.value.trim();if(!name)return;
   _modalSubtasks.push({id:genId(),name,duration:0,done:false});
@@ -3253,7 +3263,10 @@ async function generateSubtasks(){
     const text=data.content.map(i=>i.text||'').join('');
     const clean=text.replace(/```json|```/g,'').trim();
     const subs=JSON.parse(clean);
-    subs.forEach(s=>_modalSubtasks.push({id:genId(),name:s.name,duration:s.duration||0,done:false}));
+    const remaining=20-_modalSubtasks.length;
+    const toAdd=subs.slice(0,Math.max(0,remaining));
+    if(toAdd.length<subs.length)showToast(`Added ${toAdd.length} of ${subs.length} (max 20 subtasks)`);
+    toAdd.forEach(s=>_modalSubtasks.push({id:genId(),name:s.name,duration:s.duration||0,done:false}));
     renderModalSubtasks();
   }catch(err){
     showToast('AI generation unavailable — add subtasks manually using the + button');
@@ -3301,6 +3314,7 @@ function addSubtaskInline(taskId,idate){
   const t=tasks.find(t=>t.id===taskId);
   if(!t)return;
   if(!t.subtasks)t.subtasks=[];
+  if(t.subtasks.length>=20){showToast('Maximum 20 subtasks per task');return;}
   t.subtasks.push({id:genId(),name:'',duration:0,done:false});
   save();renderAll();
   // Focus the new blank subtask
@@ -3795,6 +3809,7 @@ function selectCatColor(c){
 }
 function saveNewCat(){
   const name=document.getElementById('catNameInput').value.trim();if(!name)return;
+  if(categories.length>=12){showToast('Maximum 12 categories');return;}
   categories.push({id:'cat_'+genId(),name,color:selectedCatColor,locked:false});
   save();closeAddCatModal();renderAll();
 }
@@ -4386,14 +4401,14 @@ function loadJournal(){
   try{ journal = JSON.parse(localStorage.getItem('clarity_journal')||'{}'); }catch{ journal = {}; }
 }
 function saveJournalData(){
-  localStorage.setItem('clarity_journal', JSON.stringify(journal));
+  try{localStorage.setItem('clarity_journal', JSON.stringify(journal));}catch(e){showToast('Storage full');console.error(e);}
 }
 loadJournal();
 
 // ── Month Notes ──
 let monthNotes={};
 try{monthNotes=JSON.parse(localStorage.getItem('clarity_month_notes')||'{}')}catch{monthNotes={}}
-function saveMonthNotesData(){localStorage.setItem('clarity_month_notes',JSON.stringify(monthNotes))}
+function saveMonthNotesData(){try{localStorage.setItem('clarity_month_notes',JSON.stringify(monthNotes))}catch(e){showToast('Storage full');console.error(e)}}
 let _monthNotesOpen=false;
 
 const MOOD_EMOJIS = ['😔','😐','🙂','😊','🌟'];
