@@ -1037,14 +1037,14 @@ function renderWeek(){
         rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
       }
       const narrowCls=ci.total>=3?' wk-task-narrow':'';
+      const wkDurStep=dur>30?`<div class="wk-dur-stepper"><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',-15,event)">−</button><span class="wk-task-block-dur">${durLabel(dur)}</span><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',15,event)">+</button></div>`:'';
       if(isEvent){
         return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <span class="wk-task-block-name">${esc(t.name)}</span>
-          ${ci.total<=2&&dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
-          <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
+          ${ci.total<=2?wkDurStep:''}
         </div>`;
       }
       return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
@@ -1055,8 +1055,7 @@ function renderWeek(){
           ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
           <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${ci.total<=2&&t.recur?'<span class="recur-icon">↻</span>':''}
         </div>
-        ${ci.total<=2&&dur>30?`<div class="wk-task-block-dur">${durLabel(dur)}</div>`:''}
-        <div class="task-resize-handle" data-rid="${t.id}" onmousedown="onResizeStart(event,'${t.id}','${t._instanceDate||k}','week')"></div>
+        ${ci.total<=2?wkDurStep:''}
       </div>`;
     }).join('');
     const WK_SLOT_H_R=48;
@@ -1688,190 +1687,125 @@ try{routineBlocks=JSON.parse(localStorage.getItem('clarity_routine')||'[]')}catc
 function saveRoutine(){try{localStorage.setItem('clarity_routine',JSON.stringify(routineBlocks))}catch(e){showToast('Storage full');console.error(e)}}
 function onRoutineTypeChange(){
   const v=document.getElementById('routineType').value;
-  document.getElementById('routineName').style.display=v==='custom'?'':'none';
-  // Set schedulable toggle default based on type
+  const nameWrap=document.getElementById('routineNameWrap');
+  if(nameWrap)nameWrap.style.display=v==='custom'?'':'none';
   const rt=ROUTINE_TYPES[v]||ROUTINE_TYPES.custom;
   const toggle=document.getElementById('routineSchedToggle');
   if(toggle)toggle.classList.toggle('on',rt.schedulable||false);
 }
+
+let _routineStripTab='all';
+
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
   if(!routineBlocks.length){
-    el.innerHTML=`<div class="routine-empty">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="opacity:.35;margin-bottom:6px"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      <span>No routine blocks yet</span>
-      <span style="font-size:10px;color:var(--text3);margin-top:2px">Tap <strong>+ Add</strong> above to set up your schedule</span>
-    </div>`;
+    el.innerHTML=`<div class="routine-hero"><div class="routine-hero-top"><div class="routine-hero-title">My Routine</div></div>
+      <div class="routine-hero-desc">Tell Luclaro about your typical day so the AI can plan around it.</div>
+      <div class="routine-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="opacity:.35;margin-bottom:6px"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>No routine blocks yet</span><span style="font-size:10px;color:var(--text3);margin-top:2px">Add your first block to get started</span></div></div>
+    <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>`;
     return;
   }
-
-  // ── Visual strip section ──
-  // Group blocks by day pattern for strip rows
-  function dayPatternKey(days){return days.slice().sort((a,b)=>a-b).join(',')}
-  function dayPatternLabel(days){
+  // ── Group blocks by day pattern for tabs ──
+  function dayPK(days){return days.slice().sort((a,b)=>a-b).join(',')}
+  function dayPLabel(days){
     const s=days.slice().sort((a,b)=>a-b);
-    if(s.length===7)return'Every day';
-    if(s.join(',')==='1,2,3,4,5')return'Weekdays';
-    if(s.join(',')==='0,6')return'Weekends';
-    const dNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    return s.map(d=>dNames[d]).join(', ');
+    if(s.length===7)return'Every day';if(s.join(',')==='1,2,3,4,5')return'Weekdays';if(s.join(',')==='0,6')return'Weekends';
+    if(s.length===1)return['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][s[0]];
+    return s.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ');
   }
-  const patternMap=new Map();
-  routineBlocks.forEach(b=>{
-    const pk=dayPatternKey(b.days);
-    if(!patternMap.has(pk))patternMap.set(pk,{days:b.days,label:dayPatternLabel(b.days),blocks:[]});
-    patternMap.get(pk).blocks.push(b);
-  });
-
-  let stripHtml='<div class="rt-strip-section">';
-  patternMap.forEach(grp=>{
-    // Sort blocks by start time
-    const sorted=grp.blocks.slice().sort((a,b)=>a.start.localeCompare(b.start));
-    stripHtml+=`<div class="rt-strip-row">
-      <div class="rt-strip-label">${esc(grp.label)}</div>
-      <div class="rt-strip">`;
-    // Render blocks as positioned segments on a 24h bar
-    let lastEnd=0;
-    sorted.forEach(b=>{
-      const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-      const[sh,sm]=b.start.split(':').map(Number);
-      const[eh,em]=b.end.split(':').map(Number);
-      let startMins=sh*60+sm, endMins=eh*60+em;
-      if(endMins<=startMins)endMins+=1440; // overnight
-      const startPct=(startMins/1440*100);
-      const widthPct=((endMins-startMins)/1440*100);
-      const label=esc(b.customName||rt.label);
-      stripHtml+=`<div class="rt-strip-block" style="left:${startPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%;background:${rt.color}" title="${label}: ${fmtT(b.start)} – ${fmtT(b.end)}"><span>${label}</span></div>`;
-    });
-    stripHtml+=`</div></div>`;
-  });
-  stripHtml+=`<div class="rt-strip-times"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
-  stripHtml+=`</div>`;
-
-  // ── Timeline list ──
-  const sorted=routineBlocks.slice().map((b,i)=>({b,i})).sort((a,b)=>a.b.start.localeCompare(b.b.start));
-  let tlHtml='<div class="rt-tl-wrap"><div class="rt-tl-line"></div>';
-  sorted.forEach(({b,i})=>{
-    const dayLabels=['S','M','T','W','T','F','S'];
-    const daysStr=[0,1,2,3,4,5,6].map(d=>`<span class="rt-tl-day${b.days.includes(d)?' on':''}">${dayLabels[d]}</span>`).join('');
+  const patMap=new Map();
+  routineBlocks.forEach(b=>{const pk=dayPK(b.days);if(!patMap.has(pk))patMap.set(pk,{days:b.days,label:dayPLabel(b.days),blocks:[]});patMap.get(pk).blocks.push(b);});
+  const patterns=[...patMap.entries()];
+  if(_routineStripTab!=='all'&&!patMap.has(_routineStripTab))_routineStripTab=patterns[0]?.[0]||'all';
+  if(patterns.length===1)_routineStripTab=patterns[0][0];
+  // ── Tabs ──
+  let tabsHtml='';
+  if(patterns.length>1){
+    tabsHtml=`<div class="rt-hero-tabs">`;
+    patterns.forEach(([pk,grp])=>{tabsHtml+=`<button class="rt-hero-tab${_routineStripTab===pk?' on':''}" onclick="_routineStripTab='${pk}';renderRoutineList()">${esc(grp.label)}</button>`;});
+    tabsHtml+=`</div>`;
+  }
+  // ── Strip blocks ──
+  const activeBlocks=_routineStripTab==='all'?routineBlocks:patMap.get(_routineStripTab)?.blocks||routineBlocks;
+  let stripHtml='';
+  activeBlocks.slice().sort((a,b)=>a.start.localeCompare(b.start)).forEach(b=>{
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-    const isWindow=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
-    const badge=isWindow
-      ?'<span class="routine-mode-badge window">Window</span>'
-      :'<span class="routine-mode-badge block">Block</span>';
-    tlHtml+=`<div class="rt-tl-item" onclick="editRoutine(${i})">
-      <div class="rt-tl-dot" style="border-color:${rt.color}"></div>
-      <div class="rt-tl-body">
-        <div class="rt-tl-row1">
-          <span class="rt-tl-name">${esc(b.customName||rt.label)}</span>
-          ${badge}
-        </div>
-        <div class="rt-tl-row2">
-          <span class="rt-tl-time">${fmtT(b.start)} – ${fmtT(b.end)}</span>
-          <span class="rt-tl-days">${daysStr}</span>
-        </div>
-      </div>
-      <button class="routine-card-del" onclick="event.stopPropagation();delRoutine(${i})" title="Delete">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </button>
-    </div>`;
+    const[sh,sm]=b.start.split(':').map(Number);const[eh,em]=b.end.split(':').map(Number);
+    let startMins=sh*60+sm,endMins=eh*60+em;const overnight=endMins<=startMins;
+    const label=esc(b.customName||rt.label);const idx=routineBlocks.indexOf(b);
+    if(overnight){
+      const evePct=(startMins/1440*100),eveW=((1440-startMins)/1440*100);
+      stripHtml+=`<div class="rt-strip-blk rt-night-r" style="left:${evePct.toFixed(1)}%;width:${eveW.toFixed(1)}%;background:${rt.color};opacity:.55" title="${label}: ${fmtT(b.start)} – ${fmtT(b.end)}" onclick="editRoutine(${idx})"><span>${label}</span></div>`;
+      const mornW=(endMins/1440*100);
+      stripHtml+=`<div class="rt-strip-blk rt-night-l" style="left:0;width:${mornW.toFixed(1)}%;background:${rt.color};opacity:.55" title="${label}" onclick="editRoutine(${idx})"><span></span></div>`;
+    } else {
+      const pct=(startMins/1440*100),w=((endMins-startMins)/1440*100);
+      stripHtml+=`<div class="rt-strip-blk" style="left:${pct.toFixed(1)}%;width:${w.toFixed(1)}%;background:${rt.color}" title="${label}: ${fmtT(b.start)} – ${fmtT(b.end)}" onclick="editRoutine(${idx})"><span>${label}</span></div>`;
+    }
   });
-  tlHtml+=`</div>`;
+  // ── Block list ──
+  const dayLabels=['S','M','T','W','T','F','S'];
+  let bkHtml=routineBlocks.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(b=>{
+    const i=routineBlocks.indexOf(b);const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    const isW=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
+    const badge=isW?'<span class="routine-mode-badge window">Window</span>':'<span class="routine-mode-badge block">Block</span>';
+    const ds=[0,1,2,3,4,5,6].map(d=>`<span class="rt-bk-day${b.days.includes(d)?' on':''}">${dayLabels[d]}</span>`).join('');
+    return`<div class="rt-bk" onclick="editRoutine(${i})"><div class="rt-bk-bar" style="background:${rt.color}"></div><div class="rt-bk-info"><div class="rt-bk-name">${esc(b.customName||rt.label)}</div><div class="rt-bk-meta"><span>${fmtT(b.start)} – ${fmtT(b.end)}</span>${badge}<span class="rt-bk-days">${ds}</span></div></div><button class="rt-bk-del" onclick="event.stopPropagation();delRoutine(${i})" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div>`;
+  }).join('');
 
-  el.innerHTML=stripHtml+tlHtml;
+  el.innerHTML=`<div class="routine-hero"><div class="routine-hero-top"><div class="routine-hero-title">My Routine</div>${tabsHtml}</div>
+    <div class="rt-strip-wrap"><div class="rt-strip">${stripHtml}</div>
+    <div class="rt-strip-times"><span>12am</span><span>3am</span><span>6am</span><span>9am</span><span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span></div></div></div>
+    <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>
+    <div class="routine-lower"><div class="routine-instr"><div class="routine-instr-title">How routines work</div>
+      <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--accent)"></span><div><strong>Window</strong> — Luclaro can schedule tasks during this time</div></div>
+      <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time the AI won't schedule over</div></div>
+      <div class="routine-instr-hint">Tap any block in the strip or list to edit. Overnight blocks wrap around.</div></div>
+    <div class="routine-blocks-list"><div class="routine-blocks-title">Your blocks</div>${bkHtml}</div></div>`;
 }
 
-let _routineEditIdx=-1; // -1 = adding new, 0+ = editing index
-let _routineFormOpen=false;
-
-function toggleRoutineForm(){
-  _routineFormOpen=!_routineFormOpen;
-  _routineEditIdx=-1;
-  const form=document.getElementById('routineForm');
-  const toggle=document.getElementById('routineAddToggle');
-  if(form)form.style.display=_routineFormOpen?'flex':'none';
-  if(toggle){
-    toggle.textContent=_routineFormOpen?'Cancel':'+ Add block';
-    toggle.classList.toggle('routine-add-active',_routineFormOpen);
-  }
-  if(_routineFormOpen)resetRoutineForm();
+let _routineEditIdx=-1;
+function openRoutineModal(){
+  _routineEditIdx=-1;resetRoutineModal();
+  document.getElementById('routineModalTitle').textContent='Add routine block';
+  document.getElementById('routineModalSave').textContent='Add Block';
+  document.getElementById('routineModalOverlay').classList.add('open');
 }
-
-function cancelRoutineForm(){
-  _routineFormOpen=false;
-  _routineEditIdx=-1;
-  const form=document.getElementById('routineForm');
-  const toggle=document.getElementById('routineAddToggle');
-  if(form)form.style.display='none';
-  if(toggle){
-    toggle.textContent='+ Add block';
-    toggle.classList.remove('routine-add-active');
-  }
-}
-
-function resetRoutineForm(){
+function closeRoutineModal(){document.getElementById('routineModalOverlay').classList.remove('open')}
+function resetRoutineModal(){
   document.getElementById('routineType').value='work';
   document.getElementById('routineName').value='';
-  document.getElementById('routineName').style.display='none';
+  const nw=document.getElementById('routineNameWrap');if(nw)nw.style.display='none';
   document.getElementById('routineStart').value='09:00';
   document.getElementById('routineEnd').value='17:00';
   document.querySelectorAll('#routineDays .routine-day-btn').forEach(b=>b.classList.add('on'));
-  const toggle=document.getElementById('routineSchedToggle');
-  if(toggle)toggle.classList.remove('on');
+  const t=document.getElementById('routineSchedToggle');if(t)t.classList.remove('on');
   onRoutineTypeChange();
-  const title=document.getElementById('routineFormTitle');
-  if(title)title.textContent='New block';
-  const saveBtn=document.getElementById('routineFormSave');
-  if(saveBtn){saveBtn.textContent='Add Block';saveBtn.onclick=function(){addRoutineBlock()};}
 }
-
 function editRoutine(idx){
-  const b=routineBlocks[idx];if(!b)return;
-  _routineEditIdx=idx;
-  _routineFormOpen=true;
-  const form=document.getElementById('routineForm');
-  const toggle=document.getElementById('routineAddToggle');
-  if(form)form.style.display='flex';
-  if(toggle){
-    toggle.textContent='Cancel';
-    toggle.classList.add('routine-add-active');
-  }
-  // Populate form
-  document.getElementById('routineType').value=b.type;
-  onRoutineTypeChange();
+  const b=routineBlocks[idx];if(!b)return;_routineEditIdx=idx;
+  document.getElementById('routineType').value=b.type;onRoutineTypeChange();
   if(b.customName)document.getElementById('routineName').value=b.customName;
   document.getElementById('routineStart').value=b.start;
   document.getElementById('routineEnd').value=b.end;
-  document.querySelectorAll('#routineDays .routine-day-btn').forEach((btn,i)=>{
-    btn.classList.toggle('on',b.days.includes(i));
-  });
-  const schedToggle=document.getElementById('routineSchedToggle');
-  const isWindow=b.schedulable!==undefined?b.schedulable:((ROUTINE_TYPES[b.type]||{}).schedulable||false);
-  if(schedToggle)schedToggle.classList.toggle('on',isWindow);
-  const title=document.getElementById('routineFormTitle');
-  if(title)title.textContent='Edit block';
-  const saveBtn=document.getElementById('routineFormSave');
-  if(saveBtn){saveBtn.textContent='Save Changes';saveBtn.onclick=function(){saveRoutineEdit()};}
+  document.querySelectorAll('#routineDays .routine-day-btn').forEach((btn,i)=>btn.classList.toggle('on',b.days.includes(i)));
+  const st=document.getElementById('routineSchedToggle');
+  const isW=b.schedulable!==undefined?b.schedulable:((ROUTINE_TYPES[b.type]||{}).schedulable||false);
+  if(st)st.classList.toggle('on',isW);
+  document.getElementById('routineModalTitle').textContent='Edit routine block';
+  document.getElementById('routineModalSave').textContent='Save Changes';
+  document.getElementById('routineModalOverlay').classList.add('open');
 }
-
-function saveRoutineEdit(){
-  const validated=validateRoutineInput(_routineEditIdx);
-  if(!validated)return;
-  routineBlocks[_routineEditIdx]=validated;
-  saveRoutine();renderRoutineList();
-  cancelRoutineForm();
-  showToast('Routine block updated');
+function saveRoutineFromModal(){
+  const validated=validateRoutineInput(_routineEditIdx);if(!validated)return;
+  if(_routineEditIdx>=0){routineBlocks[_routineEditIdx]=validated;showToast('Routine block updated');}
+  else{routineBlocks.push(validated);showToast('Routine block added');}
+  saveRoutine();renderRoutineList();closeRoutineModal();
 }
 
 function toggleRoutineDay(btn){btn.classList.toggle('on')}
-function addRoutineBlock(){
-  const validated=validateRoutineInput(-1);
-  if(!validated)return;
-  routineBlocks.push(validated);
-  saveRoutine();renderRoutineList();
-  cancelRoutineForm();
-  showToast('Routine block added');
-}
+function addRoutineBlock(){saveRoutineFromModal()}
 
 function validateRoutineInput(editIdx){
   // Max 20

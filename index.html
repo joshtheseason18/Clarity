@@ -324,69 +324,7 @@
         </div>
         <!-- Routine area -->
         <div id="catRoutineArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
-          <!-- Hero card with title, instructions, add button -->
-          <div class="routine-hero">
-            <div class="routine-hero-top">
-              <div class="routine-hero-title">My Routine</div>
-              <button class="routine-add-btn-pill" id="routineAddToggle" onclick="toggleRoutineForm()">+ Add block</button>
-            </div>
-            <div class="routine-hero-desc">Tell Luclaro about your typical day so the AI can plan around it.</div>
-            <div class="routine-legend">
-              <div class="routine-legend-item">
-                <span class="routine-legend-dot" style="background:var(--accent)"></span>
-                <span><strong>Window</strong> — Luclaro can schedule tasks here</span>
-              </div>
-              <div class="routine-legend-item">
-                <span class="routine-legend-dot" style="background:var(--text3)"></span>
-                <span><strong>Block</strong> — Protected time, AI won't touch it</span>
-              </div>
-            </div>
-          </div>
-          <!-- Collapsible add/edit form -->
-          <div class="routine-form" id="routineForm" style="display:none">
-            <div class="routine-form-title" id="routineFormTitle">New block</div>
-            <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:12px;padding:7px 10px">
-              <option value="work">Work</option>
-              <option value="class">Class</option>
-              <option value="gym">Gym / Exercise</option>
-              <option value="meals">Meals</option>
-              <option value="sleep">Sleep</option>
-              <option value="commute">Commute</option>
-              <option value="church">Church</option>
-              <option value="family">Family Time</option>
-              <option value="free">Free Time</option>
-              <option value="focus">Focus / Deep Work</option>
-              <option value="selfcare">Self-Care</option>
-              <option value="custom">Custom…</option>
-            </select>
-            <input class="fi" id="routineName" placeholder="Custom label" style="font-size:12px;padding:7px 10px;display:none">
-            <div style="display:flex;gap:6px">
-              <input class="fi" type="time" id="routineStart" value="09:00" style="flex:1;font-size:12px;padding:7px 10px">
-              <span style="color:var(--text3);font-size:12px;align-self:center">to</span>
-              <input class="fi" type="time" id="routineEnd" value="17:00" style="flex:1;font-size:12px;padding:7px 10px">
-            </div>
-            <div class="routine-days" id="routineDays">
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,0)">S</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,1)">M</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,2)">T</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,3)">W</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,4)">T</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,5)">F</button>
-              <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
-            </div>
-            <div class="toggle-row" style="margin:4px 0;padding:6px 10px">
-              <span class="toggle-label" style="font-size:11px">Can Luclaro schedule tasks here?</span>
-              <button class="toggle-track" id="routineSchedToggle" onclick="this.classList.toggle('on')">
-                <div class="toggle-thumb"></div>
-              </button>
-            </div>
-            <div class="routine-form-btns">
-              <button class="routine-form-save" id="routineFormSave" onclick="addRoutineBlock()">Add Block</button>
-              <button class="routine-form-cancel" onclick="cancelRoutineForm()">Cancel</button>
-            </div>
-          </div>
-          <!-- Routine list -->
-          <div id="routineList" style="margin-top:10px"></div>
+          <div id="routineList"></div>
         </div>
       </div>
     </div>
@@ -877,6 +815,69 @@
         <span id="aiSpinner" style="display:none">Thinking…</span>
       </button>
       <button class="btn-s" id="aiAcceptBtn" onclick="acceptAISchedule()" style="display:none;background:var(--accent-dim)">Add to Calendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROUTINE ADD/EDIT MODAL -->
+<div class="modal-overlay" id="routineModalOverlay" onclick="if(event.target===this)closeRoutineModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <div>
+      <div class="modal-title" id="routineModalTitle">Add routine block</div>
+      <div class="modal-sub">Set up a recurring time block in your schedule</div>
+    </div>
+    <div class="fg">
+      <label class="flbl">Type</label>
+      <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:13px">
+        <option value="work">Work</option>
+        <option value="class">Class</option>
+        <option value="gym">Gym / Exercise</option>
+        <option value="meals">Meals</option>
+        <option value="sleep">Sleep</option>
+        <option value="commute">Commute</option>
+        <option value="church">Church</option>
+        <option value="family">Family Time</option>
+        <option value="free">Free Time</option>
+        <option value="focus">Focus / Deep Work</option>
+        <option value="selfcare">Self-Care</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </div>
+    <div class="fg" id="routineNameWrap" style="display:none">
+      <label class="flbl">Custom label</label>
+      <input class="fi" id="routineName" placeholder="e.g. Side project time" style="font-size:13px">
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="flbl">Start time</label>
+        <input class="fi" type="time" id="routineStart" value="09:00" style="font-size:13px">
+      </div>
+      <div class="fg">
+        <label class="flbl">End time</label>
+        <input class="fi" type="time" id="routineEnd" value="17:00" style="font-size:13px">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="flbl">Days</label>
+      <div class="routine-days" id="routineDays">
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,0)">S</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,1)">M</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,2)">T</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,3)">W</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,4)">T</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,5)">F</button>
+        <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
+      </div>
+    </div>
+    <div class="toggle-row" style="padding:8px 0">
+      <span class="toggle-label" style="font-size:12px">Can Luclaro schedule tasks here?</span>
+      <button class="toggle-track" id="routineSchedToggle" onclick="this.classList.toggle('on')">
+        <div class="toggle-thumb"></div>
+      </button>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-c" onclick="closeRoutineModal()">Cancel</button>
+      <button class="btn-s" id="routineModalSave" onclick="saveRoutineFromModal()">Add Block</button>
     </div>
   </div>
 </div>
