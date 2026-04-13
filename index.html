@@ -324,10 +324,11 @@
         </div>
         <!-- Routine area -->
         <div id="catRoutineArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Define your daily structure. <strong>Windows</strong> (like Work) are times Luclaro places tasks into. <strong>Blocks</strong> (like Gym, Class) are protected — the AI won't schedule over them. You can always add tasks manually to any time slot.</div>
-          <div id="routineList"></div>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;padding:12px;background:var(--surface2);border-radius:10px">
-            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">Add a block</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5"><strong style="color:var(--text2)">Windows</strong> = Luclaro places tasks here. <strong style="color:var(--text2)">Blocks</strong> = protected, AI won't schedule over them.</div>
+          <!-- Collapsible add/edit form -->
+          <button class="routine-add-toggle" id="routineAddToggle" onclick="toggleRoutineForm()">+ Add routine block</button>
+          <div class="routine-form" id="routineForm" style="display:none">
+            <div class="routine-form-title" id="routineFormTitle">New block</div>
             <select class="fi" id="routineType" onchange="onRoutineTypeChange()" style="font-size:12px;padding:7px 10px">
               <option value="work">Work</option>
               <option value="class">Class</option>
@@ -357,17 +358,19 @@
               <button class="routine-day-btn on" onclick="toggleRoutineDay(this,5)">F</button>
               <button class="routine-day-btn on" onclick="toggleRoutineDay(this,6)">S</button>
             </div>
-            <div class="toggle-row" style="margin:4px 0">
+            <div class="toggle-row" style="margin:4px 0;padding:6px 10px">
               <span class="toggle-label" style="font-size:11px">Can Luclaro schedule tasks here?</span>
               <button class="toggle-track" id="routineSchedToggle" onclick="this.classList.toggle('on')">
                 <div class="toggle-thumb"></div>
               </button>
             </div>
-            <div style="font-size:10px;color:var(--text3);line-height:1.4">
-              <strong>No</strong> = blocked time (gym, class). <strong>Yes</strong> = scheduling window (work hours).
+            <div class="routine-form-btns">
+              <button class="routine-form-save" id="routineFormSave" onclick="addRoutineBlock()">Add Block</button>
+              <button class="routine-form-cancel" onclick="cancelRoutineForm()">Cancel</button>
             </div>
-            <button class="drawer-btn" onclick="addRoutineBlock()" style="margin-top:4px">+ Add Block</button>
           </div>
+          <!-- Routine list -->
+          <div id="routineList" style="margin-top:8px"></div>
         </div>
       </div>
     </div>

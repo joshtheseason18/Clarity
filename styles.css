@@ -1670,11 +1670,37 @@ header{
 .reflow-arrow{color:var(--text3);font-size:10px}
 
 /* ══ MY ROUTINE ═══════════════════════════════════ */
+.routine-add-toggle{
+  width:100%;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;
+  background:none;color:var(--text2);font-family:'DM Sans',sans-serif;
+  font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;
+}
+.routine-add-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.routine-form{
+  display:flex;flex-direction:column;gap:6px;padding:12px;
+  background:var(--surface2);border-radius:10px;margin-bottom:4px;
+}
+.routine-form-title{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.5px}
+.routine-form-btns{display:flex;gap:6px;margin-top:4px}
+.routine-form-save{
+  flex:1;padding:8px;background:var(--accent);color:#fff;border:none;border-radius:7px;
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s;
+}
+.routine-form-save:hover{background:var(--accent-dim)}
+.routine-form-cancel{
+  padding:8px 14px;background:none;color:var(--text3);border:1px solid var(--border);border-radius:7px;
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;
+}
+.routine-form-cancel:hover{border-color:var(--text2);color:var(--text2)}
 .routine-block{
   display:flex;align-items:center;gap:10px;padding:10px 12px;
-  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-  margin-bottom:6px;font-size:12px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  font-size:12px;cursor:pointer;transition:background .12s;
 }
+.routine-block:first-child{border-radius:8px 8px 0 0}
+.routine-block:last-child{border-radius:0 0 8px 8px;border-bottom:none}
+.routine-block:only-child{border-radius:8px}
+.routine-block:hover{background:var(--surface2)}
 .routine-block-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text2)}
 .routine-block-info{flex:1;min-width:0}
 .routine-block-label{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

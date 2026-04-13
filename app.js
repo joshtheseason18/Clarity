@@ -1617,38 +1617,167 @@ function onRoutineTypeChange(){
 }
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
-  if(!routineBlocks.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);font-style:italic;padding:4px 0">No blocks yet — add your class schedule, work hours, etc.</div>';return;}
+  if(!routineBlocks.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);font-style:italic;padding:12px 0;text-align:center">No blocks yet — tap above to add your schedule.</div>';return;}
   el.innerHTML=routineBlocks.map((b,i)=>{
     const dayLabels=['S','M','T','W','T','F','S'];
     const daysStr=b.days.map(d=>dayLabels[d]).join(' ');
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
     const isWindow=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
-    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:700;font-size:9px;letter-spacing:.3px">WINDOW</span>':'<span style="color:var(--text3);font-weight:600;font-size:9px;letter-spacing:.3px">BLOCK</span>';
-    return`<div class="routine-block" style="border-left:3px solid ${rt.color}">
+    const modeLabel=isWindow?'<span style="color:var(--accent);font-weight:700">WINDOW</span>':'<span style="color:var(--text3)">BLOCK</span>';
+    return`<div class="routine-block" style="border-left:3px solid ${rt.color}" onclick="editRoutine(${i})">
       <div class="routine-block-icon">${rt.icon()}</div>
       <div class="routine-block-info">
         <div class="routine-block-label">${esc(b.customName||rt.label)}</div>
         <div class="routine-block-meta">${fmtT(b.start)} – ${fmtT(b.end)} · ${daysStr} · ${modeLabel}</div>
       </div>
-      <button class="routine-block-del" onclick="delRoutine(${i})">✕</button>
+      <button class="routine-block-del" onclick="event.stopPropagation();delRoutine(${i})">✕</button>
     </div>`;
   }).join('');
 }
+
+let _routineEditIdx=-1; // -1 = adding new, 0+ = editing index
+let _routineFormOpen=false;
+
+function toggleRoutineForm(){
+  _routineFormOpen=!_routineFormOpen;
+  _routineEditIdx=-1;
+  const form=document.getElementById('routineForm');
+  const toggle=document.getElementById('routineAddToggle');
+  if(form)form.style.display=_routineFormOpen?'flex':'none';
+  if(toggle)toggle.style.display=_routineFormOpen?'none':'';
+  if(_routineFormOpen)resetRoutineForm();
+}
+
+function cancelRoutineForm(){
+  _routineFormOpen=false;
+  _routineEditIdx=-1;
+  const form=document.getElementById('routineForm');
+  const toggle=document.getElementById('routineAddToggle');
+  if(form)form.style.display='none';
+  if(toggle)toggle.style.display='';
+}
+
+function resetRoutineForm(){
+  document.getElementById('routineType').value='work';
+  document.getElementById('routineName').value='';
+  document.getElementById('routineName').style.display='none';
+  document.getElementById('routineStart').value='09:00';
+  document.getElementById('routineEnd').value='17:00';
+  document.querySelectorAll('#routineDays .routine-day-btn').forEach(b=>b.classList.add('on'));
+  const toggle=document.getElementById('routineSchedToggle');
+  if(toggle)toggle.classList.remove('on');
+  onRoutineTypeChange();
+  const title=document.getElementById('routineFormTitle');
+  if(title)title.textContent='New block';
+  const saveBtn=document.getElementById('routineFormSave');
+  if(saveBtn){saveBtn.textContent='Add Block';saveBtn.onclick=function(){addRoutineBlock()};}
+}
+
+function editRoutine(idx){
+  const b=routineBlocks[idx];if(!b)return;
+  _routineEditIdx=idx;
+  _routineFormOpen=true;
+  const form=document.getElementById('routineForm');
+  const toggle=document.getElementById('routineAddToggle');
+  if(form)form.style.display='flex';
+  if(toggle)toggle.style.display='none';
+  // Populate form
+  document.getElementById('routineType').value=b.type;
+  onRoutineTypeChange();
+  if(b.customName)document.getElementById('routineName').value=b.customName;
+  document.getElementById('routineStart').value=b.start;
+  document.getElementById('routineEnd').value=b.end;
+  document.querySelectorAll('#routineDays .routine-day-btn').forEach((btn,i)=>{
+    btn.classList.toggle('on',b.days.includes(i));
+  });
+  const schedToggle=document.getElementById('routineSchedToggle');
+  const isWindow=b.schedulable!==undefined?b.schedulable:((ROUTINE_TYPES[b.type]||{}).schedulable||false);
+  if(schedToggle)schedToggle.classList.toggle('on',isWindow);
+  const title=document.getElementById('routineFormTitle');
+  if(title)title.textContent='Edit block';
+  const saveBtn=document.getElementById('routineFormSave');
+  if(saveBtn){saveBtn.textContent='Save Changes';saveBtn.onclick=function(){saveRoutineEdit()};}
+}
+
+function saveRoutineEdit(){
+  const validated=validateRoutineInput(_routineEditIdx);
+  if(!validated)return;
+  routineBlocks[_routineEditIdx]=validated;
+  saveRoutine();renderRoutineList();
+  cancelRoutineForm();
+  showToast('Routine block updated');
+}
+
 function toggleRoutineDay(btn){btn.classList.toggle('on')}
 function addRoutineBlock(){
+  const validated=validateRoutineInput(-1);
+  if(!validated)return;
+  routineBlocks.push(validated);
+  saveRoutine();renderRoutineList();
+  cancelRoutineForm();
+  showToast('Routine block added');
+}
+
+function validateRoutineInput(editIdx){
+  // Max 20
+  if(editIdx===-1&&routineBlocks.length>=20){showToast('Maximum 20 routine blocks');return null;}
   const type=document.getElementById('routineType').value;
   const customName=type==='custom'?document.getElementById('routineName').value.trim():'';
-  if(type==='custom'&&!customName){document.getElementById('routineName').focus();return;}
+  if(type==='custom'&&!customName){document.getElementById('routineName').focus();showToast('Enter a custom label');return null;}
   const start=document.getElementById('routineStart').value;
   const end=document.getElementById('routineEnd').value;
+  if(!start||!end){showToast('Set start and end times');return null;}
   const dayBtns=document.querySelectorAll('#routineDays .routine-day-btn');
   const days=[];dayBtns.forEach((b,i)=>{if(b.classList.contains('on'))days.push(i);});
-  if(!days.length){showToast('Select at least one day');return;}
+  if(!days.length){showToast('Select at least one day');return null;}
   const schedulable=document.getElementById('routineSchedToggle').classList.contains('on');
-  routineBlocks.push({type,customName,start,end,days,schedulable});
-  saveRoutine();renderRoutineList();
-  document.getElementById('routineName').value='';
-  showToast('Routine block added');
+  // Check exact duplicate
+  for(let i=0;i<routineBlocks.length;i++){
+    if(i===editIdx)continue;
+    const b=routineBlocks[i];
+    if(b.type===type&&b.start===start&&b.end===end&&b.days.some(d=>days.includes(d))){
+      showToast('This routine already exists');return null;
+    }
+  }
+  // Check same-type overlap
+  const[sh,sm]=start.split(':').map(Number);
+  const[eh,em]=end.split(':').map(Number);
+  const startMins=sh*60+sm;
+  const endMins=eh*60+em;
+  for(let i=0;i<routineBlocks.length;i++){
+    if(i===editIdx)continue;
+    const b=routineBlocks[i];
+    if(b.type!==type)continue;
+    const sharedDays=b.days.filter(d=>days.includes(d));
+    if(!sharedDays.length)continue;
+    const[bsh,bsm]=b.start.split(':').map(Number);
+    const[beh,bem]=b.end.split(':').map(Number);
+    const bStart=bsh*60+bsm;
+    const bEnd=beh*60+bem;
+    if(startMins<bEnd&&bStart<endMins){
+      const rt=ROUTINE_TYPES[type]||ROUTINE_TYPES.custom;
+      showToast(`You already have ${rt.label} at ${fmtT(b.start)}–${fmtT(b.end)} on overlapping days`);
+      return null;
+    }
+  }
+  // Check cross-type overlap (warning, not block)
+  for(let i=0;i<routineBlocks.length;i++){
+    if(i===editIdx)continue;
+    const b=routineBlocks[i];
+    if(b.type===type)continue;
+    const sharedDays=b.days.filter(d=>days.includes(d));
+    if(!sharedDays.length)continue;
+    const[bsh2,bsm2]=b.start.split(':').map(Number);
+    const[beh2,bem2]=b.end.split(':').map(Number);
+    const bStart2=bsh2*60+bsm2;
+    const bEnd2=beh2*60+bem2;
+    if(startMins<bEnd2&&bStart2<endMins){
+      const rt2=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+      if(!confirm(`This overlaps with ${rt2.label} (${fmtT(b.start)}–${fmtT(b.end)}). Add anyway?`))return null;
+      break; // Only warn once
+    }
+  }
+  return{type,customName,start,end,days,schedulable};
 }
 function delRoutine(i){routineBlocks.splice(i,1);saveRoutine();renderRoutineList();}
 
