@@ -1754,10 +1754,11 @@ header{
 /* ══ MY ROUTINE ═══════════════════════════════════ */
 .routine-hero{
   background:var(--surface2);border-radius:12px;padding:18px 20px 14px;margin-bottom:14px;
+  display:flex;flex-direction:column;flex:1;min-height:0;
 }
-.routine-hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.routine-hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;flex-shrink:0}
 .routine-hero-title{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text)}
-.routine-hero-desc{font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px}
+.routine-hero-desc{font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;flex-shrink:0}
 .rt-hero-tabs{display:flex;gap:0;background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
 .rt-hero-tab{font-size:11px;padding:6px 14px;color:var(--text3);font-weight:500;cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-right:1px solid var(--border);transition:all .12s}
 .rt-hero-tab:last-child{border-right:none}
@@ -1765,21 +1766,21 @@ header{
 [data-dark="true"] .rt-hero-tab.on{background:rgba(var(--accent-rgb),.15)}
 
 /* Strip */
-.rt-strip-wrap{margin-bottom:4px}
-.rt-strip{position:relative;height:44px;background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.rt-strip-wrap{margin-bottom:4px;flex:1;display:flex;flex-direction:column;min-height:0}
+.rt-strip{position:relative;flex:1;min-height:44px;background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
 .rt-strip-blk{
-  position:absolute;top:3px;height:38px;border-radius:6px;
+  position:absolute;top:4px;bottom:4px;border-radius:6px;
   display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;transition:opacity .12s;
 }
 .rt-strip-blk:hover{opacity:.8!important}
 .rt-strip-blk span{font-size:11px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
 .rt-night-r{border-radius:6px 0 0 6px!important}
 .rt-night-l{border-radius:0 6px 6px 0!important}
-.rt-strip-times{display:flex;justify-content:space-between;padding:0 2px;margin-top:5px}
+.rt-strip-times{display:flex;justify-content:space-between;padding:0 2px;margin-top:5px;flex-shrink:0}
 .rt-strip-times span{font-size:10px;color:var(--text3)}
 
 /* Add button */
-.routine-add-row{text-align:center;margin-bottom:18px}
+.routine-add-row{text-align:center;margin-bottom:18px;flex-shrink:0}
 .routine-add-btn{
   font-size:13px;font-weight:600;color:var(--accent);padding:10px 28px;
   border:1.5px solid var(--accent);border-radius:99px;background:none;
@@ -1788,14 +1789,14 @@ header{
 .routine-add-btn:hover{background:var(--accent-pale)}
 
 /* Lower: instructions + block list */
-.routine-lower{display:flex;gap:24px;align-items:flex-start}
+.routine-lower{display:flex;gap:24px;align-items:stretch;flex:1;min-height:0}
 .routine-instr{width:190px;flex-shrink:0}
 .routine-instr-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px}
 .routine-instr-item{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:11px;color:var(--text2);line-height:1.5}
 .routine-instr-item strong{font-weight:600;color:var(--text)}
 .routine-instr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .routine-instr-hint{font-size:10px;color:var(--text3);margin-top:10px;line-height:1.5;font-style:italic}
-.routine-blocks-list{flex:1;min-width:0}
+.routine-blocks-list{flex:1;min-width:0;display:flex;flex-direction:column}
 .routine-blocks-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
 
 /* Block cards */
@@ -1817,10 +1818,11 @@ header{
 
 /* Empty state */
 .routine-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;color:var(--text3);font-size:12px;text-align:center;line-height:1.5}
-.rt-strip-empty{display:flex;align-items:center;justify-content:center;border-style:dashed}
+.rt-strip-empty{display:flex;align-items:center;justify-content:center;border-style:dashed;min-height:60px}
 .rt-strip-empty-hint{font-size:12px;color:var(--text3);font-style:italic}
 .routine-empty-list{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;min-height:80px;
   padding:40px 16px;color:var(--text3);font-size:12px;text-align:center;line-height:1.5;
   background:var(--surface2);border-radius:10px;border:1px dashed var(--border);
 }
