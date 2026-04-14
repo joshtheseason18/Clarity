@@ -878,7 +878,7 @@ header{
 .wk-routine-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0}
 .wk-task-block{
   position:absolute;left:2px;right:2px;
-  border-radius:4px;border-left:3px solid var(--accent);
+  border-radius:0 4px 4px 0;border-left:3px solid var(--accent);border-top:2px solid var(--accent);
   background:rgba(var(--accent-rgb),.13);
   overflow:hidden;cursor:grab;
   pointer-events:all;
@@ -910,7 +910,7 @@ header{
   flex:1; /* stretches to fill wrapper height so block matches scheduled duration */
   min-width:0; /* prevent block from pushing the grid column wider */
   margin:3px 6px 3px 8px;
-  border-radius:8px;border-left:4px solid var(--accent);
+  border-radius:0 8px 8px 0;border-left:4px solid var(--accent);border-top:2.5px solid var(--accent);
   background:rgba(var(--accent-rgb),.13);
   /* No overflow:hidden — subtasks need to grow the block vertically.
      Horizontal containment is handled by min-width:0 chain + word-break:break-word on the title. */
@@ -1458,6 +1458,7 @@ header{
 .warn-toast-x{
   background:transparent;border:none;color:#fff;font-size:18px;font-weight:700;
   cursor:pointer;padding:0 2px;line-height:1;opacity:.7;flex-shrink:0;
+  font-family:'DM Sans',sans-serif;
 }
 .warn-toast-x:hover{opacity:1}
 
@@ -1614,57 +1615,69 @@ header{
   letter-spacing:.2px;
 }
 .routine-slot-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:.8}
+.routine-slot-badge{
+  font-size:8px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:1px 6px;border-radius:3px;margin-left:2px;flex-shrink:0;
+}
+.routine-slot-badge.window{color:inherit;background:rgba(0,0,0,.06)}
+.routine-slot-badge.block{color:var(--text3);background:var(--surface3)}
+[data-dark="true"] .routine-slot-badge.window{background:rgba(255,255,255,.08)}
 
 /* ══ ROUTINE CONTAINER NESTING ═══════════════════════ */
-/* Day view — absolute overlay frame around each routine time-range */
 .routine-container{
   position:absolute;z-index:1;pointer-events:none;
-  border-radius:10px;
+  border-radius:0 10px 10px 0;
   border-left:3px solid var(--rc-color,#888);
   box-shadow:inset 0 0 0 1px var(--rc-dim,rgba(0,0,0,.06));
   background:var(--rc-bg,transparent);
   overflow:visible;
 }
-.routine-container-hdr{
-  display:flex;align-items:center;gap:5px;
-  padding:4px 10px 2px 8px;font-size:11px;font-weight:700;
-  color:var(--rc-color);letter-spacing:.15px;
-  position:sticky;top:0;z-index:1;
-}
-/* Floating header pill — rendered as separate element ABOVE tasks */
-.routine-container-hdr-float{
-  position:absolute;z-index:5;pointer-events:none;
-  display:flex;align-items:center;gap:5px;
-  padding:3px 10px 3px 8px;font-size:11px;font-weight:700;
-  color:var(--rc-color);letter-spacing:.15px;
-  background:var(--bg);border-radius:0 0 8px 0;
-  border-bottom:1px solid var(--rc-dim);
-  border-right:1px solid var(--rc-dim);
-  white-space:nowrap;
-  opacity:.92;
-}
-.routine-container-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.routine-container-name{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.routine-container-badge{
-  font-size:8px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
-  padding:1px 6px;border-radius:3px;margin-left:4px;flex-shrink:0;
-}
-.routine-container-badge.window{color:var(--rc-color);background:var(--rc-dim)}
-.routine-container-badge.block{color:var(--text3);background:var(--surface3)}
-[data-dark="true"] .routine-container-badge.window{background:rgba(255,255,255,.06)}
-
-/* Task inset within routine containers — day view */
 .day-slot[data-routine] .day-task-slot-wrap{margin:0 4px}
-.day-slot[data-routine] .routine-slot-label{display:none}
+.routine-window-hint{font-size:10px;opacity:.3;padding:2px 10px;pointer-events:none;font-style:italic;letter-spacing:.2px}
 
-/* Open-window hint for empty schedulable routine slots */
-.routine-window-hint{
-  font-size:10px;opacity:.3;
-  padding:2px 10px;pointer-events:none;font-style:italic;
-  letter-spacing:.2px;
+/* ══ QUICK EVENT INPUT ═══════════════════════════════ */
+.qe-section{padding:0 12px 12px}
+.qe-divider{height:1px;background:var(--border);margin:10px 0 8px}
+.qe-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.4px;text-transform:uppercase;display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.qe-label svg{opacity:.5}
+.qe-wrap{position:relative}
+.qe-input{
+  width:100%;padding:8px 34px 8px 10px;
+  border:1.5px solid var(--accent);border-radius:10px;
+  font-family:'DM Sans',sans-serif;font-size:12px;
+  color:var(--text);background:var(--bg);outline:none;
+  transition:border-color .15s,box-shadow .15s;
 }
+.qe-input:focus{box-shadow:0 0 0 3px var(--accent-pale)}
+.qe-input::placeholder{color:var(--text3)}
+.qe-enter{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  font-size:9px;font-weight:700;color:var(--accent);background:var(--accent-pale);
+  padding:2px 6px;border-radius:4px;pointer-events:none;
+}
+.qe-hint{font-size:10px;color:var(--text3);margin-top:4px;font-style:italic;line-height:1.5}
 
-/* Week view — task inset within routine bands handled via JS left/right adjustment */
+/* ══ YEAR VIEW EXPANDED MONTH ═════════════════════════ */
+.year-month-card.expanded{
+  grid-column:span 2;border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-pale);
+}
+.ym-expand-actions{display:flex;gap:8px;margin-top:10px}
+.ym-expand-btn{
+  font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-pale);
+  border:none;border-radius:8px;padding:6px 14px;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:background .12s;
+}
+.ym-expand-btn:hover{background:var(--accent);color:#fff}
+.ym-expand-btn.secondary{color:var(--text2);background:var(--surface3)}
+.ym-expand-btn.secondary:hover{background:var(--surface2)}
+.year-month-card.expanded .ym-cal-grid{gap:4px}
+.year-month-card.expanded .ym-day{
+  font-size:12px;border-radius:6px;font-weight:500;
+  transition:background .1s;
+}
+.year-month-card.expanded .ym-day:not(.other):hover{background:var(--accent-pale)}
+.year-month-card.expanded .ym-dot{width:5px;height:5px;bottom:3px}
 
 /* ══ TASK TOOLTIP ══════════════════════════════════ */
 .task-tooltip{
@@ -2124,11 +2137,6 @@ header{
   .day-conflict-badge{font-size:9px}
   .day-time-range{font-size:9px;padding:1px 5px}
   .day-task-notes-pill{display:none}
-  .routine-container-hdr{font-size:10px;padding:3px 8px 1px 6px}
-  .routine-container-hdr-float{font-size:10px;padding:2px 8px 2px 6px}
-  .routine-container-dot{width:5px;height:5px}
-  .routine-container-badge{font-size:7px;padding:1px 4px}
-  .routine-window-hint{font-size:9px;padding:1px 8px}
 
   /* ── Schedule/Categories view ── */
   .cat-view-hdr{padding:8px 12px 0}

@@ -819,7 +819,8 @@ function renderYear(){
     } else if(taskTotal>0){
       countHtml=`<span class="ym-count has-tasks">${taskTotal} task${taskTotal!==1?'s':''}</span>`;
     }
-    html+=`<div class="year-month-card${hasToday?' has-today':''}" onclick="onYearMonthClick(${curYear},${mo})">
+    const isExpanded=_yearExpandedMonth===mo;
+    html+=`<div class="year-month-card${hasToday?' has-today':''}${isExpanded?' expanded':''}" onclick="onYearMonthClick(${curYear},${mo})">
       <div class="ym-header"><div class="ym-name">${MONTHS_LONG[mo]}</div><div class="ym-counts">${countHtml}</div></div>
       <div class="ym-days-hdr">${orderedDayLabels().map(d=>`<div class="ym-day-lbl">${d[0]}</div>`).join('')}</div>
       <div class="ym-cal-grid">`;
@@ -828,15 +829,28 @@ function renderYear(){
       const key=`${curYear}-${pad(mo+1)}-${pad(d)}`,n=(dayCount[d]||0)+(eventDayCount[d]||0),isT=key===todayKey;
       const hasEv=(eventDayCount[d]||0)>0;
       let dotCls=n===1?'d1':n===2?'d2':n<=4?'d3':n>4?'d4':'';
-      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
+      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')" title="Click to add task/event">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
     }
     const rem=(first+dim)%7;if(rem>0)for(let i=0;i<7-rem;i++)html+=`<div class="ym-day other"></div>`;
-    html+=`</div></div>`;
+    html+=`</div>`;
+    if(isExpanded){
+      html+=`<div class="ym-expand-actions">
+        <button class="ym-expand-btn" onclick="event.stopPropagation();onYearGoMonth(${curYear},${mo})">Open in month view</button>
+        <button class="ym-expand-btn secondary" onclick="event.stopPropagation();_yearExpandedMonth=-1;renderYear()">Collapse</button>
+      </div>`;
+    }
+    html+=`</div>`;
   }
   document.getElementById('yearGrid').innerHTML=html;
 }
-function onYearMonthClick(y,mo){cursor=new Date(y,mo,1);selDate=new Date(y,mo,1);switchView('month')}
-function onYearDayClick(key){selDate=fromDk(key);switchView('day')}
+function onYearMonthClick(y,mo){
+  if(_yearExpandedMonth===mo&&curYear===y){_yearExpandedMonth=-1;}
+  else{_yearExpandedMonth=mo;curYear=y;}
+  renderYear();
+}
+function onYearDayClick(key){openNew(key,'09:00')}
+function onYearGoMonth(y,mo){_yearExpandedMonth=-1;cursor=new Date(y,mo,1);selDate=new Date(y,mo,1);switchView('month');}
+let _yearExpandedMonth=-1;
 
 // ══ MONTH ════════════════════════════════════
 function renderMonth(){
@@ -880,7 +894,7 @@ function renderMonth(){
   updateMonthNotesPreview();
   if(_monthNotesOpen)loadMonthNotesUI();
 }
-function onMCell(k){selDate=fromDk(k);switchView('day')}
+function onMCell(k){openNew(k,'09:00')}
 
 // ── Month Notes ──────────────────────────────────────────────
 function monthNotesKey(){
@@ -1020,8 +1034,6 @@ function renderWeek(){
       });
     })();
 
-    // Routine bands for this day (used for task nesting inset)
-    const wkRoutines=getRoutineForDay(k);
     let taskBlocks=dayTasks.map(t=>{
       const [th,tm]=t.time.split(':').map(Number);
       const topPx=(th*60+tm)/30*WK_SLOT_H;
@@ -1032,26 +1044,18 @@ function renderWeek(){
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
       // Column positioning from overlap layout
       const ci=wkColMap.get(t.id)||{col:0,total:1};
-      // Check if task is within a routine band for nesting inset
-      const tMins=th*60+tm;
-      const wkInRoutine=wkRoutines.some(b=>{
-        const[bsh2,bsm2]=b.start.split(':').map(Number);
-        const[beh2,bem2]=b.end.split(':').map(Number);
-        return tMins>=bsh2*60+bsm2&&tMins<beh2*60+bem2;
-      });
-      const wkRI=wkInRoutine?3:0;
-      let leftVal=(2+wkRI)+'px',rightVal=(2+wkRI)+'px';
+      let leftVal='2px',rightVal='2px';
       if(ci.total>1){
         const pct=100/ci.total;
-        leftVal=ci.col===0?(2+wkRI)+'px':`calc(${(ci.col*pct).toFixed(1)}% + ${1+wkRI}px)`;
-        rightVal=ci.col===ci.total-1?(2+wkRI)+'px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + ${1+wkRI}px)`;
+        leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
+        rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
       }
       const narrowCls=ci.total>=3?' wk-task-narrow':'';
       const wkDurStep=dur>30?`<div class="wk-dur-stepper"><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',-15,event)">−</button><span class="wk-task-block-dur">${durLabel(dur)}</span><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',15,event)">+</button></div>`:'';
       if(isEvent){
         return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
-          style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc}"
+          style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc};border-top-color:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <span class="wk-task-block-name">${esc(t.name)}</span>
           ${ci.total<=2?wkDurStep:''}
@@ -1059,7 +1063,7 @@ function renderWeek(){
       }
       return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
-        style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};background:${taskBlockBg(t.category)}"
+        style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
         <div style="display:flex;align-items:center;gap:2px;min-width:0">
           ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
@@ -1177,7 +1181,7 @@ function buildDayTaskBlock(t, key, conflictIds){
     return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
       <div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-        style="background:${cc}"
+        style="background:${cc};border-top-color:${cc}"
         onclick="openEdit('${t.id}','${idate}',event)">
         <div class="day-task-block-check">
           <span class="day-task-block-name">${esc(t.name)}</span>
@@ -1198,7 +1202,7 @@ function buildDayTaskBlock(t, key, conflictIds){
   return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
     <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="border-left-color:${cc};background:${taskBlockBg(t.category)}"
+      style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
       onclick="openEdit('${t.id}','${idate}',event)">
       <div class="day-task-block-check">
         <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
@@ -1346,6 +1350,7 @@ function renderDay(){
 
   // Routine block lookup
   const routineBands=getRoutineForDay(key);
+  const _labeledBands=new Set(); // track which bands got their label
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
   }
@@ -1394,10 +1399,25 @@ function renderDay(){
     // Render in-flow task blocks (overlapping items are excluded — they render in the absolute overlay)
     const taskHtml=tasksHere.map(t=>buildDayTaskBlock(t,key,conflictIds)).join('');
 
-    // Routine data attribute for container nesting + open-window hint
+    // Routine data attribute for container nesting
     const routineAttr=rb?` data-routine="${rb.type}"`:'';
+
+    // Routine band label — show on first slot of each band (works with or without tasks)
+    let routineLabelHtml='';
+    if(rb&&rt){
+      const bandKey=rb.type+'|'+rb.start+'|'+rb.end+(rb.customName||'');
+      if(!_labeledBands.has(bandKey)){
+        _labeledBands.add(bandKey);
+        const rName=esc(rb.customName||rt.label);
+        const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
+        const badgeHtml=isWin?`<span class="routine-slot-badge window">Window</span>`:`<span class="routine-slot-badge block">Block</span>`;
+        routineLabelHtml=`<div class="routine-slot-label" style="color:${rt.color}"><span class="routine-slot-dot" style="background:${rt.color}"></span>${rName} ${badgeHtml}</div>`;
+      }
+    }
+
+    // Open-window hint for empty schedulable routine slots
     let windowHintHtml='';
-    if(rb&&!hasTask){
+    if(rb&&!hasTask&&!routineLabelHtml){
       const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
       if(isWin){windowHintHtml=`<div class="routine-window-hint" style="color:${rt.color}">open</div>`;}
     }
@@ -1408,7 +1428,7 @@ function renderDay(){
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
              ondrop="onDropSlot(event,'${key}','${sk2}')">
-             ${windowHintHtml}${taskHtml}
+             ${routineLabelHtml}${windowHintHtml}${taskHtml}
            </div>`;
   });
 
@@ -1437,19 +1457,11 @@ function renderDay(){
         const hPx=Math.max(36,dur/30*DAY_SLOT_H);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
-        // Check if task falls within a routine band for inset nesting
-        const tStartMins=h*60+m;
-        const _inRoutine=routineBands.some(b=>{
-          const[bsh,bsm]=b.start.split(':').map(Number);
-          const[beh,bem]=b.end.split(':').map(Number);
-          return tStartMins>=bsh*60+bsm&&tStartMins<beh*60+bem;
-        });
-        const rInset=_inRoutine?4:0;
-        let leftVal=(2+rInset)+'px',rightVal=(2+rInset)+'px';
+        let leftVal='2px',rightVal='2px';
         if(ci.total>1){
           const pct=100/ci.total;
-          leftVal=ci.col===0?(2+rInset)+'px':`calc(${(ci.col*pct).toFixed(1)}% + ${1+rInset}px)`;
-          rightVal=ci.col===ci.total-1?(2+rInset)+'px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + ${1+rInset}px)`;
+          leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
+          rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
         }
 
         const idate=t._instanceDate||key;
@@ -1473,7 +1485,7 @@ function renderDay(){
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-            style="background:${cc};height:100%;margin:0;border-radius:6px"
+            style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
@@ -1487,7 +1499,7 @@ function renderDay(){
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
           blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-            style="border-left-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:6px"
+            style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
@@ -1549,29 +1561,17 @@ function renderDay(){
 
         const topPx2=startSlot.offsetTop;
         const bottomPx2=endSlot.offsetTop+endSlot.offsetHeight;
-        // Use MAX of DOM measurement and time-proportional height
-        // This prevents collapsed interior slots from squishing the container
         const durationSlots=Math.ceil((endMins3-startMins3)/30);
         const timeH=durationSlots*DAY_SLOT_H;
         const domH=bottomPx2-topPx2;
         const hPx2=Math.max(domH,timeH);
         if(hPx2<=0)return;
 
-        // ── Container frame (z-index 1, behind tasks) ──
+        // Container frame (z-index 1, behind tasks)
         const container=document.createElement('div');
         container.className='routine-container';
         container.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;--rc-bg:${rtC.color}06;top:${topPx2}px;height:${hPx2}px;left:${lblW2}px;right:0`;
         tl.appendChild(container);
-
-        // ── Floating header pill (z-index 5, above tasks) ──
-        const rName2=esc(b.customName||rtC.label);
-        const badgeCls=isW?'window':'block';
-        const badgeText=isW?'Window':'Block';
-        const hdr=document.createElement('div');
-        hdr.className='routine-container-hdr-float';
-        hdr.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;top:${topPx2}px;left:${lblW2+4}px`;
-        hdr.innerHTML=`<span class="routine-container-dot" style="background:${rtC.color}"></span><span class="routine-container-name">${rName2}</span><span class="routine-container-badge ${badgeCls}">${badgeText}</span>`;
-        tl.appendChild(hdr);
       });
     });
   }
@@ -2780,6 +2780,124 @@ document.getElementById('bdInput').addEventListener('keydown',e=>{
     autoExpand(ta);
   }
 });
+
+// ══ QUICK EVENT ADD ════════════════════════════
+function parseQuickEvent(raw){
+  // Natural language parser: "Dentist Tuesday 2pm" or "Mom birthday April 20" or "Dinner Fri 7pm at Olive Garden"
+  let text=raw.trim();if(!text)return null;
+  let time=null,date=null,location=null,allday=false;
+
+  // Extract "at <location>" from end
+  const atMatch=text.match(/\s+at\s+(.+)$/i);
+  if(atMatch){location=atMatch[1].trim();text=text.slice(0,atMatch.index).trim();}
+
+  // Extract time patterns: 2pm, 2:30pm, 14:00, 2 pm
+  const timeRe=/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)\b/;
+  const time24Re=/\b(\d{1,2}):(\d{2})\b/;
+  const tm=text.match(timeRe);
+  if(tm){
+    let h=parseInt(tm[1]),m=parseInt(tm[2]||'0');
+    const ampm=tm[3].toLowerCase();
+    if(ampm==='pm'&&h<12)h+=12;
+    if(ampm==='am'&&h===12)h=0;
+    time=pad(h)+':'+pad(m);
+    text=text.replace(tm[0],'').trim();
+  } else {
+    const tm2=text.match(time24Re);
+    if(tm2){time=pad(parseInt(tm2[1]))+':'+pad(parseInt(tm2[2]));text=text.replace(tm2[0],'').trim();}
+  }
+
+  // Check for "all day"
+  if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
+
+  // Extract date: day names, "tomorrow", "today", or "Month Day"
+  const today=new Date();today.setHours(0,0,0,0);
+  const dayNames=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const dayNamesS=['sun','mon','tue','wed','thu','fri','sat'];
+  const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const monthNamesS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+  // "today"
+  if(/\btoday\b/i.test(text)){date=dk(today);text=text.replace(/\btoday\b/i,'').trim();}
+  // "tomorrow"
+  else if(/\btomorrow\b/i.test(text)){date=dk(addDays(today,1));text=text.replace(/\btomorrow\b/i,'').trim();}
+  // Day name: "Tuesday", "Fri"
+  else{
+    for(let i=0;i<7;i++){
+      const re=new RegExp('\\b('+dayNames[i]+'|'+dayNamesS[i]+')\\b','i');
+      const dm=text.match(re);
+      if(dm){
+        const target=i,cur=today.getDay();
+        let diff=target-cur;if(diff<=0)diff+=7;
+        date=dk(addDays(today,diff));
+        text=text.replace(dm[0],'').trim();
+        break;
+      }
+    }
+  }
+
+  // "April 20" or "Apr 20" or "20 April"
+  if(!date){
+    for(let mi=0;mi<12;mi++){
+      const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');
+      const re2=new RegExp('\\b(\\d{1,2})\\s+('+monthNames[mi]+'|'+monthNamesS[mi]+')\\b','i');
+      const mm=text.match(re)||text.match(re2);
+      if(mm){
+        const dayNum=parseInt(mm[2])||parseInt(mm[1]);
+        const yr=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();
+        date=`${yr}-${pad(mi+1)}-${pad(dayNum)}`;
+        text=text.replace(mm[0],'').trim();
+        break;
+      }
+    }
+  }
+
+  // Fallback: if no date found, use today
+  if(!date)date=dk(today);
+  // Fallback: if no time and not all-day, default 9am
+  if(!time&&!allday)time='09:00';
+
+  // Remaining text is the event name
+  const name=text.replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
+  if(!name)return null;
+
+  return{name,date,time:allday?null:time,allday,location};
+}
+
+function addQuickEvent(){
+  const input=document.getElementById('qeInput');if(!input)return;
+  const raw=input.value.trim();if(!raw)return;
+  const parsed=parseQuickEvent(raw);
+  if(!parsed){showToast('Could not parse event — try "Dinner Friday 7pm"');return;}
+
+  tasks.push({
+    id:genId(),
+    name:parsed.name,
+    type:'event',
+    priority:'none',
+    category:'none',
+    notes:'',
+    date:parsed.date,
+    time:parsed.time,
+    allday:parsed.allday,
+    duration:60,
+    scheduled:true,
+    done:false,
+    location:parsed.location||'',
+    recur:false,recurN:1,recurU:'day',
+    subtasks:[],
+    doneOverrides:[],
+    deletedOccurrences:[]
+  });
+
+  input.value='';
+  save();renderAll();
+  const d=fromDk(parsed.date);
+  const dateLabel=MONTHS_S[d.getMonth()]+' '+d.getDate();
+  const timeLabel=parsed.allday?'All Day':fmtT(parsed.time);
+  showToast(`Event "${parsed.name}" added · ${dateLabel} ${timeLabel}`);
+}
+
 function renderBD(){
   const list=document.getElementById('bdList');if(!list)return;
   if(!brainDump.length){list.innerHTML=`<div class="bd-hint">Drag tasks to any day or time slot →</div>`;return}
@@ -2873,7 +2991,6 @@ function showWarnToast(msg,persist){
     document.body.appendChild(el);
   }
   clearTimeout(el._t);
-  // Build content with optional X button for persistent warnings
   if(persist){
     el.innerHTML=`<span class="warn-toast-msg">${msg}</span><button class="warn-toast-x" onclick="dismissWarnToast()" title="Dismiss">&times;</button>`;
     el.classList.add('show','persistent');
@@ -4892,5 +5009,13 @@ function clarityInit(){
   initTooltips();
   initBDReorder();
   restoreFocusTimer();
+
+  // Quick event input — enter to add
+  const qeInput=document.getElementById('qeInput');
+  if(qeInput){
+    qeInput.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){e.preventDefault();addQuickEvent();}
+    });
+  }
 }
 document.addEventListener('DOMContentLoaded',clarityInit);
