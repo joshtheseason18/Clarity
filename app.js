@@ -951,7 +951,7 @@ function renderMonth(){
       <span class="month-stat-num">${mTasks.length}</span><span class="month-stat-sub">${mDone} done</span><span class="month-stat-label">Tasks</span>
     </div>
     <div class="month-stat-card" onmouseenter="monthGlow('events')" onmouseleave="monthGlow(null)" onclick="openYearMonthPopup(${y},${mo});showYearMonthSummary('event',${y},${mo})">
-      <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-sub">hover to highlight</span><span class="month-stat-label">Events</span>
+      <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-sub">&nbsp;</span><span class="month-stat-label">Events</span>
     </div>
     <div class="month-stat-card">
       <span class="month-stat-num">${goalsDone}/${goalsTotal||3}</span><span class="month-stat-sub">${goalPct}%</span><span class="month-stat-label">Goals</span>
@@ -1041,7 +1041,7 @@ function renderMonthPlan(){
       ondragstart="onMpGoalDragStart(event,${i})" ondragover="onMpGoalDragOver(event)" ondrop="onMpGoalDrop(event,${i})" ondragend="onMpGoalDragEnd(event)">
       <span class="mp-goal-grip" onmousedown="event.stopPropagation()">≡</span>
       <div class="mp-goal-check${g.done?' checked':''}" onclick="toggleMpGoal(${i})"></div>
-      <span class="mp-goal-text" contenteditable="true" spellcheck="false"
+      <span class="mp-goal-text" contenteditable="true" spellcheck="false" data-placeholder="Type a goal…"
         onblur="saveMpGoalText(${i},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">${esc(g.text)}</span>
       <span class="mp-goal-del" onclick="deleteMpGoal(${i})">✕</span>
     </div>`;
@@ -1098,12 +1098,15 @@ function renderMonthPlan(){
 function addMpGoal(){
   const key=monthPlanKey();const p=getMonthPlans(key);
   if((p.goals||[]).length>=3)return;
-  p.goals.push({id:'g'+Date.now(),text:'New goal',done:false});
+  p.goals.push({id:'g'+Date.now(),text:'',done:false});
   saveMonthPlans();renderMonthPlan();
   // Focus the new goal text
   setTimeout(()=>{
     const goals=document.querySelectorAll('.mp-goal-text');
-    if(goals.length)goals[goals.length-1].focus();
+    if(goals.length){
+      const el=goals[goals.length-1];
+      el.focus();
+    }
   },50);
 }
 function toggleMpGoal(i){
@@ -2190,6 +2193,7 @@ let _focusTaskId=null,_focusDate=null;
 let _focusDur=25,_focusRemaining=25*60,_focusTotal=25*60;
 let _focusRunning=false,_focusInterval=null;
 let _focusSessions=0;
+let _focusOriginalDur=30; // Bug 2 fix: store original duration for reset
 
 function switchSideFocus(){
   populateFocusPicker();
@@ -2215,10 +2219,19 @@ function onFocusPickTask(val){
 }
 function startFocusForTask(id,dateKey){
   const t=tasks.find(t=>t.id===id);if(!t)return;
+  // Bug 6 fix: clean up any running timer before starting a new one
+  if(_focusRunning&&_focusTaskId&&_focusTaskId!==id){
+    clearInterval(_focusInterval);
+    _focusRunning=false;
+    localStorage.removeItem('clarity_focus_active');
+  }
   _focusTaskId=id;_focusDate=dateKey;
   const dur=t.duration||30;
+  _focusOriginalDur=dur; // Bug 2 fix: store original for reset
   _focusDur=dur;_focusRemaining=dur*60;_focusTotal=dur*60;
-  _focusRunning=false;_focusSessions=0;
+  // Bug 5 fix: don't reset session count when switching tasks
+  // _focusSessions=0; ← removed
+  _focusRunning=false;
   clearInterval(_focusInterval);
   document.getElementById('focusEmpty').style.display='none';
   document.getElementById('focusActive').style.display='';
@@ -2296,27 +2309,53 @@ function restoreFocusTimer(){
   }catch(e){localStorage.removeItem('clarity_focus_active');}
 }
 function addFocusTime(){
+  // Bug 1 fix: check slot overflow before extending
+  const t=tasks.find(t=>t.id===_focusTaskId);
+  if(t&&t.time&&t.date){
+    const newDur=_focusDur+15;
+    const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newDur);
+    if(overflow.blocked){
+      showWarnToast(`Can't extend — ${overflow.count} tasks already at ${fmtT(overflow.slotTime)}`,false);
+      return;
+    }
+    const routineCheck=checkRoutineOverflow(_focusDate||t.date,t.time,newDur);
+    if(routineCheck.blocked){
+      showWarnToast(`Extending runs into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,false);
+      // Warn but allow
+    }
+  }
   _focusRemaining+=15*60;
   _focusTotal+=15*60;
   _focusDur+=15;
   // Also update the task's duration
-  const t=tasks.find(t=>t.id===_focusTaskId);
   if(t)t.duration=_focusDur;
   save();
+  // Bug 3 fix: update localStorage if timer is running
+  if(_focusRunning){
+    localStorage.setItem('clarity_focus_active',JSON.stringify({
+      taskId:_focusTaskId,date:_focusDate,
+      endAt:Date.now()+_focusRemaining*1000,
+      total:_focusTotal
+    }));
+  }
   updateFocusDisplay();
-  showToast('+15 min added');
+  showToast(`+15 min added · Task now ${durLabel(_focusDur)}`);
 }
 function resetFocusTimer(){
   clearInterval(_focusInterval);
   _focusRunning=false;
   localStorage.removeItem('clarity_focus_active');
+  // Bug 2 fix: revert to ORIGINAL duration, not current (which may have been extended)
   const t=tasks.find(t=>t.id===_focusTaskId);
-  const dur=t?t.duration||30:_focusDur;
-  _focusDur=dur;_focusRemaining=dur*60;_focusTotal=dur*60;
+  if(t&&t.duration!==_focusOriginalDur){
+    t.duration=_focusOriginalDur;
+    save();
+  }
+  _focusDur=_focusOriginalDur;_focusRemaining=_focusOriginalDur*60;_focusTotal=_focusOriginalDur*60;
   document.getElementById('focusPlayBtn').textContent='Start';
   document.getElementById('focusDurRow').style.opacity='';
   document.getElementById('focusDurRow').style.pointerEvents='';
-  buildFocusDurButtons(dur);
+  buildFocusDurButtons(_focusOriginalDur);
   updateFocusDisplay();
 }
 function endFocusSession(){
@@ -2331,8 +2370,18 @@ function endFocusSession(){
   // Check overflow and offer reflow
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t&&elapsed>t.duration*60){
+    const newDurMins=Math.ceil(elapsed/60);
+    // Bug 4 fix: check slot overflow before auto-extending
+    if(t.time&&t.date){
+      const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newDurMins);
+      if(overflow.blocked){
+        showWarnToast(`Session ran over but can't extend — ${overflow.count} tasks at ${fmtT(overflow.slotTime)}`,false);
+        resetFocusUI();
+        return;
+      }
+    }
     const overflowMins=Math.ceil((elapsed-t.duration*60)/60);
-    t.duration=Math.ceil(elapsed/60);
+    t.duration=newDurMins;
     save();
     offerReflow(t,overflowMins);
   }
@@ -2443,6 +2492,9 @@ function checkOverdueTasks(){
 let _overdueDismissedToday=false;
 function openOverduePopup(overdueList){
   if(_overdueDismissedToday)return;
+  // Don't open if another modal is already visible (prevent stacking)
+  const anyModalOpen=document.querySelector('.modal-overlay.open,.modal-overlay.show');
+  if(anyModalOpen&&anyModalOpen.id!=='overduePopupOverlay')return;
   if(!overdueList||!overdueList.length){
     const todayKey=dk(new Date());
     overdueList=tasks.filter(t=>
@@ -2602,14 +2654,16 @@ function overdueBatchMove(target){
 }
 function showOverdueConflictView(overdueList,results,targetKey,targetLabel){
   const conflictCount=results.filter(r=>r.conflict).length;
-  const durations=overdueList.map(t=>t.duration||30);
-  const smartSlots=findOpenSlots(targetKey,overdueList.length,durations);
+  // Only find slots for conflicting tasks
+  const conflictingDurations=results.filter(r=>r.conflict).map(r=>r.task.duration||30);
+  const smartSlots=findOpenSlots(targetKey,conflictingDurations.length,conflictingDurations);
+  let slotIdx=0;
   const listHtml=results.map((r,i)=>{
     const t=r.task;
     const cc=catColor(t.category);
-    const timeStr=t.time||'unset';
     if(r.conflict){
-      const newTime=smartSlots[i]?fmtT(smartSlots[i]):'no slot';
+      const newTime=smartSlots[slotIdx]?fmtT(smartSlots[slotIdx]):'no open slot';
+      slotIdx++;
       return`<div class="od-task-row">
         <div class="od-task-color" style="background:${cc}"></div>
         <div class="od-task-info">
@@ -2626,6 +2680,7 @@ function showOverdueConflictView(overdueList,results,targetKey,targetLabel){
       </div>
     </div>`;
   }).join('');
+  const noSlotCount=conflictCount-smartSlots.length;
   const content=document.getElementById('overduePopupContent');
   if(!content)return;
   content.innerHTML=`
@@ -2640,7 +2695,7 @@ function showOverdueConflictView(overdueList,results,targetKey,targetLabel){
       <button class="od-close" onclick="closeOverduePopup()">✕</button>
     </div>
     <div class="od-warn-bar">
-      <div class="od-warn-text"><strong>Smart placement available</strong> — move conflicting tasks to the next open slots in your routine windows?</div>
+      <div class="od-warn-text"><strong>Smart placement available</strong> — move conflicting tasks to the next open slots in your routine windows?${noSlotCount>0?` <em>(${noSlotCount} task${noSlotCount>1?'s':''} couldn't be placed — not enough open slots)</em>`:''}</div>
     </div>
     <div class="od-task-list" id="odTaskList">${listHtml}</div>
     <div class="od-batch-bar">
@@ -2655,14 +2710,26 @@ function overdueSmartPlace(targetKey){
     t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
     (t.type||'task')!=='event'
   ).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  const durations=overdueList.map(t=>t.duration||30);
-  const smartSlots=findOpenSlots(targetKey,overdueList.length,durations);
-  overdueList.forEach((t,i)=>{
+  // Run conflict check to know which need new slots
+  const results=checkConflicts(overdueList,targetKey);
+  const conflictingTasks=results.filter(r=>r.conflict).map(r=>r.task);
+  const conflictingDurations=conflictingTasks.map(t=>t.duration||30);
+  const smartSlots=findOpenSlots(targetKey,conflictingDurations.length,conflictingDurations);
+  let slotIdx=0;
+  overdueList.forEach(t=>{
     t.date=targetKey;
-    if(smartSlots[i])t.time=smartSlots[i];
+    const isConflict=conflictingTasks.some(ct=>ct.id===t.id);
+    if(isConflict&&smartSlots[slotIdx]){
+      t.time=smartSlots[slotIdx];
+      slotIdx++;
+    } else if(isConflict){
+      slotIdx++; // skip — no slot available, keep original time
+    }
+    // Non-conflicting tasks keep their original time
   });
   save();renderAll();closeOverduePopup();
-  showToast(`Smart-placed ${overdueList.length} task${overdueList.length!==1?'s':''}`);
+  const placed=Math.min(conflictingTasks.length,smartSlots.length);
+  showToast(`Smart-placed ${placed} task${placed!==1?'s':''}, ${overdueList.length-conflictingTasks.length} moved as-is`);
 }
 function overdueForceMove(targetKey,targetLabel){
   const todayKey=dk(new Date());
@@ -3334,16 +3401,70 @@ function onDO(e){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropa
 function onDL(e){e.currentTarget.classList.remove('drag-over')}
 function snapFlash(el){if(!el)return;el.classList.remove('snap-flash');void el.offsetWidth;el.classList.add('snap-flash');setTimeout(()=>el.classList.remove('snap-flash'),600)}
 // ══ SLOT VALIDATION ══════════════════════════
-const MAX_TASKS_PER_SLOT = 2;
+const MAX_TASKS_PER_SLOT = 3;
 
 function tasksInSlot(dateKey, time){
   // All non-done tasks scheduled at this exact date+time
   return tasks.filter(t=>t.scheduled&&t.date===dateKey&&t.time===time&&!t.done);
 }
 
+// Count all tasks that overlap a given time range on a date (duration-aware)
+function countOverlappingAt(dateKey, checkMins, excludeId){
+  const dayTasks=tasks.filter(t=>t.scheduled&&t.date===dateKey&&t.time&&!t.done&&!t.allday&&t.id!==excludeId);
+  let count=0;
+  dayTasks.forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    const tStart=h*60+m;
+    const tEnd=tStart+(t.duration||30);
+    if(checkMins>=tStart&&checkMins<tEnd)count++;
+  });
+  return count;
+}
+
+// Check if extending a task would overflow any slot in its new range
+function checkDurationOverflow(taskId, dateKey, startTime, newDur){
+  const[h,m]=startTime.split(':').map(Number);
+  const startMins=h*60+m;
+  const endMins=startMins+newDur;
+  // Check every 30-min slot the task would now occupy
+  for(let mm=startMins;mm<endMins;mm+=30){
+    const count=countOverlappingAt(dateKey,mm,taskId);
+    if(count>=MAX_TASKS_PER_SLOT){
+      const slotH=Math.floor(mm/60),slotM=mm%60;
+      return{blocked:true,slotTime:pad(slotH)+':'+pad(slotM),count:count};
+    }
+  }
+  return{blocked:false};
+}
+
+// Check if extending would push into a blocked routine
+function checkRoutineOverflow(dateKey, startTime, newDur){
+  const[h,m]=startTime.split(':').map(Number);
+  const endMins=h*60+m+newDur;
+  const routines=getRoutineForDay(dateKey);
+  for(const b of routines){
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    const isSchedulable=b.schedulable!==undefined?b.schedulable:rt.schedulable;
+    if(isSchedulable)continue; // skip schedulable windows, only check blocked
+    const[bh,bm]=b.start.split(':').map(Number);
+    const[eh,em]=b.end.split(':').map(Number);
+    const bStart=bh*60+bm;
+    const bEnd=eh*60+em;
+    const startMins=h*60+m;
+    // Task currently starts before the block and new end would push into it
+    if(startMins<bStart&&endMins>bStart){
+      return{blocked:true,routineName:b.customName||rt.label,routineStart:b.start};
+    }
+  }
+  return{blocked:false};
+}
+
 function slotFull(dateKey, time, excludeId){
-  const existing=tasksInSlot(dateKey,time).filter(t=>t.id!==excludeId);
-  return existing.length>=MAX_TASKS_PER_SLOT;
+  // Check both exact start count AND duration-aware overlap count
+  const exactCount=tasksInSlot(dateKey,time).filter(t=>t.id!==excludeId).length;
+  const[h,m]=time.split(':').map(Number);
+  const overlapCount=countOverlappingAt(dateKey,h*60+m,excludeId);
+  return Math.max(exactCount,overlapCount)>=MAX_TASKS_PER_SLOT;
 }
 
 function duplicateInSlot(dateKey, time, taskName, excludeId){
@@ -3667,13 +3788,44 @@ function doRipple(el){
 const DUR_OPTS=[15,30,45,60,75,90,105,120,150,180,240];
 function durLabel(m){if(m<60)return m+'m';const h=Math.floor(m/60),r=m%60;return r?h+'h '+r+'m':h+'h'}
 
+let _adjustDurLock=false;
 function adjustDuration(id,idate,delta,e){
-  if(e)e.stopPropagation();
-  const t=tasks.find(t=>t.id===id);if(!t)return;
+  if(e){e.stopPropagation();e.preventDefault();}
+  if(_adjustDurLock)return;
+  _adjustDurLock=true;
+  const t=tasks.find(t=>t.id===id);if(!t){_adjustDurLock=false;return;}
   const newDur=Math.max(15,Math.min(720,(t.duration||30)+delta));
-  if(newDur===(t.duration||30))return;
+  if(newDur===(t.duration||30)){_adjustDurLock=false;return;}
+  // Only check overflow on INCREASE (shrinking is always safe)
+  if(delta>0&&t.time&&t.date){
+    // Check if extending pushes into a full slot
+    const overflow=checkDurationOverflow(t.id,idate||t.date,t.time,newDur);
+    if(overflow.blocked){
+      showWarnToast(`Can't extend — ${overflow.count} tasks already at ${fmtT(overflow.slotTime)}`,false);
+      _adjustDurLock=false;
+      setTimeout(()=>{_adjustDurLock=false;},150);
+      return;
+    }
+    // Check if extending pushes into a blocked routine
+    const routineCheck=checkRoutineOverflow(idate||t.date,t.time,newDur);
+    if(routineCheck.blocked){
+      showWarnToast(`Extending would run into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,false);
+      // Allow it but warn — don't block
+    }
+  }
   t.duration=newDur;
-  save();renderAll();
+  save();
+  // Targeted update: find this task's dur label in DOM and update it without full re-render
+  const block=document.querySelector(`.day-task-block[data-id="${id}"],.wk-task-block[data-id="${id}"]`);
+  if(block){
+    const durPill=block.querySelector('.day-task-dur-pill,.wk-task-block-dur');
+    if(durPill)durPill.textContent=durLabel(newDur);
+  }
+  // Defer full re-render to avoid click race
+  requestAnimationFrame(()=>{
+    renderAll();
+    setTimeout(()=>{_adjustDurLock=false;},150);
+  });
 }
 
 let _selDur=30;
@@ -5115,6 +5267,11 @@ function updateOverdueBadge(){
 }
 
 function goOverdue(){
+  // Close any open modal first since this is user-initiated
+  document.querySelectorAll('.modal-overlay.open,.modal-overlay.show').forEach(el=>{
+    el.classList.remove('open','show');
+  });
+  _overdueDismissedToday=false; // reset session dismiss since user explicitly asked
   openOverduePopup();
 }
 

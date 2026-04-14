@@ -700,7 +700,7 @@ header{
 .ym-day.today .ym-dot.d4{background:#fff}
 
 /* Year month popup */
-.ym-popup{background:var(--surface);border-radius:16px;padding:20px;width:340px;max-width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.ym-popup{background:var(--surface);border-radius:16px;padding:20px;width:440px;max-width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .ymp-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .ymp-title{font-family:'DM Serif Display',serif;font-size:20px;color:var(--text)}
 .ymp-close{width:28px;height:28px;border-radius:50%;border:none;background:var(--surface2);color:var(--text2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;transition:background .12s}
@@ -2463,6 +2463,7 @@ header{
 .month-plan-hdr{
   display:flex;align-items:center;gap:8px;padding:12px 16px;
   cursor:pointer;user-select:none;transition:background .15s;
+  background:var(--accent-pale);border-bottom:1px solid var(--border);
 }
 .month-plan-hdr:hover{background:var(--surface2)}
 .month-plan-title{font-size:14px;font-weight:700;color:var(--text);flex:1;font-family:'DM Serif Display',serif}
@@ -2470,7 +2471,9 @@ header{
 .month-plan-toggle:hover{color:var(--accent)}
 .month-plan-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:0 16px 16px}
 @media(max-width:768px){.month-plan-grid{grid-template-columns:1fr;gap:12px}}
-.mp-col{display:flex;flex-direction:column;gap:6px}
+.mp-col{display:flex;flex-direction:column;gap:6px;padding-right:16px;border-right:1px solid var(--border)}
+.mp-col:last-child{padding-right:0;border-right:none}
+@media(max-width:768px){.mp-col{padding-right:0;border-right:none;padding-bottom:12px;border-bottom:1px solid var(--border)}.mp-col:last-child{padding-bottom:0;border-bottom:none}}
 .mp-col-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);margin-bottom:4px}
 /* Goals */
 .mp-goal{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;transition:background .1s;position:relative}
@@ -2481,6 +2484,7 @@ header{
 .mp-goal-check.checked{background:var(--accent);border-color:var(--accent)}
 .mp-goal-check.checked::after{content:'✓';color:#fff;font-size:10px;font-weight:700}
 .mp-goal-text{font-size:12px;color:var(--text);flex:1;outline:none;border:none;background:none;font-family:'DM Sans',sans-serif;line-height:1.4}
+.mp-goal-text:empty::before{content:attr(data-placeholder);color:var(--text3);font-style:italic;pointer-events:none}
 .mp-goal.done .mp-goal-text{text-decoration:line-through;opacity:.5}
 .mp-goal-del{opacity:0;font-size:10px;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:4px;transition:all .1s}
 .mp-goal:hover .mp-goal-del{opacity:1}
