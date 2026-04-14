@@ -2193,17 +2193,35 @@ let _focusTaskId=null,_focusDate=null;
 let _focusDur=25,_focusRemaining=25*60,_focusTotal=25*60;
 let _focusRunning=false,_focusInterval=null;
 let _focusSessions=0;
-let _focusOriginalDur=30; // Bug 2 fix: store original duration for reset
+let _focusOriginalDur=30;
+let _focusMode='task'; // 'pomodoro','task','custom'
+let _focusOverlayOpen=false;
 
 function switchSideFocus(){
   populateFocusPicker();
   if(_focusTaskId){
     document.getElementById('focusEmpty').style.display='none';
     document.getElementById('focusActive').style.display='';
+    // Update sidebar compact card
+    const t=tasks.find(t=>t.id===_focusTaskId);
+    if(t){
+      document.getElementById('focusSideName').textContent=t.name;
+      updateSidebarTimer();
+    }
   } else {
     document.getElementById('focusEmpty').style.display='';
     document.getElementById('focusActive').style.display='none';
   }
+}
+function updateSidebarTimer(){
+  const mins=Math.floor(_focusRemaining/60);
+  const secs=_focusRemaining%60;
+  const el=document.getElementById('focusSideTime');
+  if(el)el.textContent=pad(mins)+':'+pad(secs);
+  const pct=_focusTotal>0?(_focusTotal-_focusRemaining)/_focusTotal:0;
+  const circ=94.25;
+  const arc=document.getElementById('focusArcSide');
+  if(arc)arc.setAttribute('stroke-dashoffset',circ-(circ*pct));
 }
 function populateFocusPicker(){
   const sel=document.getElementById('focusTaskPicker');if(!sel)return;
@@ -2219,7 +2237,7 @@ function onFocusPickTask(val){
 }
 function startFocusForTask(id,dateKey){
   const t=tasks.find(t=>t.id===id);if(!t)return;
-  // Bug 6 fix: clean up any running timer before starting a new one
+  // Clean up any running timer before starting new one
   if(_focusRunning&&_focusTaskId&&_focusTaskId!==id){
     clearInterval(_focusInterval);
     _focusRunning=false;
@@ -2227,53 +2245,172 @@ function startFocusForTask(id,dateKey){
   }
   _focusTaskId=id;_focusDate=dateKey;
   const dur=t.duration||30;
-  _focusOriginalDur=dur; // Bug 2 fix: store original for reset
+  _focusOriginalDur=dur;
+  _focusMode='task';
   _focusDur=dur;_focusRemaining=dur*60;_focusTotal=dur*60;
-  // Bug 5 fix: don't reset session count when switching tasks
-  // _focusSessions=0; ← removed
   _focusRunning=false;
   clearInterval(_focusInterval);
+  // Update sidebar
   document.getElementById('focusEmpty').style.display='none';
   document.getElementById('focusActive').style.display='';
-  document.getElementById('focusTaskName').textContent=t.name;
-  const meta=[t.time?fmtT(t.time):'',catById(t.category)?.name||'',durLabel(dur)].filter(Boolean).join(' · ');
-  document.getElementById('focusTaskMeta').textContent=meta;
-  document.getElementById('focusPlayBtn').textContent='Start';
+  document.getElementById('focusSideName').textContent=t.name;
+  // Open the overlay
+  openFocusOverlay();
+}
+
+// ── Focus Overlay ────────────────────────────────────
+function openFocusOverlay(){
+  const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
+  _focusOverlayOpen=true;
+  const overlay=document.getElementById('focusOverlay');
+  overlay.classList.add('show');
+  // Populate content
+  document.getElementById('foTaskName').textContent=t.name;
+  const cc=catColor(t.category);
+  const catName=catById(t.category)?.name||'';
+  const timeStr=t.time?fmtT(t.time)+' – '+fmtT(pad(Math.floor(((t.time.split(':').map(Number)[0]*60+t.time.split(':').map(Number)[1])+(t.duration||30))/60)%24)+':'+pad(((t.time.split(':').map(Number)[0]*60+t.time.split(':').map(Number)[1])+(t.duration||30))%60)):'';
+  document.getElementById('foTaskMeta').innerHTML=`<span class="fo-cat-dot" style="background:${cc}"></span>${catName}${timeStr?' · '+timeStr:''}`;
+  // Set mode toggle
+  updateFocusModeUI();
+  // Build subtasks
+  buildFocusSubtasks();
+  // Show intention
+  loadFocusIntention();
+  // Update display
   updateFocusDisplay();
-  buildFocusDurButtons(dur);
-  if(!sidebarOpen)toggleSidebar();
-  switchSide('focus');
+  updatePlayBtnIcon();
+  // Update session count
+  const sc=document.getElementById('foSessionCount');
+  if(sc)sc.textContent=_focusSessions?`${_focusSessions} session${_focusSessions>1?'s':''} today`:'';
+  // Hide mini-timer
+  hideFocusMiniTimer();
 }
-function buildFocusDurButtons(sel){
-  const row=document.getElementById('focusDurRow');
-  const opts=[15,25,30,45,60,90];
-  row.innerHTML=opts.map(d=>`<button class="dur-opt${d===sel?' selected':''}" onclick="setFocusDur(${d})">${durLabel(d)}</button>`).join('');
+function closeFocusOverlay(){
+  _focusOverlayOpen=false;
+  document.getElementById('focusOverlay').classList.remove('show');
+  // If timer is running, show mini-timer
+  if(_focusRunning)showFocusMiniTimer();
+  switchSideFocus();
 }
-function setFocusDur(m){
+
+// ── Focus Modes ──────────────────────────────────────
+function setFocusMode(mode){
   if(_focusRunning)return;
-  _focusDur=m;_focusRemaining=m*60;_focusTotal=m*60;
-  buildFocusDurButtons(m);
+  _focusMode=mode;
+  const t=tasks.find(t=>t.id===_focusTaskId);
+  if(mode==='pomodoro'){
+    _focusDur=25;
+  } else if(mode==='task'){
+    _focusDur=t?(t.duration||30):30;
+  } else if(mode==='custom'){
+    const slider=document.getElementById('foCustomSlider');
+    _focusDur=slider?parseInt(slider.value):30;
+  }
+  _focusRemaining=_focusDur*60;_focusTotal=_focusDur*60;
+  updateFocusModeUI();
   updateFocusDisplay();
 }
+function updateFocusModeUI(){
+  const btns=document.querySelectorAll('.fo-mode-btn');
+  btns.forEach(b=>{
+    const m=b.textContent.toLowerCase().trim();
+    const mKey=m==='pomodoro'?'pomodoro':m==='task'?'task':'custom';
+    b.classList.toggle('on',mKey===_focusMode);
+  });
+  const customRow=document.getElementById('foCustomRow');
+  if(customRow)customRow.style.display=_focusMode==='custom'?'':'none';
+  if(_focusMode==='custom'){
+    const slider=document.getElementById('foCustomSlider');
+    if(slider)slider.value=_focusDur;
+    const val=document.getElementById('foCustomVal');
+    if(val)val.textContent=durLabel(_focusDur);
+  }
+  // Disable mode buttons while running
+  const modeRow=document.getElementById('foModeRow');
+  if(modeRow){
+    modeRow.style.opacity=_focusRunning?'.4':'';
+    modeRow.style.pointerEvents=_focusRunning?'none':'';
+  }
+}
+function onFocusCustomSlider(val){
+  if(_focusRunning)return;
+  _focusDur=parseInt(val);
+  _focusRemaining=_focusDur*60;_focusTotal=_focusDur*60;
+  const valEl=document.getElementById('foCustomVal');
+  if(valEl)valEl.textContent=durLabel(_focusDur);
+  updateFocusDisplay();
+}
+
+// ── Focus Display Updates ────────────────────────────
 function updateFocusDisplay(){
   const mins=Math.floor(_focusRemaining/60);
   const secs=_focusRemaining%60;
-  document.getElementById('focusTimeDisplay').textContent=pad(mins)+':'+pad(secs);
+  const timeStr=pad(mins)+':'+pad(secs);
+  // Update overlay
+  const td=document.getElementById('focusTimeDisplay');
+  if(td)td.textContent=timeStr;
   const pct=_focusTotal>0?(_focusTotal-_focusRemaining)/_focusTotal:0;
   const circ=326.73;
-  document.getElementById('focusArc').setAttribute('stroke-dashoffset',circ-(circ*pct));
+  const arc=document.getElementById('focusArc');
+  if(arc)arc.setAttribute('stroke-dashoffset',circ-(circ*pct));
+  // Update sidebar
+  updateSidebarTimer();
+  // Update mini-timer
+  updateFocusMiniTimer();
 }
+function updatePlayBtnIcon(){
+  const icon=document.getElementById('foPlayIcon');
+  if(!icon)return;
+  if(_focusRunning){
+    icon.setAttribute('d','M6 4h4v16H6zM14 4h4v16h-4z'); // pause icon
+  } else {
+    icon.setAttribute('d','M8 5v14l11-7z'); // play icon
+  }
+}
+
+// ── Focus Subtasks ───────────────────────────────────
+function buildFocusSubtasks(){
+  const el=document.getElementById('foSubtasks');if(!el)return;
+  const t=tasks.find(t=>t.id===_focusTaskId);
+  if(!t||!t.subtasks||!t.subtasks.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="fo-sub-label">Subtasks</div>`+
+    t.subtasks.map((s,i)=>`<div class="fo-sub-row">
+      <div class="fo-sub-check${s.done?' checked':''}" onclick="toggleFocusSubtask(${i})"></div>
+      <span class="fo-sub-name${s.done?' done':''}">${esc(s.name)}</span>
+    </div>`).join('');
+}
+function toggleFocusSubtask(i){
+  const t=tasks.find(t=>t.id===_focusTaskId);if(!t||!t.subtasks||!t.subtasks[i])return;
+  t.subtasks[i].done=!t.subtasks[i].done;
+  if(t.subtasks[i].done)playSubTick?playSubTick():null;
+  save();
+  buildFocusSubtasks();
+}
+function playSubTick(){
+  try{const ac=getAC();const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.type='sine';o.frequency.setValueAtTime(880,ac.currentTime);g.gain.setValueAtTime(.08,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.15);o.start(ac.currentTime);o.stop(ac.currentTime+.18);}catch(e){}
+}
+
+// ── Focus Intention ──────────────────────────────────
+function loadFocusIntention(){
+  const el=document.getElementById('foIntention');if(!el)return;
+  const weekStart=wkStart(new Date());
+  const intentionKey='clarity_intention_'+dk(weekStart);
+  const intention=localStorage.getItem(intentionKey)||'';
+  if(intention){
+    el.innerHTML=`<div class="fo-intention-text">"${esc(intention)}"</div>`;
+  } else {
+    el.innerHTML='';
+  }
+}
+
+// ── Timer Controls ───────────────────────────────────
 function toggleFocusTimer(){
   if(_focusRunning){
     _focusRunning=false;
     clearInterval(_focusInterval);
-    document.getElementById('focusPlayBtn').textContent='Resume';
     localStorage.removeItem('clarity_focus_active');
   } else {
     _focusRunning=true;
-    document.getElementById('focusPlayBtn').textContent='Pause';
-    document.getElementById('focusDurRow').style.opacity='.4';
-    document.getElementById('focusDurRow').style.pointerEvents='none';
     // Save state for refresh recovery
     localStorage.setItem('clarity_focus_active',JSON.stringify({
       taskId:_focusTaskId,date:_focusDate,
@@ -2291,6 +2428,8 @@ function toggleFocusTimer(){
       }
     },1000);
   }
+  updatePlayBtnIcon();
+  updateFocusModeUI();
 }
 // Restore focus timer on page load
 function restoreFocusTimer(){
@@ -2301,15 +2440,22 @@ function restoreFocusTimer(){
     const remaining=Math.round((s.endAt-Date.now())/1000);
     if(remaining<=0){localStorage.removeItem('clarity_focus_active');return;}
     const t=tasks.find(t=>t.id===s.taskId);if(!t)return;
-    startFocusForTask(s.taskId,s.date);
-    _focusRemaining=remaining;
-    _focusTotal=s.total;
+    _focusTaskId=s.taskId;_focusDate=s.date;
+    const dur=t.duration||30;
+    _focusOriginalDur=dur;_focusMode='task';
+    _focusDur=dur;_focusRemaining=remaining;_focusTotal=s.total;
+    _focusRunning=false;
+    clearInterval(_focusInterval);
+    document.getElementById('focusEmpty').style.display='none';
+    document.getElementById('focusActive').style.display='';
+    document.getElementById('focusSideName').textContent=t.name;
     updateFocusDisplay();
     toggleFocusTimer(); // auto-start
+    // Show mini-timer (overlay not open on restore)
+    showFocusMiniTimer();
   }catch(e){localStorage.removeItem('clarity_focus_active');}
 }
 function addFocusTime(){
-  // Bug 1 fix: check slot overflow before extending
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t&&t.time&&t.date){
     const newDur=_focusDur+15;
@@ -2321,16 +2467,13 @@ function addFocusTime(){
     const routineCheck=checkRoutineOverflow(_focusDate||t.date,t.time,newDur);
     if(routineCheck.blocked){
       showWarnToast(`Extending runs into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,false);
-      // Warn but allow
     }
   }
   _focusRemaining+=15*60;
   _focusTotal+=15*60;
   _focusDur+=15;
-  // Also update the task's duration
   if(t)t.duration=_focusDur;
   save();
-  // Bug 3 fix: update localStorage if timer is running
   if(_focusRunning){
     localStorage.setItem('clarity_focus_active',JSON.stringify({
       taskId:_focusTaskId,date:_focusDate,
@@ -2345,18 +2488,32 @@ function resetFocusTimer(){
   clearInterval(_focusInterval);
   _focusRunning=false;
   localStorage.removeItem('clarity_focus_active');
-  // Bug 2 fix: revert to ORIGINAL duration, not current (which may have been extended)
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t&&t.duration!==_focusOriginalDur){
     t.duration=_focusOriginalDur;
     save();
   }
   _focusDur=_focusOriginalDur;_focusRemaining=_focusOriginalDur*60;_focusTotal=_focusOriginalDur*60;
-  document.getElementById('focusPlayBtn').textContent='Start';
-  document.getElementById('focusDurRow').style.opacity='';
-  document.getElementById('focusDurRow').style.pointerEvents='';
-  buildFocusDurButtons(_focusOriginalDur);
+  _focusMode='task';
+  updateFocusModeUI();
+  updatePlayBtnIcon();
   updateFocusDisplay();
+}
+
+// ── End Confirmation ─────────────────────────────────
+function confirmEndFocus(){
+  const elapsed=_focusTotal-_focusRemaining;
+  const elapsedMins=Math.floor(elapsed/60);
+  const sub=document.getElementById('focusEndSub');
+  if(sub)sub.textContent=`You've focused for ${elapsedMins}m${elapsedMins>=1?' '+pad(elapsed%60)+'s':''}. The task won't be marked as done.`;
+  document.getElementById('focusEndOverlay').classList.add('open');
+}
+function cancelEndFocus(){
+  document.getElementById('focusEndOverlay').classList.remove('open');
+}
+function doEndFocus(){
+  document.getElementById('focusEndOverlay').classList.remove('open');
+  endFocusSession();
 }
 function endFocusSession(){
   clearInterval(_focusInterval);
@@ -2365,13 +2522,10 @@ function endFocusSession(){
   const elapsed=_focusTotal-_focusRemaining;
   if(elapsed>60){
     _focusSessions++;
-    document.getElementById('focusSessionCount').textContent=`${_focusSessions} session${_focusSessions>1?'s':''} completed today`;
   }
-  // Check overflow and offer reflow
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t&&elapsed>t.duration*60){
     const newDurMins=Math.ceil(elapsed/60);
-    // Bug 4 fix: check slot overflow before auto-extending
     if(t.time&&t.date){
       const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newDurMins);
       if(overflow.blocked){
@@ -2390,8 +2544,6 @@ function endFocusSession(){
 function onFocusComplete(){
   playDone();
   _focusSessions++;
-  document.getElementById('focusSessionCount').textContent=`${_focusSessions} session${_focusSessions>1?'s':''} completed today`;
-  // Mark task done
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t){
     if(t.recur&&_focusDate){
@@ -2402,26 +2554,60 @@ function onFocusComplete(){
     }
     save();renderAll();
   }
-  // Show break suggestion
-  const isLongBreak=_focusSessions%4===0;
-  const breakMins=isLongBreak?15:5;
-  document.getElementById('focusActive').innerHTML=`
-    <div class="focus-break-msg">
-      <div class="focus-break-msg-icon">${isLongBreak?'<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="currentColor" stroke-width="1.5" opacity=".4"/><path d="M9 12c1-2 2-3 3-3s2 1 3 3-2 3-3 3-2-1-3-3z" fill="currentColor" opacity=".3"/><path d="M8 8c1.5 0 2 1 2 2M14 8c-1.5 0-2 1-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>':'<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M16 11h1.5a2.5 2.5 0 010 5H16" stroke="currentColor" stroke-width="1.5"/><path d="M7 5c0-1 .5-2 1.5-2M10 5c0-1 .5-2 1.5-2M13 5c0-1 .5-2 1.5-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".4"/></svg>'}</div>
-      <div class="focus-break-msg-text">${isLongBreak?'Long break — 15 min':'Nice work! Take a 5 min break'}</div>
-      <div class="focus-break-msg-sub">${t?'"'+t.name+'" marked complete':'Session finished'}</div>
-    </div>
-    <div class="focus-controls" style="margin-top:12px">
-      <button class="focus-btn primary" onclick="resetFocusUI()">Done</button>
-    </div>
-    <div class="focus-session-count">${_focusSessions} session${_focusSessions>1?'s':''} today</div>`;
+  // Show completion in overlay
+  const card=document.getElementById('focusOverlayCard');
+  if(card&&_focusOverlayOpen){
+    const isLongBreak=_focusSessions%4===0;
+    card.innerHTML=`
+      <button class="fo-exit" onclick="closeFocusOverlay()">✕</button>
+      <div class="fo-complete-wrap">
+        <div class="fo-complete-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="var(--accent)" stroke-width="1.5"/>
+            <path d="M8 12l3 3 5-6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="fo-complete-title">${isLongBreak?'Long break — 15 min':'Nice work!'}</div>
+        <div class="fo-complete-sub">${t?'"'+esc(t.name)+'" marked complete':'Session finished'}</div>
+        <div class="fo-complete-sub">${_focusSessions} session${_focusSessions>1?'s':''} today</div>
+        <button class="fo-complete-btn" onclick="closeFocusOverlay();resetFocusUI()">Done</button>
+      </div>`;
+  }
+  hideFocusMiniTimer();
 }
 function resetFocusUI(){
   _focusTaskId=null;_focusDate=null;_focusRunning=false;
+  _focusOverlayOpen=false;
   clearInterval(_focusInterval);
-  document.getElementById('focusDurRow').style.opacity='';
-  document.getElementById('focusDurRow').style.pointerEvents='';
+  document.getElementById('focusOverlay').classList.remove('show');
+  hideFocusMiniTimer();
   switchSideFocus();
+}
+
+// ── Floating Mini Timer ──────────────────────────────
+function showFocusMiniTimer(){
+  const el=document.getElementById('focusMiniTimer');if(!el)return;
+  const t=tasks.find(t=>t.id===_focusTaskId);
+  if(t)document.getElementById('fmtName').textContent=t.name;
+  updateFocusMiniTimer();
+  el.style.display='flex';
+}
+function hideFocusMiniTimer(){
+  const el=document.getElementById('focusMiniTimer');
+  if(el)el.style.display='none';
+}
+function updateFocusMiniTimer(){
+  const mins=Math.floor(_focusRemaining/60);
+  const secs=_focusRemaining%60;
+  const el=document.getElementById('fmtTime');
+  if(el)el.textContent=pad(mins)+':'+pad(secs);
+  const pct=_focusTotal>0?(_focusTotal-_focusRemaining)/_focusTotal:0;
+  const circ=94.25;
+  const arc=document.getElementById('fmtArc');
+  if(arc)arc.setAttribute('stroke-dashoffset',circ-(circ*pct));
+}
+function buildFocusDurButtons(sel){
+  // Legacy — no longer renders buttons, mode toggle handles this
 }
 
 // ══ REFLOW (cascade after overrun) ══════════════
@@ -4044,11 +4230,15 @@ function startSubtaskFocus(idx){
   startFocusForTask(mId,mInstanceDate);
   if(sub.duration){
     _focusDur=sub.duration;_focusRemaining=sub.duration*60;_focusTotal=sub.duration*60;
-    buildFocusDurButtons(sub.duration);
+    _focusMode='custom';
+    updateFocusModeUI();
     updateFocusDisplay();
   }
-  document.getElementById('focusTaskName').textContent=sub.name;
-  document.getElementById('focusTaskMeta').textContent='Subtask of: '+(t?t.name:'');
+  // Update overlay with subtask name
+  const nameEl=document.getElementById('foTaskName');
+  if(nameEl)nameEl.textContent=sub.name;
+  const metaEl=document.getElementById('foTaskMeta');
+  if(metaEl)metaEl.textContent='Subtask of: '+(t?t.name:'');
 }
 async function generateSubtasks(){
   const taskName=document.getElementById('fName').value.trim();

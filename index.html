@@ -373,40 +373,24 @@
         <div id="focusEmpty" class="focus-empty">
           <div style="margin-bottom:8px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.3" opacity=".4"/><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.3" opacity=".6"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity=".7"/></svg></div>
           <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">Start a Focus Session</div>
-          <div style="font-size:11px;color:var(--text3);line-height:1.6">Click any task in Day view, then come here to start a timed focus session.</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.6">Click ▶ Focus on any task, or pick one below.</div>
           <div style="margin-top:12px">
-            <div class="flbl" style="margin-bottom:6px">Or pick a task:</div>
             <select class="fi" id="focusTaskPicker" onchange="onFocusPickTask(this.value)" style="font-size:12px;width:100%">
               <option value="">— Select a task —</option>
             </select>
           </div>
         </div>
-        <!-- Active timer state -->
+        <!-- Active: compact sidebar card linking to overlay -->
         <div id="focusActive" style="display:none">
-          <div class="focus-task-name" id="focusTaskName"></div>
-          <div class="focus-task-meta" id="focusTaskMeta"></div>
-          <div class="focus-ring-wrap">
-            <svg class="focus-ring" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="6"/>
-              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="6"
-                stroke-dasharray="326.73" stroke-dashoffset="0" stroke-linecap="round"
-                id="focusArc" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .5s"/>
-            </svg>
-            <div class="focus-time-display" id="focusTimeDisplay">25:00</div>
-          </div>
-          <div class="focus-duration-row" id="focusDurRow">
-            <button class="dur-opt" onclick="setFocusDur(15)">15m</button>
-            <button class="dur-opt" onclick="setFocusDur(25)">25m</button>
-            <button class="dur-opt selected" onclick="setFocusDur(30)">30m</button>
-            <button class="dur-opt" onclick="setFocusDur(45)">45m</button>
-            <button class="dur-opt" onclick="setFocusDur(60)">1h</button>
-            <button class="dur-opt" onclick="setFocusDur(90)">1.5h</button>
-          </div>
-          <div class="focus-controls">
-            <button class="focus-btn secondary" onclick="addFocusTime()" id="focusAddBtn" title="Add 15 min">+15m</button>
-            <button class="focus-btn primary" onclick="toggleFocusTimer()" id="focusPlayBtn">Start</button>
-            <button class="focus-btn secondary" onclick="resetFocusTimer()" title="Reset timer">Reset</button>
-            <button class="focus-btn secondary" onclick="endFocusSession()" title="End and leave" style="color:var(--red)">End</button>
+          <div class="focus-sidebar-card" onclick="openFocusOverlay()">
+            <div class="focus-sidebar-ring">
+              <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="94.25" stroke-dashoffset="0" stroke-linecap="round" id="focusArcSide" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .5s"/></svg>
+            </div>
+            <div class="focus-sidebar-info">
+              <div class="focus-sidebar-name" id="focusSideName"></div>
+              <div class="focus-sidebar-time" id="focusSideTime">25:00</div>
+            </div>
+            <div class="focus-sidebar-open">Open</div>
           </div>
           <div class="focus-session-count" id="focusSessionCount"></div>
         </div>
@@ -936,6 +920,77 @@
   <div class="qa-acts">
     <button class="btn-c" onclick="closeQuickAdd()">Cancel</button>
     <button class="btn-s" onclick="saveQuickAdd()">Save</button>
+  </div>
+</div>
+
+<!-- Focus Overlay -->
+<div class="fo-overlay" id="focusOverlay">
+  <div class="fo-card" id="focusOverlayCard">
+    <button class="fo-exit" onclick="closeFocusOverlay()" title="Minimize to floating timer">✕</button>
+    <div class="fo-task-name" id="foTaskName"></div>
+    <div class="fo-task-meta" id="foTaskMeta"></div>
+    <div class="fo-mode-row" id="foModeRow">
+      <button class="fo-mode-btn" onclick="setFocusMode('pomodoro')">Pomodoro</button>
+      <button class="fo-mode-btn on" onclick="setFocusMode('task')">Task</button>
+      <button class="fo-mode-btn" onclick="setFocusMode('custom')">Custom</button>
+    </div>
+    <div class="fo-custom-row" id="foCustomRow" style="display:none">
+      <input type="range" min="5" max="120" step="5" value="30" id="foCustomSlider" oninput="onFocusCustomSlider(this.value)">
+      <span class="fo-custom-val" id="foCustomVal">30m</span>
+    </div>
+    <div class="fo-ring-wrap">
+      <svg class="fo-ring" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="4.5"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="4.5"
+          stroke-dasharray="326.73" stroke-dashoffset="0" stroke-linecap="round"
+          id="focusArc" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .5s"/>
+      </svg>
+      <div class="fo-ring-inner">
+        <div class="fo-time" id="focusTimeDisplay">25:00</div>
+        <div class="fo-time-label">remaining</div>
+      </div>
+    </div>
+    <button class="fo-play-btn" id="focusPlayBtn" onclick="toggleFocusTimer()">
+      <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M8 5v14l11-7z" id="foPlayIcon"/></svg>
+    </button>
+    <div class="fo-sec-row">
+      <span class="fo-sec-link" onclick="addFocusTime()">+15 min</span>
+      <span class="fo-sec-link" onclick="resetFocusTimer()">Reset</span>
+      <span class="fo-sec-link fo-sec-end" onclick="confirmEndFocus()">End session</span>
+    </div>
+    <div class="fo-divider"></div>
+    <div class="fo-subtasks" id="foSubtasks"></div>
+    <div class="fo-intention" id="foIntention"></div>
+    <div class="fo-session-count" id="foSessionCount"></div>
+  </div>
+</div>
+
+<!-- Floating Mini Timer -->
+<div class="fmt-pill" id="focusMiniTimer" style="display:none" onclick="openFocusOverlay()">
+  <div class="fmt-ring">
+    <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="94.25" stroke-dashoffset="0" stroke-linecap="round" id="fmtArc" style="transform:rotate(-90deg);transform-origin:center"/></svg>
+  </div>
+  <div class="fmt-info">
+    <div class="fmt-name" id="fmtName"></div>
+    <div class="fmt-time" id="fmtTime">25:00</div>
+  </div>
+  <button class="fmt-close" onclick="event.stopPropagation();confirmEndFocus()" title="End session">✕</button>
+</div>
+
+<!-- Focus End Confirmation -->
+<div class="modal-overlay" id="focusEndOverlay" onclick="if(event.target===this)cancelEndFocus()">
+  <div class="modal" style="max-width:320px" onclick="event.stopPropagation()">
+    <div style="text-align:center;padding:4px 0 8px">
+      <div style="width:36px;height:36px;border-radius:10px;background:var(--red-pale);display:inline-flex;align-items:center;justify-content:center;margin-bottom:8px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="var(--red)" stroke-width="1.3"/><line x1="8" y1="5" x2="8" y2="8.5" stroke="var(--red)" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.5" r=".6" fill="var(--red)"/></svg>
+      </div>
+      <div class="modal-title">End focus session?</div>
+      <div class="modal-sub" id="focusEndSub">You've focused for 0m. The task won't be marked as done.</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="focus-btn secondary" style="flex:1" onclick="cancelEndFocus()">Keep going</button>
+      <button class="focus-btn primary" style="flex:1;background:var(--red)" onclick="doEndFocus()">End session</button>
+    </div>
   </div>
 </div>
 
