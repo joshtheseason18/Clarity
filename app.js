@@ -1144,9 +1144,8 @@ function onSubDragEnd(e){
   _subDragTaskId=null;_subDragFrom=-1;
 }
 
-// Build a single day task block for the absolute overlay layer.
-// Returns the inner HTML only — the outer positioned wrapper is created by renderDay().
-function buildDayTaskBlock(t, key, conflictIds, colInfo){
+// Build a single in-flow day task block (no absolute top/height — slot provides sizing)
+function buildDayTaskBlock(t, key, conflictIds){
   const idate=t._instanceDate||key;
   const dur=t.duration||30;
   const isEvent=(t.type||'task')==='event';
@@ -1155,11 +1154,10 @@ function buildDayTaskBlock(t, key, conflictIds, colInfo){
   const subs=t.subtasks||[];
   const subsDone=subs.filter(s=>s.done).length;
   const subsTotal=subs.length;
+  const DAY_H=window.innerWidth<=640?64:76;
+  const schedH=Math.max(36,dur/30*DAY_H-8);
   const hasConflict=conflictIds&&conflictIds.has(t.id);
   const conflictBadge=hasConflict?`<span class="day-conflict-badge" title="This task overlaps another scheduled task">⚠ overlap</span>`:'';
-  const ci=colInfo||{col:0,total:1};
-  const narrow=ci.total>=3;
-  const xnarrow=ci.total>=4;
 
   // Duration stepper: − [30m] +
   const durStepHtml=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
@@ -1175,45 +1173,49 @@ function buildDayTaskBlock(t, key, conflictIds, colInfo){
   }
 
   if(isEvent){
-    return`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
+    return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
+      <div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-        style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
+        style="background:${cc};border-top-color:${cc}"
         onclick="openEdit('${t.id}','${idate}',event)">
         <div class="day-task-block-check">
           <span class="day-task-block-name">${esc(t.name)}</span>
           <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-          ${!narrow?timeRangeBadge:''}
+          ${timeRangeBadge}
         </div>
-        ${dur>15?`<div class="day-task-meta-row">${durStepHtml}${!narrow&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${!narrow&&t.recur?' ↻':''}</div>`:''}
-        ${!narrow&&(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">${IC_CLIP} ${(t.attachments||[]).length} attached</span>`:!narrow&&t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK} Link</a>`:''}
-        ${!narrow?buildSubtaskHtml(t.id,subs,true):''}
-        ${!narrow?conflictBadge:''}
-      </div>`;
+        ${dur>15?`<div class="day-task-meta-row">${durStepHtml}${t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${t.recur?` ↻`:''}</div>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach" onclick="event.stopPropagation()">${IC_CLIP} ${(t.attachments||[]).length} attached</span>`:t.link?`<a class="task-attach" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK} Link</a>`:''}
+        ${buildSubtaskHtml(t.id,subs,true)}
+        ${conflictBadge}
+      </div>
+    </div>`;
   }
 
   // Focus pill — compact pill style instead of inline button
-  const focusPill=!narrow&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
+  const focusPill=!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
 
-  return`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
+  return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
+    <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
       draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
-      style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
+      style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
       onclick="openEdit('${t.id}','${idate}',event)">
       <div class="day-task-block-check">
-        ${!narrow?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>`:''}
+        <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
         <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
         <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
-        ${!narrow&&t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
-        ${!narrow?timeRangeBadge:''}
+        ${t.recur?`<span class="recur-icon" title="${recurLbl(t)}">↻</span>`:''}
+        ${timeRangeBadge}
       </div>
       ${dur>15?`<div class="day-task-meta-row">
         ${durStepHtml}
         ${focusPill}
-        ${!narrow&&t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
-        ${!narrow&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:!narrow&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
-        ${!narrow?conflictBadge:''}
+        ${t.notes?`<span class="day-task-notes-pill">${esc(t.notes.slice(0,32))}${t.notes.length>32?'…':''}</span>`:''}
+        ${(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
+        ${conflictBadge}
       </div>`:''}
-      ${!narrow?buildSubtaskHtml(t.id,subs,false):''}
-    </div>`;
+      ${buildSubtaskHtml(t.id,subs,false)}
+    </div>
+  </div>`;
 }
 
 let _overlapWarnShown=false;
@@ -1252,6 +1254,7 @@ function renderDay(){
 
   // ── Conflict detection ─────────────────────────────────────────────────────
   const conflictIds=new Set();
+  const overlapIds=new Set();
   _timedTasks.forEach((a,ai)=>{
     const[ah,am]=a.time.split(':').map(Number);
     const aStart=ah*60+am;
@@ -1264,19 +1267,21 @@ function renderDay(){
       if(aStart<bEnd&&bStart<aEnd){
         conflictIds.add(a.id);
         conflictIds.add(b.id);
+        overlapIds.add(a.id);
+        overlapIds.add(b.id);
       }
     });
   });
 
-  // ── Overlap column layout for ALL timed tasks (like week view) ──
+  // ── Column layout for ALL timed tasks (like week view) ──
   const dayColMap=new Map();
   {
-    const items=_timedTasks.map(t=>{
+    const allItems=_timedTasks.map(t=>{
       const[h,m]=t.time.split(':').map(Number);
       return{id:t.id,start:h*60+m,end:h*60+m+(t.duration||30),isEvent:(t.type||'task')==='event'};
     }).sort((a,b)=>a.start-b.start||b.end-a.end);
     const clusters=[];
-    items.forEach(item=>{
+    allItems.forEach(item=>{
       let merged=false;
       for(const cl of clusters){if(cl.some(c=>item.start<c.end&&c.start<item.end)){cl.push(item);merged=true;break;}}
       if(!merged)clusters.push([item]);
@@ -1293,7 +1298,6 @@ function renderDay(){
       });
       cl.forEach(item=>{dayColMap.get(item.id).total=cols.length;});
     });
-    // ── Overlap warning ──
     const maxCols=Math.max(0,...[...dayColMap.values()].map(v=>v.total));
     if(maxCols>=3&&!_overlapWarnShown){
       _overlapWarnShown=true;
@@ -1315,26 +1319,20 @@ function renderDay(){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
   }
 
-  // ── Build slot grid (background only — no tasks inside slots) ──
-  // Check which slots have tasks for routine shading logic
-  const taskTimeSet=new Set(_timedTasks.map(t=>t.time));
-
+  // ── Build slot grid: consistent heights, NO task blocks inside, NO collapsing ──
   let html='';
   sl.forEach(s=>{
     const sk2=sk(s.h,s.m);
     const isHalf=s.m===30;
-    const hasTask=taskTimeSet.has(sk2);
 
     // Routine shading
     const rb=routineAt(sk2);
     const rt=rb?ROUTINE_TYPES[rb.type]||ROUTINE_TYPES.custom:null;
     const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
-    const slotBg=rt&&!hasTask?`background:${rt.color}18`:'';
-
-    // Routine data attribute for container nesting
+    const slotBg=rt?`background:${rt.color}18`:'';
     const routineAttr=rb?` data-routine="${rb.type}"`:'';
 
-    // Routine band label — show on first slot of each band
+    // Routine band label on first slot of each band
     let routineLabelHtml='';
     if(rb&&rt){
       const bandKey=rb.type+'|'+rb.start+'|'+rb.end+(rb.customName||'');
@@ -1347,9 +1345,10 @@ function renderDay(){
       }
     }
 
-    // Open-window hint for empty schedulable routine slots
+    // Open-window hint for empty schedulable routine slots (only on slots without tasks)
+    const hasTaskHere=_timedTasks.some(t=>t.time===sk2);
     let windowHintHtml='';
-    if(rb&&!hasTask&&!routineLabelHtml){
+    if(rb&&!hasTaskHere&&!routineLabelHtml){
       const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
       if(isWin){windowHintHtml=`<div class="routine-window-hint" style="color:${rt.color}">open</div>`;}
     }
@@ -1366,45 +1365,103 @@ function renderDay(){
 
   const tl=document.getElementById('dayTimeline');
   tl.innerHTML=html;
-  tl.style.position='relative';
 
-  // ── Absolute overlay for ALL timed tasks (like week view) ────────────────
-  if(_timedTasks.length>0){
+  // ── Absolute overlay for ALL timed tasks (like week view) ──────────────────
+  if(_timedTasks.length){
     requestAnimationFrame(()=>{
       const firstLbl=tl.querySelector('.day-time-lbl');
       const lblW=firstLbl?firstLbl.offsetWidth:80;
 
-      const taskLayer=document.createElement('div');
-      taskLayer.className='day-task-layer';
-      taskLayer.style.cssText=`position:absolute;top:0;left:${lblW}px;right:0;bottom:0;pointer-events:none;z-index:3`;
+      const overlay=document.createElement('div');
+      overlay.className='day-overlay-layer';
+      overlay.style.cssText=`position:absolute;top:0;left:${lblW}px;right:0;bottom:0;pointer-events:none;z-index:3`;
 
       _timedTasks.forEach(t=>{
         const[h,m]=t.time.split(':').map(Number);
-        const startMins=h*60+m;
+        const timeKey=sk(h,m);
+        const slotEl=tl.querySelector(`.day-slot[data-time="${timeKey}"]`);
+        if(!slotEl)return;
+        const topPx=slotEl.offsetTop;
         const dur=t.duration||30;
-        const topPx=(startMins/30)*DAY_SLOT_H;
-        const hPx=Math.max(36,(dur/30)*DAY_SLOT_H);
+        const hPx=Math.max(36,dur/30*DAY_SLOT_H);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
-        let leftVal='2px',rightVal='2px';
+        // Inset for tasks within routine containers
+        const tStartMins=h*60+m;
+        const inRoutine=routineBands.some(b=>{
+          const[bsh,bsm]=b.start.split(':').map(Number);
+          const[beh,bem]=b.end.split(':').map(Number);
+          return tStartMins>=bsh*60+bsm&&tStartMins<beh*60+bem;
+        });
+        const rInset=inRoutine?4:0;
+        let leftVal=(2+rInset)+'px',rightVal=(2+rInset)+'px';
         if(ci.total>1){
           const pct=100/ci.total;
-          leftVal=ci.col===0?'2px':`calc(${(ci.col*pct).toFixed(1)}% + 1px)`;
-          rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
+          leftVal=ci.col===0?(2+rInset)+'px':`calc(${(ci.col*pct).toFixed(1)}% + ${1+rInset}px)`;
+          rightVal=ci.col===ci.total-1?(2+rInset)+'px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + ${1+rInset}px)`;
         }
 
-        const blockHtml=buildDayTaskBlock(t,key,conflictIds,ci);
+        const idate=t._instanceDate||key;
+        const isEvent=(t.type||'task')==='event';
+        const cc=isEvent?eventColor(t.category):catColor(t.category);
+        const isDone=t.done||(t.doneOverrides||[]).includes(idate);
+        const subs=t.subtasks||[];
 
-        const wrapper=document.createElement('div');
-        wrapper.setAttribute('data-cols',ci.total);
-        if(ci.total>=3)wrapper.classList.add('day-overlay-narrow');
-        if(ci.total>=4)wrapper.classList.add('day-overlay-xnarrow');
-        wrapper.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow-y:auto;overflow-x:hidden`;
-        wrapper.innerHTML=blockHtml;
-        taskLayer.appendChild(wrapper);
+        let timeRB='';
+        if(t.time){
+          const[th2,tm2]=t.time.split(':').map(Number);
+          const endMins2=(th2*60+tm2)+dur;
+          timeRB=`<span class="day-time-range">${fmtT(t.time)} – ${fmtT(pad(Math.floor(endMins2/60)%24)+':'+pad(endMins2%60))}</span>`;
+        }
+
+        let blockHtml;
+        const durStep=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
+        if(isEvent){
+          blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
+            onclick="openEdit('${t.id}','${idate}',event)">
+            <div class="day-task-block-check">
+              <span class="day-task-block-name">${esc(t.name)}</span>
+              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+              ${ci.total<=3?timeRB:''}
+            </div>
+            ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}</div>`:''}
+            ${ci.total<=3?buildSubtaskHtml(t.id,subs,true):''}
+          </div>`;
+        } else {
+          const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
+          blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
+            onclick="openEdit('${t.id}','${idate}',event)">
+            <div class="day-task-block-check">
+              <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
+              <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
+              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+              ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
+              ${ci.total<=3?timeRB:''}
+            </div>
+            ${dur>15?`<div class="day-task-meta-row">
+              ${durStep}
+              ${focusPill2}
+              ${ci.total<=3&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:ci.total<=3&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
+            </div>`:''}
+            ${ci.total<=3?buildSubtaskHtml(t.id,subs,false):''}
+          </div>`;
+        }
+
+        const block=document.createElement('div');
+        block.setAttribute('data-cols',ci.total);
+        if(ci.total>=3)block.classList.add('day-overlay-narrow');
+        if(ci.total>=4)block.classList.add('day-overlay-xnarrow');
+        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow-y:auto;overflow-x:hidden`;
+        block.innerHTML=blockHtml;
+        overlay.appendChild(block);
       });
 
-      tl.appendChild(taskLayer);
+      tl.style.position='relative';
+      tl.appendChild(overlay);
     });
   }
 
@@ -1413,14 +1470,21 @@ function renderDay(){
     requestAnimationFrame(()=>{
       const firstLbl2=tl.querySelector('.day-time-lbl');
       const lblW2=firstLbl2?firstLbl2.offsetWidth:80;
+      tl.style.position='relative';
       routineBands.forEach(b=>{
         const rtC=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-        const[sH,sM]=b.start.split(':').map(Number);
-        const[eH,eM]=b.end.split(':').map(Number);
-        const startMins=sH*60+sM;
-        const endMins=eH*60+eM;
-        const topPx2=(startMins/30)*DAY_SLOT_H;
-        const hPx2=((endMins-startMins)/30)*DAY_SLOT_H;
+        const startSlot=tl.querySelector(`.day-slot[data-time="${b.start}"]`);
+        if(!startSlot)return;
+        const[eH,eM]=b.end.split(':').map(Number);const endMins3=eH*60+eM;
+        let endSlot=null;
+        for(let mm=endMins3-30;mm>=0;mm-=30){
+          const sk3=pad(Math.floor(mm/60))+':'+pad(mm%60);
+          const el=tl.querySelector(`.day-slot[data-time="${sk3}"]`);
+          if(el){endSlot=el;break;}
+        }
+        if(!endSlot)endSlot=startSlot;
+        const topPx2=startSlot.offsetTop;
+        const hPx2=endSlot.offsetTop+endSlot.offsetHeight-topPx2;
         if(hPx2<=0)return;
         const container=document.createElement('div');
         container.className='routine-container';
@@ -1440,7 +1504,7 @@ function renderDay(){
   // Update journal if expanded
   if(_dayJournalOpen)openJournalForDate(dk(selDate));
 }
-function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.now-line,.task-check'))return;openNew(k,t)}
+function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;openNew(k,t)}
 
 // ══ CATEGORIES ════════════════════════════════
 function renderCatChips(){
@@ -4320,12 +4384,42 @@ function renderNowLine(){
       col.appendChild(line);
     }
   });
-  // Day view now-line — direct time-based positioning (consistent slot heights)
+  // Day view now-line — find actual pixel position from the slot DOM element
   const dayTimeline=document.getElementById('dayTimeline');
   if(dayTimeline&&isToday(selDate)){
     dayTimeline.querySelectorAll('.now-line').forEach(el=>el.remove());
+    const slotH=Math.floor(mins/30);
+    const s=slots()[slotH];
     const DAY_H_NOW=window.innerWidth<=640?64:76;
-    const top=(mins/30)*DAY_H_NOW;
+    let top=0;
+    if(s){
+      const slotEl=dayTimeline.querySelector(`[data-time="${sk(s.h,s.m)}"]`);
+      if(slotEl&&slotEl.offsetHeight>0){
+        const fracWithin=(mins%30)/30;
+        top=slotEl.offsetTop+fracWithin*slotEl.offsetHeight;
+      } else {
+        // Slot is collapsed — find nearest visible slot and interpolate
+        const allSlots=dayTimeline.querySelectorAll('.day-slot[data-time]');
+        let prevSlot=null,nextSlot=null;
+        const targetMins=mins;
+        allSlots.forEach(el=>{
+          if(el.offsetHeight===0)return;
+          const t=el.getAttribute('data-time');
+          const[h2,m2]=t.split(':').map(Number);
+          const sMins=h2*60+m2;
+          if(sMins<=targetMins)prevSlot={el,mins:sMins};
+          if(sMins>targetMins&&!nextSlot)nextSlot={el,mins:sMins};
+        });
+        if(prevSlot&&nextSlot){
+          const frac=(targetMins-prevSlot.mins)/(nextSlot.mins-prevSlot.mins);
+          top=prevSlot.el.offsetTop+prevSlot.el.offsetHeight+frac*(nextSlot.el.offsetTop-prevSlot.el.offsetTop-prevSlot.el.offsetHeight);
+        } else if(prevSlot){
+          top=prevSlot.el.offsetTop+prevSlot.el.offsetHeight;
+        } else {
+          top=(mins/30)*DAY_H_NOW;
+        }
+      }
+    }
     // Detect time label column width dynamically
     const firstLbl=dayTimeline.querySelector('.day-time-lbl');
     const lblW=firstLbl?firstLbl.offsetWidth:80;
@@ -4347,8 +4441,14 @@ function scrollToNow(){
   }
   const dv=document.querySelector('.day-scroll');
   if(dv&&curView==='day'){
-    const DAY_H_S=window.innerWidth<=640?64:76;
-    const top=Math.max(0,(mins/30)*DAY_H_S - dv.clientHeight/2);
+    // Scroll to the slot for the current time
+    const slotH=Math.floor(mins/30);
+    const s=slots()[slotH];
+    let top=0;
+    if(s){
+      const slotEl=document.querySelector(`#dayTimeline [data-time="${sk(s.h,s.m)}"]`);
+      top=slotEl?Math.max(0,slotEl.offsetTop-dv.clientHeight/2):Math.max(0,(mins/30)*52-dv.clientHeight/2);
+    }
     dv.scrollTo({top,behavior:'smooth'});
   }
 }
