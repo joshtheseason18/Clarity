@@ -223,6 +223,7 @@
         <!-- Monthly planning section -->
         <div class="month-plan-section" id="monthPlanSection">
           <div class="month-plan-hdr" onclick="toggleMonthPlan()">
+            <span class="month-plan-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="5" y1="5.5" x2="11" y2="5.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="5" y1="8" x2="9" y2="8" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="5" y1="10.5" x2="8" y2="10.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg></span>
             <span class="month-plan-title">Monthly planning</span>
             <span class="month-plan-toggle" id="monthPlanToggle">collapse</span>
           </div>
@@ -434,7 +435,7 @@
     </div>
     <!-- Scrollable body: all fields -->
     <div class="modal-body">
-      <div class="fg"><label class="flbl" id="fNameLabel">Task</label><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+      <div class="fg"><label class="flbl" id="fNameLabel">Task</label><div class="modal-name-row"><div class="modal-done-check" id="mDoneCheck" onclick="toggleModalDone()" title="Mark as done"></div><textarea class="fi auto-expand" id="fName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5;flex:1"></textarea></div></div>
       <!-- Location (events only) -->
       <div class="fg" id="fLocationWrap" style="display:none"><label class="flbl">Location</label><input class="fi" id="fLocation" placeholder="Room, address, or link…" style="font-size:12px"></div>
       <!-- All-day toggle (events only) -->
@@ -927,7 +928,10 @@
 <div class="fo-overlay" id="focusOverlay" style="display:none">
   <div class="fo-card" id="focusOverlayCard">
     <button class="fo-exit" onclick="closeFocusOverlay()" title="Minimize to floating timer">✕</button>
-    <div class="fo-task-name" id="foTaskName"></div>
+    <div class="fo-task-header">
+      <div class="fo-done-check" id="foDoneCheck" onclick="toggleFocusDone()"></div>
+      <div class="fo-task-name" id="foTaskName"></div>
+    </div>
     <div class="fo-task-meta" id="foTaskMeta"></div>
     <div class="fo-mode-row" id="foModeRow">
       <button class="fo-mode-btn" onclick="setFocusMode('pomodoro')">Pomodoro</button>
@@ -978,7 +982,7 @@
 </div>
 
 <!-- Focus End Confirmation -->
-<div class="modal-overlay" id="focusEndOverlay" onclick="if(event.target===this)cancelEndFocus()">
+<div class="modal-overlay" id="focusEndOverlay" style="z-index:650" onclick="if(event.target===this)cancelEndFocus()">
   <div class="modal" style="max-width:320px" onclick="event.stopPropagation()">
     <div style="text-align:center;padding:4px 0 8px">
       <div style="width:36px;height:36px;border-radius:10px;background:var(--red-pale);display:inline-flex;align-items:center;justify-content:center;margin-bottom:8px">

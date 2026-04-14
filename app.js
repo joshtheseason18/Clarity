@@ -723,7 +723,14 @@ function switchSide(tab){
   if(panel)panel.classList.add('active');
   if(tab==='priority')renderPri();
   if(tab==='suggestions')renderSuggestions();
-  if(tab==='focus')switchSideFocus();
+  if(tab==='focus'){
+    switchSideFocus();
+    // Hide mini-timer when focus tab is visible
+    hideFocusMiniTimer();
+  } else {
+    // Show mini-timer when leaving focus tab (if timer running and overlay closed)
+    if(_focusRunning&&!_focusOverlayOpen)showFocusMiniTimer();
+  }
 }
 function toggleSidebar(){
   sidebarOpen=!sidebarOpen;
@@ -731,7 +738,9 @@ function toggleSidebar(){
   const bd=document.getElementById('sidebarBackdrop');
   if(bd)bd.classList.toggle('open',sidebarOpen);
   // Render sidebar content when opening
-  if(sidebarOpen){renderBD();if(activeSide==='priority')renderPri();if(activeSide==='focus')switchSideFocus();}
+  if(sidebarOpen){renderBD();if(activeSide==='priority')renderPri();if(activeSide==='focus'){switchSideFocus();hideFocusMiniTimer();}}
+  // Show mini-timer when collapsing sidebar if timer running
+  if(!sidebarOpen&&_focusRunning&&!_focusOverlayOpen)showFocusMiniTimer();
 }
 
 // ══ NAVIGATION ═══════════════════════════════
@@ -951,7 +960,7 @@ function renderMonth(){
       <span class="month-stat-num">${mTasks.length}</span><span class="month-stat-sub">${mDone} done</span><span class="month-stat-label">Tasks</span>
     </div>
     <div class="month-stat-card" onmouseenter="monthGlow('events')" onmouseleave="monthGlow(null)" onclick="openYearMonthPopup(${y},${mo});showYearMonthSummary('event',${y},${mo})">
-      <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-sub">&nbsp;</span><span class="month-stat-label">Events</span>
+      <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-label">Events</span>
     </div>
     <div class="month-stat-card">
       <span class="month-stat-num">${goalsDone}/${goalsTotal||3}</span><span class="month-stat-sub">${goalPct}%</span><span class="month-stat-label">Goals</span>
@@ -2220,10 +2229,8 @@ function switchSideFocus(){
   }
 }
 function updateSidebarTimer(){
-  const mins=Math.floor(_focusRemaining/60);
-  const secs=_focusRemaining%60;
   const el=document.getElementById('focusSideTime');
-  if(el)el.textContent=pad(mins)+':'+pad(secs);
+  if(el)el.textContent=focusTimeStr(_focusRemaining);
   const pct=_focusTotal>0?(_focusTotal-_focusRemaining)/_focusTotal:0;
   const circ=94.25;
   const arc=document.getElementById('focusArcSide');
@@ -2281,6 +2288,8 @@ function openFocusOverlay(){
   updateFocusModeUI();
   // Build subtasks
   buildFocusSubtasks();
+  // Update done checkbox
+  updateFocusDoneCheck();
   // Show intention
   loadFocusIntention();
   // Update display
@@ -2351,10 +2360,14 @@ function onFocusCustomSlider(val){
 }
 
 // ── Focus Display Updates ────────────────────────────
+function focusTimeStr(totalSecs){
+  const h=Math.floor(totalSecs/3600);
+  const m=Math.floor((totalSecs%3600)/60);
+  const s=totalSecs%60;
+  return h+':'+pad(m)+':'+pad(s);
+}
 function updateFocusDisplay(){
-  const mins=Math.floor(_focusRemaining/60);
-  const secs=_focusRemaining%60;
-  const timeStr=pad(mins)+':'+pad(secs);
+  const timeStr=focusTimeStr(_focusRemaining);
   // Update overlay
   const td=document.getElementById('focusTimeDisplay');
   if(td)td.textContent=timeStr;
@@ -2377,6 +2390,52 @@ function updatePlayBtnIcon(){
   }
 }
 
+// ── Focus Meta Time Updater ──────────────────────────
+function updateFocusMetaTime(){
+  const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
+  const cc=catColor(t.category);
+  const catName=catById(t.category)?.name||'';
+  let timeStr='';
+  if(t.time){
+    const[h,m]=t.time.split(':').map(Number);
+    const endMins=h*60+m+_focusDur;
+    timeStr=fmtT(t.time)+' – '+fmtT(pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60));
+  }
+  const metaEl=document.getElementById('foTaskMeta');
+  if(metaEl)metaEl.innerHTML=`<span class="fo-cat-dot" style="background:${cc}"></span>${catName}${timeStr?' · '+timeStr:''}`;
+}
+
+// ── In-overlay notification ──────────────────────────
+let _foNotifyTimer=null;
+function showFocusNotification(msg,type){
+  // type: 'ok','warn','error'
+  let el=document.getElementById('foNotification');
+  if(!el){
+    el=document.createElement('div');
+    el.id='foNotification';
+    el.className='fo-notify';
+    const card=document.getElementById('focusOverlayCard');
+    if(!card)return;
+    // Insert after the meta row
+    const meta=document.getElementById('foTaskMeta');
+    if(meta&&meta.nextSibling)meta.parentNode.insertBefore(el,meta.nextSibling);
+    else if(card)card.insertBefore(el,card.children[3]||null);
+  }
+  const colorMap={ok:'var(--accent)',warn:'var(--amber-warn)',error:'var(--red)'};
+  const bgMap={ok:'var(--accent-pale)',warn:'rgba(245,158,11,.1)',error:'var(--red-pale)'};
+  el.style.borderLeftColor=colorMap[type]||colorMap.ok;
+  el.style.background=bgMap[type]||bgMap.ok;
+  el.innerHTML=`<span class="fo-notify-msg">${msg}</span><button class="fo-notify-x" onclick="dismissFocusNotification()">✕</button>`;
+  el.classList.add('show');
+  clearTimeout(_foNotifyTimer);
+  _foNotifyTimer=setTimeout(()=>el.classList.remove('show'),8000);
+}
+function dismissFocusNotification(){
+  const el=document.getElementById('foNotification');
+  if(el)el.classList.remove('show');
+  clearTimeout(_foNotifyTimer);
+}
+
 // ── Focus Subtasks ───────────────────────────────────
 function buildFocusSubtasks(){
   const el=document.getElementById('foSubtasks');if(!el)return;
@@ -2391,9 +2450,32 @@ function buildFocusSubtasks(){
 function toggleFocusSubtask(i){
   const t=tasks.find(t=>t.id===_focusTaskId);if(!t||!t.subtasks||!t.subtasks[i])return;
   t.subtasks[i].done=!t.subtasks[i].done;
-  if(t.subtasks[i].done)playSubTick?playSubTick():null;
+  if(t.subtasks[i].done)playSubTick();
   save();
   buildFocusSubtasks();
+}
+function toggleFocusDone(){
+  const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
+  if(t.recur&&_focusDate){
+    if(!t.doneOverrides)t.doneOverrides=[];
+    const idx=t.doneOverrides.indexOf(_focusDate);
+    if(idx===-1){t.doneOverrides.push(_focusDate);playDone();}
+    else{t.doneOverrides.splice(idx,1);playUndo();}
+  } else {
+    t.done=!t.done;
+    if(t.done)playDone();else playUndo();
+  }
+  save();renderAll();
+  updateFocusDoneCheck();
+  if(t.done||(t.doneOverrides||[]).includes(_focusDate)){
+    showFocusNotification('Task marked complete!','ok');
+  }
+}
+function updateFocusDoneCheck(){
+  const el=document.getElementById('foDoneCheck');if(!el)return;
+  const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
+  const isDone=t.done||(t.doneOverrides||[]).includes(_focusDate);
+  el.classList.toggle('checked',isDone);
 }
 function playSubTick(){
   try{const ac=getAC();const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.type='sine';o.frequency.setValueAtTime(880,ac.currentTime);g.gain.setValueAtTime(.08,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.15);o.start(ac.currentTime);o.stop(ac.currentTime+.18);}catch(e){}
@@ -2470,12 +2552,12 @@ function addFocusTime(){
     const newDur=_focusDur+15;
     const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newDur);
     if(overflow.blocked){
-      showWarnToast(`Can't extend — ${overflow.count} tasks already at ${fmtT(overflow.slotTime)}`,false);
+      showFocusNotification(`Can't extend — ${overflow.count} tasks already at ${fmtT(overflow.slotTime)}`,'error');
       return;
     }
     const routineCheck=checkRoutineOverflow(_focusDate||t.date,t.time,newDur);
     if(routineCheck.blocked){
-      showWarnToast(`Extending runs into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,false);
+      showFocusNotification(`Extending runs into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,'warn');
     }
   }
   _focusRemaining+=15*60;
@@ -2491,7 +2573,8 @@ function addFocusTime(){
     }));
   }
   updateFocusDisplay();
-  showToast(`+15 min added · Task now ${durLabel(_focusDur)}`);
+  updateFocusMetaTime();
+  showFocusNotification(`+15 min · Task now ${durLabel(_focusDur)}`,'ok');
 }
 function resetFocusTimer(){
   clearInterval(_focusInterval);
@@ -2507,14 +2590,19 @@ function resetFocusTimer(){
   updateFocusModeUI();
   updatePlayBtnIcon();
   updateFocusDisplay();
+  updateFocusMetaTime();
+  dismissFocusNotification();
+  showFocusNotification(`Timer reset to ${durLabel(_focusOriginalDur)}`,'ok');
 }
 
 // ── End Confirmation ─────────────────────────────────
 function confirmEndFocus(){
   const elapsed=_focusTotal-_focusRemaining;
-  const elapsedMins=Math.floor(elapsed/60);
+  const elapsedH=Math.floor(elapsed/3600);
+  const elapsedM=Math.floor((elapsed%3600)/60);
+  const elapsedStr=elapsedH>0?`${elapsedH}h ${elapsedM}m`:`${elapsedM}m`;
   const sub=document.getElementById('focusEndSub');
-  if(sub)sub.textContent=`You've focused for ${elapsedMins}m${elapsedMins>=1?' '+pad(elapsed%60)+'s':''}. The task won't be marked as done.`;
+  if(sub)sub.textContent=`You've focused for ${elapsedStr}. The task won't be marked as done.`;
   document.getElementById('focusEndOverlay').classList.add('open');
 }
 function cancelEndFocus(){
@@ -2596,6 +2684,8 @@ function resetFocusUI(){
 
 // ── Floating Mini Timer ──────────────────────────────
 function showFocusMiniTimer(){
+  // Don't show if focus sidebar tab is active — user can see the timer there
+  if(activeSide==='focus'&&sidebarOpen)return;
   const el=document.getElementById('focusMiniTimer');if(!el)return;
   const t=tasks.find(t=>t.id===_focusTaskId);
   if(t)document.getElementById('fmtName').textContent=t.name;
@@ -2607,10 +2697,8 @@ function hideFocusMiniTimer(){
   if(el)el.style.display='none';
 }
 function updateFocusMiniTimer(){
-  const mins=Math.floor(_focusRemaining/60);
-  const secs=_focusRemaining%60;
   const el=document.getElementById('fmtTime');
-  if(el)el.textContent=pad(mins)+':'+pad(secs);
+  if(el)el.textContent=focusTimeStr(_focusRemaining);
   const pct=_focusTotal>0?(_focusTotal-_focusRemaining)/_focusTotal:0;
   const circ=94.25;
   const arc=document.getElementById('fmtArc');
@@ -2688,8 +2776,8 @@ function checkOverdueTasks(){
 let _overdueDismissedToday=false;
 function openOverduePopup(overdueList){
   if(_overdueDismissedToday)return;
-  // Don't open if another modal is already visible (prevent stacking)
-  const anyModalOpen=document.querySelector('.modal-overlay.open,.modal-overlay.show');
+  // Don't open if another modal or focus overlay is already visible (prevent stacking)
+  const anyModalOpen=document.querySelector('.modal-overlay.open,.modal-overlay.show,.fo-overlay.show');
   if(anyModalOpen&&anyModalOpen.id!=='overduePopupOverlay')return;
   if(!overdueList||!overdueList.length){
     const todayKey=dk(new Date());
@@ -4104,6 +4192,8 @@ function setItemType(type){
   document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
   // When switching away from event, clear all-day
   if(type!=='event')setAlldayModal(false);
+  // Update done checkbox visibility
+  updateModalDoneCheck();
 }
 
 let _modalAllday=false;
@@ -4476,6 +4566,9 @@ function openNew(dateKey,time){
   renderModalAttachments();
   switchDetailTab('notes');
   updateDetailBadges();
+  // Hide done checkbox for new tasks
+  const mdc=document.getElementById('mDoneCheck');
+  if(mdc)mdc.style.display='none';
   showModal('mOverlay');
 }
 function openEdit(id,instanceDate,e){
@@ -4518,6 +4611,8 @@ function openEdit(id,instanceDate,e){
   renderModalAttachments();
   switchDetailTab('notes');
   updateDetailBadges();
+  // Show done checkbox for tasks, hide for events
+  updateModalDoneCheck();
   showModal('mOverlay');
 }
 function showModal(id){
@@ -4561,6 +4656,39 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();}
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&document.getElementById('mOverlay').classList.contains('open')){e.preventDefault();saveTask();}
 });
+// ── Modal Done Checkbox ──────────────────────────────
+function toggleModalDone(){
+  if(mMode!=='edit'||!mId)return;
+  const t=tasks.find(t=>t.id===mId);if(!t)return;
+  if((t.type||'task')==='event')return;
+  if(t.recur&&mInstanceDate){
+    if(!t.doneOverrides)t.doneOverrides=[];
+    const idx=t.doneOverrides.indexOf(mInstanceDate);
+    if(idx===-1){t.doneOverrides.push(mInstanceDate);playDone();}
+    else{t.doneOverrides.splice(idx,1);playUndo();}
+  } else {
+    t.done=!t.done;
+    if(t.done)playDone();else playUndo();
+  }
+  save();
+  updateModalDoneCheck();
+}
+function updateModalDoneCheck(){
+  const el=document.getElementById('mDoneCheck');if(!el)return;
+  // Hide for new tasks and events
+  if(mMode==='new'||_itemType==='event'){el.style.display='none';return;}
+  el.style.display='';
+  const t=tasks.find(t=>t.id===mId);if(!t){el.classList.remove('checked');return;}
+  const isDone=t.done||(t.doneOverrides||[]).includes(mInstanceDate);
+  el.classList.toggle('checked',isDone);
+  // Strikethrough on name field
+  const nameEl=document.getElementById('fName');
+  if(nameEl){
+    nameEl.style.textDecoration=isDone?'line-through':'';
+    nameEl.style.opacity=isDone?'.5':'';
+  }
+}
+
 function saveTask(){
   const name=document.getElementById('fName').value.trim();if(!name){document.getElementById('fName').focus();return}
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
