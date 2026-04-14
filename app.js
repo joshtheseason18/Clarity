@@ -963,7 +963,7 @@ function renderMonth(){
       <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-label">Events</span>
     </div>
     <div class="month-stat-card">
-      <span class="month-stat-num">${goalsDone}/${goalsTotal||3}</span><span class="month-stat-sub">${goalPct}%</span><span class="month-stat-label">Goals</span>
+      <span class="month-stat-num">${goalsDone}/${goalsTotal}</span><span class="month-stat-sub">${goalPct}%</span><span class="month-stat-label">Goals</span>
     </div>
   </div>`;
   let html=statsHtml+`<div class="month-grid-hdr">${orderedDayLabels().map(d=>`<div class="month-day-name">${d}</div>`).join('')}</div><div class="month-grid" id="monthGridInner">`;
@@ -1035,6 +1035,16 @@ function toggleMonthPlan(){
   if(grid)grid.style.display=_monthPlanOpen?'':'none';
   if(tog)tog.textContent=_monthPlanOpen?'collapse':'expand';
 }
+function updateMonthGoalStat(){
+  const bar=document.getElementById('monthStatsBar');if(!bar)return;
+  const goalCard=bar.querySelector('.month-stat-card:last-child');if(!goalCard)return;
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  const done=(p.goals||[]).filter(g=>g.done).length;
+  const total=(p.goals||[]).length;
+  const pct=total?Math.round(done/total*100):0;
+  goalCard.querySelector('.month-stat-num').textContent=`${done}/${total}`;
+  goalCard.querySelector('.month-stat-sub').textContent=`${pct}%`;
+}
 function renderMonthPlan(){
   const grid=document.getElementById('monthPlanGrid');
   const tog=document.getElementById('monthPlanToggle');
@@ -1055,8 +1065,7 @@ function renderMonthPlan(){
       <span class="mp-goal-del" onclick="deleteMpGoal(${i})">✕</span>
     </div>`;
   });
-  const canAdd=(p.goals||[]).length<3;
-  goalsHtml+=`<div class="mp-add-goal${canAdd?'':' disabled'}" onclick="${canAdd?'addMpGoal()':''}">+ Add goal</div></div>`;
+  goalsHtml+=`<div class="mp-add-goal" onclick="addMpGoal()">+ Add goal</div></div>`;
   // ── Column 2: Looking forward to ──
   let lfHtml=`<div class="mp-col"><div class="mp-col-title">Looking forward to</div>`;
   (p.lookingForward||[]).forEach((item,i)=>{
@@ -1106,7 +1115,6 @@ function renderMonthPlan(){
 // Goals functions
 function addMpGoal(){
   const key=monthPlanKey();const p=getMonthPlans(key);
-  if((p.goals||[]).length>=3)return;
   p.goals.push({id:'g'+Date.now(),text:'',done:false});
   saveMonthPlans();renderMonthPlan();
   // Focus the new goal text
@@ -1121,17 +1129,17 @@ function addMpGoal(){
 function toggleMpGoal(i){
   const key=monthPlanKey();const p=getMonthPlans(key);
   if(p.goals[i])p.goals[i].done=!p.goals[i].done;
-  saveMonthPlans();renderMonthPlan();
+  saveMonthPlans();renderMonthPlan();updateMonthGoalStat();
 }
 function saveMpGoalText(i,el){
   const key=monthPlanKey();const p=getMonthPlans(key);
   const txt=(el.textContent||'').trim();
   if(!txt){p.goals.splice(i,1);}else if(p.goals[i])p.goals[i].text=txt;
-  saveMonthPlans();renderMonthPlan();
+  saveMonthPlans();renderMonthPlan();updateMonthGoalStat();
 }
 function deleteMpGoal(i){
   const key=monthPlanKey();const p=getMonthPlans(key);
-  p.goals.splice(i,1);saveMonthPlans();renderMonthPlan();
+  p.goals.splice(i,1);saveMonthPlans();renderMonthPlan();updateMonthGoalStat();
 }
 // Goal drag reorder
 let _mpGoalDragFrom=-1;
@@ -1232,9 +1240,14 @@ function renderWeek(){
   let g=`<div class="wk-time-col">${sl.map(s=>`<div class="time-lbl">${s.m===0?fmtT(sk(s.h,s.m)):''}</div>`).join('')}</div>`;
   days.forEach(d=>{
     const k=dk(d);
+    const dayRoutines=getRoutineForDay(k);
     let colSlots=sl.map(s=>{
       const sk2=sk(s.h,s.m);
-      return`<div class="wk-slot${s.m===30?' half':''}" onclick="onWkSlot('${k}','${sk2}',event)"
+      // Check if slot is blocked by a non-schedulable routine
+      const rbWk=dayRoutines.find(b=>sk2>=b.start&&sk2<b.end)||null;
+      const rtWk=rbWk?ROUTINE_TYPES[rbWk.type]||ROUTINE_TYPES.custom:null;
+      const wkBlocked=rbWk&&(rbWk.schedulable!==undefined?!rbWk.schedulable:!(rtWk&&rtWk.schedulable));
+      return`<div class="wk-slot${s.m===30?' half':''}${wkBlocked?' routine-blocked':''}" onclick="onWkSlot('${k}','${sk2}',event)"
         ondragover="onDO(event,'${k}','${sk2}')" ondragleave="onDL(event)" ondrop="onDropSlot(event,'${k}','${sk2}')"></div>`;
     }).join('');
     const dayTasks=tasksOn(k).filter(t=>t.time&&!t.allday);
@@ -1343,7 +1356,7 @@ function renderWeek(){
   if(alldayGrid)alldayGrid.style.gridTemplateColumns=gridCols;
 }
 function onWkDay(k){selDate=fromDk(k);switchView('day')}
-function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check'))return;openNew(k,t)}
+function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,t)}
 
 // ══ DAY ═════════════════════════════════════
 
@@ -1580,6 +1593,8 @@ function renderDay(){
     const lblBorder=rt?`border-right:2px solid ${rt.color}`:'';
     const slotBg=rt?`background:${rt.color}18`:'';
     const routineAttr=rb?` data-routine="${rb.type}"`:'';
+    // Check if slot is blocked by a non-schedulable routine
+    const isSlotBlocked=rb&&(rb.schedulable!==undefined?!rb.schedulable:!(rt&&rt.schedulable));
 
     // Open-window hint for empty schedulable routine slots
     const hasTaskHere=_timedTasks.some(t=>t.time===sk2);
@@ -1590,7 +1605,7 @@ function renderDay(){
     }
 
     html+=`<div class="day-time-lbl${isHalf?' half-lbl':''}" style="${lblBorder}">${!isHalf?fmtT(sk2):''}</div>
-           <div class="day-slot${isHalf?' half':''}" data-time="${sk2}"${routineAttr}
+           <div class="day-slot${isHalf?' half':''}${isSlotBlocked?' routine-blocked':''}" data-time="${sk2}"${routineAttr}
              style="${slotBg}"
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
@@ -1757,7 +1772,7 @@ function renderDay(){
   // Update journal if expanded
   if(_dayJournalOpen)openJournalForDate(dk(selDate));
 }
-function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;openNew(k,t)}
+function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,t)}
 
 // ══ CATEGORIES ════════════════════════════════
 function renderCatChips(){
@@ -2114,6 +2129,12 @@ function validateRoutineInput(editIdx){
   const start=document.getElementById('routineStart').value;
   const end=document.getElementById('routineEnd').value;
   if(!start||!end){showToast('Set start and end times');return null;}
+  // Validate end time is after start time
+  const[sh,sm]=start.split(':').map(Number);
+  const[eh,em]=end.split(':').map(Number);
+  const startMins=sh*60+sm;
+  const endMins=eh*60+em;
+  if(endMins<=startMins){showToast('End time must be after start time');return null;}
   const dayBtns=document.querySelectorAll('#routineDays .routine-day-btn');
   const days=[];dayBtns.forEach((b,i)=>{if(b.classList.contains('on'))days.push(i);});
   if(!days.length){showToast('Select at least one day');return null;}
@@ -2127,10 +2148,6 @@ function validateRoutineInput(editIdx){
     }
   }
   // Check same-type overlap
-  const[sh,sm]=start.split(':').map(Number);
-  const[eh,em]=end.split(':').map(Number);
-  const startMins=sh*60+sm;
-  const endMins=eh*60+em;
   for(let i=0;i<routineBlocks.length;i++){
     if(i===editIdx)continue;
     const b=routineBlocks[i];
@@ -2260,7 +2277,19 @@ function startFocusForTask(id,dateKey){
   const dur=t.duration||30;
   _focusOriginalDur=dur;
   _focusMode='task';
-  _focusDur=dur;_focusRemaining=dur*60;_focusTotal=dur*60;
+  // Smart time estimation: if current time is past task start, use remaining time
+  let effectiveDur=dur;
+  if(t.time&&dateKey===dk(new Date())){
+    const now=new Date();
+    const nowMins=now.getHours()*60+now.getMinutes();
+    const[th,tm]=t.time.split(':').map(Number);
+    const taskStart=th*60+tm;
+    const taskEnd=taskStart+dur;
+    if(nowMins>taskStart&&nowMins<taskEnd){
+      effectiveDur=taskEnd-nowMins;
+    }
+  }
+  _focusDur=effectiveDur;_focusRemaining=effectiveDur*60;_focusTotal=effectiveDur*60;
   _focusRunning=false;
   clearInterval(_focusInterval);
   // Update sidebar
@@ -2467,8 +2496,14 @@ function toggleFocusDone(){
   }
   save();renderAll();
   updateFocusDoneCheck();
-  if(t.done||(t.doneOverrides||[]).includes(_focusDate)){
-    showFocusNotification('Task marked complete!','ok');
+  const isDone=t.done||(t.doneOverrides||[]).includes(_focusDate);
+  if(isDone){
+    // Stop timer and show completion
+    clearInterval(_focusInterval);
+    _focusRunning=false;
+    localStorage.removeItem('clarity_focus_active');
+    _focusSessions++;
+    onFocusComplete();
   }
 }
 function updateFocusDoneCheck(){
@@ -2868,6 +2903,17 @@ function findOpenSlots(dateKey,count,durations){
     const[h,m]=t.time.split(':').map(Number);
     const start=h*60+m, end=start+(t.duration||30);
     for(let mm=start;mm<end;mm+=15)occupied.add(mm);
+  });
+  // Also mark blocked routine time as occupied
+  const blocked=routines.filter(b=>{
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    return b.schedulable!==undefined?!b.schedulable:!rt.schedulable;
+  });
+  blocked.forEach(b=>{
+    const[bh,bm]=b.start.split(':').map(Number);
+    const[beh,bem]=b.end.split(':').map(Number);
+    const bStart=bh*60+bm,bEnd=beh*60+bem;
+    for(let mm=bStart;mm<bEnd;mm+=15)occupied.add(mm);
   });
   // Find open slots within windows
   const slots=[];
@@ -3671,7 +3717,10 @@ function cyclePriority(id,e){
 
 // ══ DRAG & DROP ════════════════════════════════
 let dragBdId=null,dragTaskId=null,dragInstanceDate=null;
-function _setDragActive(on){const tl=document.getElementById('dayTimeline');if(tl)tl.classList.toggle('drag-active',on)}
+function _setDragActive(on){
+  const tl=document.getElementById('dayTimeline');if(tl)tl.classList.toggle('drag-active',on);
+  const wg=document.getElementById('weekGrid');if(wg)wg.classList.toggle('drag-active',on);
+}
 function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
 function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
 function onTaskDragStart(e,id,idate){
@@ -3724,20 +3773,44 @@ function checkDurationOverflow(taskId, dateKey, startTime, newDur){
 // Check if extending would push into a blocked routine
 function checkRoutineOverflow(dateKey, startTime, newDur){
   const[h,m]=startTime.split(':').map(Number);
-  const endMins=h*60+m+newDur;
+  const startMins=h*60+m;
+  const endMins=startMins+newDur;
   const routines=getRoutineForDay(dateKey);
   for(const b of routines){
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
     const isSchedulable=b.schedulable!==undefined?b.schedulable:rt.schedulable;
-    if(isSchedulable)continue; // skip schedulable windows, only check blocked
+    if(isSchedulable)continue;
     const[bh,bm]=b.start.split(':').map(Number);
     const[eh,em]=b.end.split(':').map(Number);
     const bStart=bh*60+bm;
     const bEnd=eh*60+em;
-    const startMins=h*60+m;
-    // Task currently starts before the block and new end would push into it
+    // Task extends into blocked routine
     if(startMins<bStart&&endMins>bStart){
       return{blocked:true,routineName:b.customName||rt.label,routineStart:b.start};
+    }
+    // Task starts inside blocked routine
+    if(startMins>=bStart&&startMins<bEnd){
+      return{blocked:true,routineName:b.customName||rt.label,routineStart:b.start};
+    }
+  }
+  return{blocked:false};
+}
+
+// Check if a specific time slot falls inside a blocked routine
+function isBlockedByRoutine(dateKey, time){
+  const[h,m]=time.split(':').map(Number);
+  const mins=h*60+m;
+  const routines=getRoutineForDay(dateKey);
+  for(const b of routines){
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    const isSchedulable=b.schedulable!==undefined?b.schedulable:rt.schedulable;
+    if(isSchedulable)continue;
+    const[bh,bm]=b.start.split(':').map(Number);
+    const[eh,em]=b.end.split(':').map(Number);
+    const bStart=bh*60+bm;
+    const bEnd=eh*60+em;
+    if(mins>=bStart&&mins<bEnd){
+      return{blocked:true,routineName:b.customName||rt.label,routineStart:b.start,routineEnd:b.end};
     }
   }
   return{blocked:false};
@@ -3881,7 +3954,7 @@ function onDropDate(e,dateKey){
       showWarnToast(`"${esc(t.name)}" is already in that slot`);dragBdId=null;return;
     }
     if(slotFull(dateKey,defaultTime,null)){
-      showWarnToast('That slot already has 2 tasks — pick a different time');dragBdId=null;return;
+      showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
     tasks.push({...t,date:dateKey,time:defaultTime,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
@@ -3897,11 +3970,17 @@ function onDropSlot(e,dateKey,time){
   const dropEl=e.currentTarget;dropEl.classList.remove('drag-over');
   if(dragBdId){
     const t=brainDump.find(t=>t.id===dragBdId);if(!t)return;
+    // Check blocked routine
+    const rBlock=isBlockedByRoutine(dateKey,time);
+    if(rBlock.blocked){
+      showWarnToast(`Can't drop here — blocked by ${rBlock.routineName} (${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)})`);
+      dragBdId=null;return;
+    }
     if(duplicateInSlot(dateKey,time,t.name,null)){
       showWarnToast(`"${esc(t.name)}" is already in that slot`);dragBdId=null;return;
     }
     if(slotFull(dateKey,time,null)){
-      showWarnToast('That slot already has 2 tasks — pick a different time');dragBdId=null;return;
+      showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
     tasks.push({...t,date:dateKey,time,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
@@ -3922,12 +4001,18 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
   const baseDate=t.recur?(instanceDate||t.date):t.date;
   const sameslot=(baseDate===resolvedDate&&t.time===resolvedTime);
   if(!sameslot){
+    // Check blocked routine
+    const rBlock=isBlockedByRoutine(resolvedDate,resolvedTime);
+    if(rBlock.blocked){
+      showWarnToast(`Can't move here — blocked by ${rBlock.routineName} (${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)})`);
+      renderAll();return;
+    }
     if(duplicateInSlot(resolvedDate,resolvedTime,t.name,t.id)){
       showWarnToast(`"${esc(t.name)}" is already in that slot`);
       renderAll();return;
     }
     if(slotFull(resolvedDate,resolvedTime,t.id)){
-      showWarnToast('That slot already has 2 tasks — pick a different time');
+      showWarnToast('That slot already has 3 tasks — pick a different time');
       renderAll();return;
     }
   }
@@ -4566,9 +4651,11 @@ function openNew(dateKey,time){
   renderModalAttachments();
   switchDetailTab('notes');
   updateDetailBadges();
-  // Hide done checkbox for new tasks
+  // Hide done checkbox for new tasks + clear any stale done styling
   const mdc=document.getElementById('mDoneCheck');
-  if(mdc)mdc.style.display='none';
+  if(mdc){mdc.style.display='none';mdc.classList.remove('checked');}
+  const nameEl=document.getElementById('fName');
+  if(nameEl){nameEl.style.textDecoration='';nameEl.style.opacity='';}
   showModal('mOverlay');
 }
 function openEdit(id,instanceDate,e){
@@ -5319,7 +5406,7 @@ window.onDropDate=function(e,dateKey){
       showWarnToast(`"${esc(item.name)}" is already in that slot`);suggDragId=null;return;
     }
     if(slotFull(dateKey,defaultTime,null)){
-      showWarnToast('That slot already has 2 tasks — pick a different time');suggDragId=null;return;
+      showWarnToast('That slot already has 3 tasks — pick a different time');suggDragId=null;return;
     }
     tasks.push({id:genId(),name:item.name,priority:item.priority,category:'none',notes:item.sub,
       date:dateKey,time:defaultTime,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
@@ -5349,7 +5436,7 @@ window.onDropSlot=function(e,dateKey,time){
       showWarnToast(`"${esc(item.name)}" is already in that slot`);suggDragId=null;return;
     }
     if(slotFull(dateKey,time,null)){
-      showWarnToast('That slot already has 2 tasks — pick a different time');suggDragId=null;return;
+      showWarnToast('That slot already has 3 tasks — pick a different time');suggDragId=null;return;
     }
     tasks.push({id:genId(),name:item.name,priority:item.priority,category:'none',notes:item.sub,
       date:dateKey,time,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
@@ -5468,7 +5555,7 @@ function confirmSuggAlready(){
   const cat = SUGGESTIONS[ci], item = cat.items[ii];
   const resolvedTime = time || '09:00';
   if(slotFull(dateKey, resolvedTime, null)){
-    showWarnToast('That slot already has 2 tasks — pick a different time');
+    showWarnToast('That slot already has 3 tasks — pick a different time');
     closeSuggAlready(); return;
   }
   tasks.push({

@@ -1013,6 +1013,16 @@ header{
   border-bottom:1px dashed var(--border);opacity:.6;
   transition:min-height .15s;
 }
+/* During drag: let drops pass through task blocks to reach slots */
+.drag-active .day-overlay-layer{pointer-events:none!important}
+.drag-active .day-overlay-layer *{pointer-events:none!important}
+.drag-active .wk-task-layer{pointer-events:none!important}
+.drag-active .wk-task-layer *{pointer-events:none!important}
+/* Blocked routine slots — subtle hatching */
+.day-slot.routine-blocked .day-slot-interior{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.05) 5px,rgba(239,68,68,.05) 10px);cursor:not-allowed}
+.wk-slot.routine-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(239,68,68,.05) 4px,rgba(239,68,68,.05) 8px);cursor:not-allowed}
+[data-dark="true"] .day-slot.routine-blocked .day-slot-interior{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.08) 5px,rgba(239,68,68,.08) 10px)}
+[data-dark="true"] .wk-slot.routine-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(239,68,68,.08) 4px,rgba(239,68,68,.08) 8px)}
 .drag-active .day-lbl-interior{
   min-height:32px!important;height:auto!important;overflow:visible;
   font-size:10px;color:var(--text3);padding:4px 8px 0 0;
@@ -1060,6 +1070,7 @@ header{
 .wk-sub-pill:hover{color:var(--text2)}
 .event-block .wk-sub-pill{color:rgba(255,255,255,.6)}
 .event-block .wk-sub-pill:hover{color:rgba(255,255,255,.9)}
+.event-block .wk-task-block-dur{color:rgba(255,255,255,.7)}
 .wk-dur-stepper{display:flex;align-items:center;gap:0;margin-left:auto}
 .wk-dur-btn{
   width:14px;height:14px;border:none;background:none;
