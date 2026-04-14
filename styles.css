@@ -835,13 +835,10 @@ header{
   min-height:76px;
 }
 .day-time-lbl.half-lbl{border-bottom:1px dashed var(--surface3)}
-.day-lbl-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0}
 /* Ghost label: on-the-hour ticks inside a multi-slot task — visible but subordinate */
-/* Slot: in-flow container.
-   Empty slots: min-height from CSS (76px/64px mobile) — always consistent.
-   Task slots: the task block's inline min-height drives the row height via flex.
-   overflow:hidden on .day-task-block means the block's layout height = its content height,
-   so the slot stretches to contain ALL subtasks without bleeding into the next row. */
+/* Slot: background grid element (consistent height).
+   Tasks render in an absolute overlay layer, not inside slots.
+   Slots provide: time labels, routine shading, click targets, drag targets. */
 .day-slot{
   min-height:76px;
   border-bottom:1px solid var(--border);
@@ -855,49 +852,14 @@ header{
 .day-slot:not(.has-task):hover{background:var(--accent-pale)}
 .day-slot.drag-over{background:var(--accent-pale)!important;outline:1px dashed var(--accent)}
 .day-slot.snap-flash{animation:snapFlash .5s ease-out}
-.day-slot-interior{min-height:0!important;height:0!important;overflow:hidden;border:none;padding:0;pointer-events:none}
 
-/* Hour markers inside long tasks — reduced height, keep time labels visible */
-.day-lbl-hour-interior{
-  min-height:24px!important;height:24px!important;
-  font-size:10px;color:var(--text3);padding:2px 8px 0 0;opacity:.5;
-  display:flex;align-items:flex-start;justify-content:flex-end;
-  border-bottom:none;
-}
-.day-slot-hour-interior{
-  min-height:24px!important;height:24px!important;
-  border-bottom:1px dotted var(--border);opacity:.5;
-  pointer-events:all;position:relative;
-}
-
-/* During active drag: expand interior slots so they become valid drop targets */
-.drag-active .day-slot-interior{
-  min-height:32px!important;height:auto!important;pointer-events:all;
-  border-bottom:1px dashed var(--border);opacity:.6;
-  transition:min-height .15s;
-}
-.drag-active .day-lbl-interior{
-  min-height:32px!important;height:auto!important;overflow:visible;
-  font-size:10px;color:var(--text3);padding:4px 8px 0 0;
-  display:flex;align-items:flex-start;justify-content:flex-end;
-}
-.drag-active .day-slot-hour-interior,
-.drag-active .day-lbl-hour-interior{
-  opacity:1;
-}
-
-/* Wrapper around each task block + its resize handle.
-   position:relative so the handle can be absolutely positioned outside overflow:hidden.
-   The slot (flex column) sizes to fit this wrapper, which sizes to fit the block. */
-.day-task-slot-wrap{
-  position:relative;
-  display:flex;flex-direction:column;
-  /* min-height set inline per scheduled duration */
-}
+/* ── Day task overlay layer (all tasks absolutely positioned, like week view) ── */
+.day-task-layer{position:absolute;top:0;right:0;bottom:0;pointer-events:none;z-index:3}
+.day-task-layer>div{pointer-events:all}
 
 .recur-icon{font-size:10px;opacity:.5;flex-shrink:0}
 
-/* ── Absolute task blocks (week only now; day blocks are in-flow) ── */
+/* ── Absolute task blocks (both day and week views use overlay layers) ── */
 .wk-day-col{position:relative}
 .wk-task-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:2}
 .wk-routine-band{position:absolute;left:0;right:0;border-radius:5px;pointer-events:none;z-index:0;border-left:3px solid var(--rb-color,transparent);box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
@@ -1350,8 +1312,7 @@ header{
 /* ══ DAY SLOT AUTO-SPLIT (event + task overlap) ══════ */
 /* When a slot has both a timed event and a timed task at the same time,
 /* Overlay layer for overlapping items (absolute positioning like week view) */
-.day-overlay-layer{pointer-events:none}
-.day-overlay-layer>div{pointer-events:all}
+
 .week-allday-row{flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border)}
 .wk-allday-row{display:grid;grid-template-columns:68px repeat(7,1fr)}
 .wk-allday-gutter{display:flex;align-items:center;justify-content:flex-end;padding:4px 8px 4px 0;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;border-right:1px solid var(--border)}
@@ -1652,7 +1613,6 @@ header{
   background:var(--rc-bg,transparent);
   overflow:visible;
 }
-.day-slot[data-routine] .day-task-slot-wrap{margin:0 4px}
 .routine-window-hint{font-size:10px;opacity:.3;padding:2px 10px;pointer-events:none;font-style:italic;letter-spacing:.2px}
 
 /* ══ TASK TOOLTIP ══════════════════════════════════ */
