@@ -1071,14 +1071,15 @@ function renderWeek(){
     let routineBandsHtml='';
     getRoutineForDay(k).forEach(b=>{
       const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+      const isW=b.schedulable!==undefined?b.schedulable:(rt.schedulable||false);
       const[sh,sm]=b.start.split(':').map(Number);
       const[eh,em]=b.end.split(':').map(Number);
       const topPx=(sh*60+sm)/30*WK_SLOT_H_R;
       const hPx=(eh*60+em)/30*WK_SLOT_H_R-topPx;
       const rName=esc(b.customName||rt.label);
+      const badgeCls=isW?'window':'block';
       routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}0c;--rb-color:${rt.color};border-left-color:${rt.color}">
-        <span class="wk-routine-lbl" style="color:${rt.color}"><span class="wk-routine-dot" style="background:${rt.color}"></span>${rName}</span>
-      </div>`;
+      </div><div class="wk-routine-banner" style="top:${topPx}px;background:${rt.color}18;color:${rt.color}"><span class="wk-routine-dot" style="background:${rt.color}"></span>${rName}</div>`;
     });
     g+=`<div class="wk-day-col">${colSlots}<div class="wk-task-layer">${routineBandsHtml}${taskBlocks}</div></div>`;
   });
@@ -1314,12 +1315,11 @@ function renderDay(){
 
   // Routine block lookup
   const routineBands=getRoutineForDay(key);
-  const _labeledBands=new Set();
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
   }
 
-  // ── Build slot grid: consistent heights, NO task blocks inside, NO collapsing ──
+  // ── Build slot grid: consistent heights, NO task blocks, NO inline labels ──
   let html='';
   sl.forEach(s=>{
     const sk2=sk(s.h,s.m);
@@ -1332,23 +1332,10 @@ function renderDay(){
     const slotBg=rt?`background:${rt.color}18`:'';
     const routineAttr=rb?` data-routine="${rb.type}"`:'';
 
-    // Routine band label on first slot of each band
-    let routineLabelHtml='';
-    if(rb&&rt){
-      const bandKey=rb.type+'|'+rb.start+'|'+rb.end+(rb.customName||'');
-      if(!_labeledBands.has(bandKey)){
-        _labeledBands.add(bandKey);
-        const rName=esc(rb.customName||rt.label);
-        const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
-        const badgeHtml=isWin?`<span class="routine-slot-badge window">Window</span>`:`<span class="routine-slot-badge block">Block</span>`;
-        routineLabelHtml=`<div class="routine-slot-label" style="color:${rt.color}"><span class="routine-slot-dot" style="background:${rt.color}"></span>${rName} ${badgeHtml}</div>`;
-      }
-    }
-
-    // Open-window hint for empty schedulable routine slots (only on slots without tasks)
+    // Open-window hint for empty schedulable routine slots
     const hasTaskHere=_timedTasks.some(t=>t.time===sk2);
     let windowHintHtml='';
-    if(rb&&!hasTaskHere&&!routineLabelHtml){
+    if(rb&&!hasTaskHere){
       const isWin=rb.schedulable!==undefined?rb.schedulable:(rt.schedulable||false);
       if(isWin){windowHintHtml=`<div class="routine-window-hint" style="color:${rt.color}">open</div>`;}
     }
@@ -1359,7 +1346,7 @@ function renderDay(){
              onclick="onDaySlot('${key}','${sk2}',event)"
              ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
              ondrop="onDropSlot(event,'${key}','${sk2}')">
-             ${routineLabelHtml}${windowHintHtml}
+             ${windowHintHtml}
            </div>`;
   });
 
@@ -1381,12 +1368,13 @@ function renderDay(){
         const timeKey=sk(h,m);
         const slotEl=tl.querySelector(`.day-slot[data-time="${timeKey}"]`);
         if(!slotEl)return;
-        // If this slot has a routine label, offset the task below it
-        const labelEl=slotEl.querySelector('.routine-slot-label');
-        const labelOffset=labelEl?labelEl.offsetHeight+2:0;
-        const topPx=slotEl.offsetTop+labelOffset;
+        // If task starts at a routine band's start time, offset below the banner
+        const tMins=h*60+m;
+        const atBandStart=routineBands.some(b=>b.start===timeKey);
+        const bannerH=atBandStart?30:0;
+        const topPx=slotEl.offsetTop+bannerH;
         const dur=t.duration||30;
-        const hPx=Math.max(36,dur/30*DAY_SLOT_H-labelOffset);
+        const hPx=Math.max(36,dur/30*DAY_SLOT_H-bannerH);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
         // Inset for tasks within routine containers
@@ -1468,7 +1456,7 @@ function renderDay(){
     });
   }
 
-  // ── Routine container nesting overlays ──────────────────────────────────────
+  // ── Routine container nesting overlays + banners ─────────────────────────────
   if(routineBands.length){
     requestAnimationFrame(()=>{
       const firstLbl2=tl.querySelector('.day-time-lbl');
@@ -1476,6 +1464,7 @@ function renderDay(){
       tl.style.position='relative';
       routineBands.forEach(b=>{
         const rtC=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+        const isW=b.schedulable!==undefined?b.schedulable:(rtC.schedulable||false);
         const startSlot=tl.querySelector(`.day-slot[data-time="${b.start}"]`);
         if(!startSlot)return;
         const[eH,eM]=b.end.split(':').map(Number);const endMins3=eH*60+eM;
@@ -1489,10 +1478,22 @@ function renderDay(){
         const topPx2=startSlot.offsetTop;
         const hPx2=endSlot.offsetTop+endSlot.offsetHeight-topPx2;
         if(hPx2<=0)return;
+
+        // Container frame (z-index 1, behind tasks)
         const container=document.createElement('div');
         container.className='routine-container';
         container.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;--rc-bg:${rtC.color}06;top:${topPx2}px;height:${hPx2}px;left:${lblW2}px;right:0`;
         tl.appendChild(container);
+
+        // Banner (z-index 5, above tasks)
+        const rName=esc(b.customName||rtC.label);
+        const badgeCls=isW?'window':'block';
+        const badgeText=isW?'Window':'Block';
+        const banner=document.createElement('div');
+        banner.className='routine-banner';
+        banner.style.cssText=`color:${rtC.color};background:${rtC.color}18;border-bottom-color:${rtC.color}30;top:${topPx2}px;left:${lblW2}px;right:0`;
+        banner.innerHTML=`<span class="routine-banner-dot" style="background:${rtC.color}"></span><span class="routine-banner-name">${rName}</span><span class="routine-banner-badge ${badgeCls}">${badgeText}</span><span class="routine-banner-time">${fmtT(b.start)} – ${fmtT(b.end)}</span>`;
+        tl.appendChild(banner);
       });
     });
   }
@@ -2706,8 +2707,8 @@ document.getElementById('bdInput').addEventListener('keydown',e=>{
 function parseQuickEvent(raw){
   let text=raw.trim();if(!text)return null;
   let time=null,date=null,location=null,allday=false;
-  const atMatch=text.match(/\s+at\s+(.+)$/i);
-  if(atMatch){location=atMatch[1].trim();text=text.slice(0,atMatch.index).trim();}
+
+  // 1. Extract time FIRST (before "at" parsing to avoid "at 2pm" confusion)
   const timeRe=/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)\b/;
   const tm=text.match(timeRe);
   if(tm){
@@ -2716,31 +2717,90 @@ function parseQuickEvent(raw){
     if(ampm==='pm'&&h<12)h+=12;if(ampm==='am'&&h===12)h=0;
     time=pad(h)+':'+pad(m);text=text.replace(tm[0],'').trim();
   } else {const tm2=text.match(/\b(\d{1,2}):(\d{2})\b/);if(tm2){time=pad(parseInt(tm2[1]))+':'+pad(parseInt(tm2[2]));text=text.replace(tm2[0],'').trim();}}
+
+  // 2. Check "all day"
   if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
+
+  // 3. Extract numeric dates: 5/11, 05/11, 5/11/2026, 5-11, 5-11-2026
+  const numDateRe=/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/;
+  const nd=text.match(numDateRe);
+  if(nd){
+    const mo=parseInt(nd[1]),dy=parseInt(nd[2]);
+    let yr=nd[3]?parseInt(nd[3]):null;
+    if(yr&&yr<100)yr+=2000;
+    if(mo>=1&&mo<=12&&dy>=1&&dy<=31){
+      const today=new Date();today.setHours(0,0,0,0);
+      if(!yr){yr=(mo<today.getMonth()+1||(mo===today.getMonth()+1&&dy<today.getDate()))?today.getFullYear()+1:today.getFullYear();}
+      date=`${yr}-${pad(mo)}-${pad(dy)}`;
+      text=text.replace(nd[0],'').trim();
+    }
+  }
+
+  // 4. Extract named dates: today, tomorrow, day names, month names
   const today=new Date();today.setHours(0,0,0,0);
-  const dayNames=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  const dayNamesS=['sun','mon','tue','wed','thu','fri','sat'];
-  const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
-  const monthNamesS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-  if(/\btoday\b/i.test(text)){date=dk(today);text=text.replace(/\btoday\b/i,'').trim();}
-  else if(/\btomorrow\b/i.test(text)){date=dk(addDays(today,1));text=text.replace(/\btomorrow\b/i,'').trim();}
-  else{for(let i=0;i<7;i++){const re=new RegExp('\\b('+dayNames[i]+'|'+dayNamesS[i]+')\\b','i');const dm=text.match(re);if(dm){let diff=i-today.getDay();if(diff<=0)diff+=7;date=dk(addDays(today,diff));text=text.replace(dm[0],'').trim();break;}}}
-  if(!date){for(let mi=0;mi<12;mi++){const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');const mm=text.match(re);if(mm){const dayNum=parseInt(mm[2]);const yr=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();date=`${yr}-${pad(mi+1)}-${pad(dayNum)}`;text=text.replace(mm[0],'').trim();break;}}}
+  if(!date){
+    const dayNames=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const dayNamesS=['sun','mon','tue','wed','thu','fri','sat'];
+    const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const monthNamesS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    if(/\btoday\b/i.test(text)){date=dk(today);text=text.replace(/\btoday\b/i,'').trim();}
+    else if(/\btomorrow\b/i.test(text)){date=dk(addDays(today,1));text=text.replace(/\btomorrow\b/i,'').trim();}
+    else{for(let i=0;i<7;i++){const re=new RegExp('\\b('+dayNames[i]+'|'+dayNamesS[i]+')\\b','i');const dm=text.match(re);if(dm){let diff=i-today.getDay();if(diff<=0)diff+=7;date=dk(addDays(today,diff));text=text.replace(dm[0],'').trim();break;}}}
+    if(!date){for(let mi=0;mi<12;mi++){const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');const mm=text.match(re);if(mm){const dayNum=parseInt(mm[2]);const yr2=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();date=`${yr2}-${pad(mi+1)}-${pad(dayNum)}`;text=text.replace(mm[0],'').trim();break;}}}
+  }
+
+  // 5. Extract "at <location>" — only if content after "at" contains a letter (not a date/number)
+  const atMatch=text.match(/\s+at\s+((?=.*[a-zA-Z]).+)$/i);
+  if(atMatch){location=atMatch[1].trim();text=text.slice(0,atMatch.index).trim();}
+
+  // 6. Defaults
   if(!date)date=dk(today);
   if(!time&&!allday)time='09:00';
-  const name=text.replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
+
+  // 7. Clean up name — strip trailing prepositions, extra whitespace
+  const name=text.replace(/\s+(at|on|in)$/i,'').replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
   if(!name)return null;
   return{name,date,time:allday?null:time,allday,location};
 }
+let _lastQeId=null;
 function addQuickEvent(){
   const input=document.getElementById('qeInput');if(!input)return;
   const raw=input.value.trim();if(!raw)return;
   const parsed=parseQuickEvent(raw);
   if(!parsed){showToast('Could not parse — try "Dinner Friday 7pm"');return;}
-  tasks.push({id:genId(),name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]});
+  const newId=genId();
+  _lastQeId=newId;
+  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]});
   input.value='';save();renderAll();
+  // Show confirmation card
   const d=fromDk(parsed.date);
-  showToast(`Event "${parsed.name}" · ${MONTHS_S[d.getMonth()]} ${d.getDate()} ${parsed.allday?'All Day':fmtT(parsed.time)}`);
+  const dateStr=DLONG[d.getDay()]+', '+MONTHS_S[d.getMonth()]+' '+d.getDate();
+  const timeStr=parsed.allday?'All Day':fmtT(parsed.time);
+  const locStr=parsed.location?` · ${esc(parsed.location)}`:'';
+  const el=document.getElementById('qeConfirm');
+  if(el){
+    el.innerHTML=`<div class="qe-confirm-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l3 3 5-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="qe-confirm-body">
+        <div class="qe-confirm-title">${esc(parsed.name)}</div>
+        <div class="qe-confirm-detail">${dateStr} · ${timeStr}${locStr}</div>
+        <div class="qe-confirm-actions">
+          <button class="qe-confirm-btn qe-edit" onclick="openQeEdit()">Edit details</button>
+          <button class="qe-confirm-btn qe-done" onclick="dismissQeConfirm()">Done</button>
+        </div>
+      </div>`;
+    el.style.display='flex';
+  }
+}
+function dismissQeConfirm(){
+  const el=document.getElementById('qeConfirm');
+  if(el){el.style.display='none';el.innerHTML='';}
+}
+function openQeEdit(){
+  dismissQeConfirm();
+  if(!_lastQeId)return;
+  const t=tasks.find(t=>t.id===_lastQeId);if(!t)return;
+  const fakeEvent={stopPropagation:()=>{}};
+  openEdit(_lastQeId,t.date,fakeEvent);
 }
 
 function renderBD(){

@@ -725,6 +725,27 @@ header{
 .qe-add-btn{font-size:11px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;transition:opacity .12s}
 .qe-add-btn:hover{opacity:.85}
 .qe-hint{font-size:10px;color:var(--text3);margin-top:4px;font-style:italic;line-height:1.5}
+.qe-confirm{
+  display:flex;align-items:flex-start;gap:10px;margin-top:8px;
+  background:var(--accent-pale);border:1px solid var(--accent);
+  border-radius:10px;padding:10px 12px;
+}
+.qe-confirm-icon{
+  width:22px;height:22px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
+}
+.qe-confirm-body{flex:1;min-width:0}
+.qe-confirm-title{font-size:13px;font-weight:600;color:var(--text)}
+.qe-confirm-detail{font-size:11px;color:var(--text2);margin-top:2px}
+.qe-confirm-actions{display:flex;gap:6px;margin-top:6px}
+.qe-confirm-btn{
+  font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;
+  border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .12s;
+}
+.qe-edit{background:var(--surface3);color:var(--text2)}
+.qe-edit:hover{opacity:.8}
+.qe-done{background:var(--accent);color:#fff}
+.qe-done:hover{opacity:.85}
 /* When today has both task dot and event dot, offset task dot left */
 .ym-day.today.has-event .ym-dot{left:calc(50% - 3px)}
 .ym-day.today.has-event::after{background:rgba(255,255,255,.7);bottom:3px}
@@ -1638,10 +1659,35 @@ header{
   letter-spacing:.2px;
 }
 .routine-slot-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:.8}
-.routine-slot-badge{font-size:8px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-left:2px;flex-shrink:0}
-.routine-slot-badge.window{color:inherit;background:rgba(0,0,0,.06)}
-.routine-slot-badge.block{color:var(--text3);background:var(--surface3)}
-[data-dark="true"] .routine-slot-badge.window{background:rgba(255,255,255,.08)}
+
+/* ══ ROUTINE BANNER (overlay, z-index 5, above tasks) ═══════ */
+.routine-banner{
+  position:absolute;z-index:5;pointer-events:none;
+  display:flex;align-items:center;gap:6px;
+  padding:6px 12px;font-size:12px;font-weight:600;
+  color:var(--rb-color);letter-spacing:.15px;
+  background:transparent;
+  border-bottom:1px solid transparent;
+  border-radius:0 10px 0 0;
+}
+.routine-banner-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.routine-banner-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.routine-banner-badge{
+  font-size:8px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:2px 7px;border-radius:4px;flex-shrink:0;
+}
+.routine-banner-badge.window{background:rgba(0,0,0,.06)}
+.routine-banner-badge.block{color:var(--text3);background:var(--surface3)}
+[data-dark="true"] .routine-banner-badge.window{background:rgba(255,255,255,.08)}
+.routine-banner-time{margin-left:auto;font-size:10px;opacity:.6;font-weight:500;white-space:nowrap}
+
+/* Week view banner */
+.wk-routine-banner{
+  position:absolute;left:0;right:0;z-index:3;pointer-events:none;
+  display:flex;align-items:center;gap:3px;
+  padding:2px 4px;font-size:9px;font-weight:700;
+  border-radius:4px 4px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 
 /* ══ ROUTINE CONTAINER NESTING ═══════════════════════ */
 .routine-container{
