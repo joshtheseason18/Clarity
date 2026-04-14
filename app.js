@@ -1381,9 +1381,12 @@ function renderDay(){
         const timeKey=sk(h,m);
         const slotEl=tl.querySelector(`.day-slot[data-time="${timeKey}"]`);
         if(!slotEl)return;
-        const topPx=slotEl.offsetTop;
+        // If this slot has a routine label, offset the task below it
+        const labelEl=slotEl.querySelector('.routine-slot-label');
+        const labelOffset=labelEl?labelEl.offsetHeight+2:0;
+        const topPx=slotEl.offsetTop+labelOffset;
         const dur=t.duration||30;
-        const hPx=Math.max(36,dur/30*DAY_SLOT_H);
+        const hPx=Math.max(36,dur/30*DAY_SLOT_H-labelOffset);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
         // Inset for tasks within routine containers
