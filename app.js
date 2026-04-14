@@ -1029,11 +1029,15 @@ function renderWeek(){
       });
     })();
 
+    // Routine bands for this day (for banner offset)
+    const wkDayRoutines=getRoutineForDay(k);
     let taskBlocks=dayTasks.map(t=>{
       const [th,tm]=t.time.split(':').map(Number);
-      const topPx=(th*60+tm)/30*WK_SLOT_H;
+      // Offset task below banner if it starts at a routine's start time
+      const wkBannerH=wkDayRoutines.some(b=>b.start===t.time)?18:0;
+      const topPx=(th*60+tm)/30*WK_SLOT_H+wkBannerH;
       const dur=t.duration||30;
-      const hPx=Math.max(14,dur/30*WK_SLOT_H-1);
+      const hPx=Math.max(14,dur/30*WK_SLOT_H-1-wkBannerH);
       const isEvent=(t.type||'task')==='event';
       const cc=isEvent?eventColor(t.category):catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
@@ -3221,6 +3225,7 @@ function setDurSpinner(totalMin){
   const mnEl=document.getElementById('fDurMin');
   if(hrEl)hrEl.value=hr;
   if(mnEl)mnEl.value=mn;
+  syncEndTimeFromDur();
 }
 function onDurSpinnerChange(){
   const hr=parseInt(document.getElementById('fDurHr').value)||0;
@@ -3230,8 +3235,36 @@ function onDurSpinnerChange(){
   document.getElementById('fDurMin').value=mn;
   _selDur=Math.min(720,hr*60+mn); // cap at 12 hours
   if(_selDur<15)_selDur=15;
-  // Clamp spinner display if over max
   if(hr>12){document.getElementById('fDurHr').value=12;_selDur=720;}
+  syncEndTimeFromDur();
+}
+
+// ── Start / End time field sync ──
+function syncEndTimeFromDur(){
+  const startEl=document.getElementById('fStartTime');
+  const endEl=document.getElementById('fEndTime');
+  if(!startEl||!endEl||!startEl.value)return;
+  const[sh,sm]=startEl.value.split(':').map(Number);
+  const endMins=sh*60+sm+_selDur;
+  endEl.value=pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60);
+}
+function onStartTimeChange(){
+  const startEl=document.getElementById('fStartTime');
+  if(!startEl||!startEl.value)return;
+  mTime=startEl.value;
+  syncEndTimeFromDur();
+}
+function onEndTimeChange(){
+  const startEl=document.getElementById('fStartTime');
+  const endEl=document.getElementById('fEndTime');
+  if(!startEl||!endEl||!startEl.value||!endEl.value)return;
+  const[sh,sm]=startEl.value.split(':').map(Number);
+  const[eh,em]=endEl.value.split(':').map(Number);
+  let diff=(eh*60+em)-(sh*60+sm);
+  if(diff<=0)diff+=1440; // overnight
+  diff=Math.min(720,Math.max(15,diff));
+  _selDur=diff;
+  setDurSpinner(_selDur);
 }
 function durToMin(lbl){
   // parse "1h 30m" or "45m" or "2h" back to minutes (for internal use)
@@ -3544,6 +3577,7 @@ function openNew(dateKey,time){
   document.getElementById('fRecurU').value='day';
   document.getElementById('recurOpts').style.display='none';
   document.getElementById('btnDel').style.display='none';
+  const stEl=document.getElementById('fStartTime');if(stEl)stEl.value=time;
   setDurSpinner(30);
   renderModalSubtasks();
   renderModalAttachments();
@@ -3585,6 +3619,7 @@ function openEdit(id,instanceDate,e){
   document.getElementById('fRecurU').value=t.recurU||'day';
   document.getElementById('recurOpts').style.display=t.recur?'flex':'none';
   document.getElementById('btnDel').style.display='block';
+  const stEl2=document.getElementById('fStartTime');if(stEl2)stEl2.value=t.time||'09:00';
   setDurSpinner(t.duration||30);
   renderModalSubtasks();
   renderModalAttachments();
@@ -3643,9 +3678,10 @@ function saveTask(){
   const subtasks=_modalSubtasks;
   const attachments=_modalAttachments;
   const allday=_itemType==='event'&&_modalAllday;
-  const finalTime=allday?null:mTime;
+  const startTimeVal=document.getElementById('fStartTime').value||mTime;
+  const finalTime=allday?null:startTimeVal;
   if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:allday?null:t.time,duration,recur,recurN,recurU,subtasks});}
+  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,subtasks});}
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){

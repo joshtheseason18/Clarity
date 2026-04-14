@@ -448,6 +448,11 @@
           <div class="toggle-thumb"></div>
         </button>
       </div>
+      <!-- Start / End time row -->
+      <div class="frow" id="fTimeRow">
+        <div class="fg"><label class="flbl">Start time</label><input class="fi" type="time" id="fStartTime" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">End time</label><input class="fi" type="time" id="fEndTime" onchange="onEndTimeChange()" style="font-size:12px;padding:6px 9px"></div>
+      </div>
       <div class="frow" id="fPriRow">
         <div class="fg"><label class="flbl">Priority</label>
           <select class="fi" id="fPri"><option value="none">None</option><option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option></select>
