@@ -1375,7 +1375,7 @@ function renderDay(){
         // If task starts at a routine band's start time, offset below the banner
         const tMins=h*60+m;
         const atBandStart=routineBands.some(b=>b.start===timeKey);
-        const bannerH=atBandStart?30:0;
+        const bannerH=atBandStart?18:0;
         const topPx=slotEl.offsetTop+bannerH;
         const dur=t.duration||30;
         const hPx=Math.max(36,dur/30*DAY_SLOT_H-bannerH);
@@ -1411,6 +1411,7 @@ function renderDay(){
 
         let blockHtml;
         const durStep=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
+        const subPill=subs.length?`<div class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></div>`:'';
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
@@ -1418,11 +1419,11 @@ function renderDay(){
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
-              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
               ${ci.total<=3?timeRB:''}
             </div>
             ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}</div>`:''}
-            ${ci.total<=3?buildSubtaskHtml(t.id,subs,true):''}
+            ${ci.total<=3?subPill:''}
           </div>`;
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
@@ -1433,7 +1434,7 @@ function renderDay(){
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();addSubtaskInline('${t.id}','${idate}')">+</button>
+              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
               ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
               ${ci.total<=3?timeRB:''}
             </div>
@@ -1442,7 +1443,7 @@ function renderDay(){
               ${focusPill2}
               ${ci.total<=3&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:ci.total<=3&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
             </div>`:''}
-            ${ci.total<=3?buildSubtaskHtml(t.id,subs,false):''}
+            ${ci.total<=3?subPill:''}
           </div>`;
         }
 
@@ -1450,7 +1451,7 @@ function renderDay(){
         block.setAttribute('data-cols',ci.total);
         if(ci.total>=3)block.classList.add('day-overlay-narrow');
         if(ci.total>=4)block.classList.add('day-overlay-xnarrow');
-        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow-y:auto;overflow-x:hidden`;
+        block.style.cssText=`position:absolute;top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};pointer-events:all;z-index:3;overflow:hidden`;
         block.innerHTML=blockHtml;
         overlay.appendChild(block);
       });
@@ -3557,6 +3558,85 @@ function placeCaretAtEnd(el){
   sel.removeAllRanges();
   sel.addRange(range);
 }
+
+// ══ SUBTASK POPUP ════════════════════════════════
+let _subPopupTaskId=null,_subPopupDate=null;
+function openSubtaskPopup(taskId,idate){
+  _subPopupTaskId=taskId;_subPopupDate=idate;
+  const t=tasks.find(t=>t.id===taskId);if(!t)return;
+  const subs=t.subtasks||[];
+  const overlay=document.getElementById('subPopupOverlay');
+  if(!overlay)return;
+  renderSubtaskPopupContent(t);
+  overlay.classList.add('open');
+}
+function closeSubtaskPopup(){
+  const overlay=document.getElementById('subPopupOverlay');
+  if(overlay)overlay.classList.remove('open');
+  _subPopupTaskId=null;_subPopupDate=null;
+  renderAll();
+}
+function renderSubtaskPopupContent(t){
+  if(!t)t=tasks.find(t=>t.id===_subPopupTaskId);
+  if(!t)return;
+  const subs=t.subtasks||[];
+  const done=subs.filter(s=>s.done).length;
+  document.getElementById('subPopupTitle').textContent=t.name;
+  document.getElementById('subPopupCount').textContent=`${subs.length} subtask${subs.length!==1?'s':''} · ${done} completed`;
+  const list=document.getElementById('subPopupList');
+  list.innerHTML=subs.map((s,i)=>`<div class="sp-item${s.done?' done':''}" draggable="true"
+    ondragstart="onSpDragStart(event,${i})" ondragover="onSpDragOver(event)" ondrop="onSpDrop(event,${i})" ondragend="onSpDragEnd(event)">
+    <div class="sp-check${s.done?' checked':''}" onclick="toggleSpSub(${i})"></div>
+    <span class="sp-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()" onblur="saveSpSub(${i},this)" onkeydown="onSpKeydown(event,${i},this)">${esc(s.name)}</span>
+    <span class="sp-grip" title="Drag to reorder">≡</span>
+    <button class="sp-del" onclick="deleteSpSub(${i})" title="Remove">×</button>
+  </div>`).join('')||'<div class="sp-empty">No subtasks yet</div>';
+}
+function toggleSpSub(idx){
+  const t=tasks.find(t=>t.id===_subPopupTaskId);if(!t||!t.subtasks[idx])return;
+  t.subtasks[idx].done=!t.subtasks[idx].done;
+  save();renderSubtaskPopupContent(t);
+}
+function saveSpSub(idx,el){
+  const t=tasks.find(t=>t.id===_subPopupTaskId);if(!t||!t.subtasks)return;
+  const val=el.textContent.trim();
+  if(!val){t.subtasks.splice(idx,1);}
+  else{t.subtasks[idx].name=val;}
+  save();renderSubtaskPopupContent(t);
+}
+function deleteSpSub(idx){
+  const t=tasks.find(t=>t.id===_subPopupTaskId);if(!t||!t.subtasks)return;
+  t.subtasks.splice(idx,1);save();renderSubtaskPopupContent(t);
+}
+function addSpSub(){
+  const t=tasks.find(t=>t.id===_subPopupTaskId);if(!t)return;
+  const input=document.getElementById('subPopupInput');
+  const name=input.value.trim();if(!name)return;
+  if(!t.subtasks)t.subtasks=[];
+  if(t.subtasks.length>=20){showToast('Maximum 20 subtasks');return;}
+  t.subtasks.push({id:genId(),name,duration:0,done:false});
+  input.value='';save();renderSubtaskPopupContent(t);
+  input.focus();
+}
+function onSpKeydown(e,idx,el){
+  if(e.key==='Enter'){e.preventDefault();saveSpSub(idx,el);addSpSubFocus();}
+  if(e.key==='Escape')el.blur();
+}
+function addSpSubFocus(){const input=document.getElementById('subPopupInput');if(input)input.focus();}
+// Drag reorder in popup
+let _spDragFrom=-1;
+function onSpDragStart(e,idx){_spDragFrom=idx;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','sp');e.target.classList.add('sp-dragging');}
+function onSpDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';const row=e.target.closest('.sp-item');if(row)row.classList.add('sp-drop-target');}
+function onSpDrop(e,toIdx){
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.sp-drop-target').forEach(r=>r.classList.remove('sp-drop-target'));
+  if(_spDragFrom<0||_spDragFrom===toIdx)return;
+  const t=tasks.find(t=>t.id===_subPopupTaskId);if(!t||!t.subtasks)return;
+  const moved=t.subtasks.splice(_spDragFrom,1)[0];
+  t.subtasks.splice(toIdx,0,moved);
+  save();renderSubtaskPopupContent(t);_spDragFrom=-1;
+}
+function onSpDragEnd(e){e.target.classList.remove('sp-dragging');document.querySelectorAll('.sp-drop-target').forEach(r=>r.classList.remove('sp-drop-target'));_spDragFrom=-1;}
 
 function openNew(dateKey,time){
   mMode='new';mDate=dateKey;mTime=time;mId=null;mInstanceDate=null;

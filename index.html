@@ -426,6 +426,24 @@
 </div>
 
 <!-- TASK MODAL -->
+<!-- Subtask popup -->
+<div class="modal-overlay" id="subPopupOverlay" onclick="if(event.target===this)closeSubtaskPopup()">
+  <div class="sub-popup">
+    <div class="sp-hdr">
+      <div class="sp-hdr-left">
+        <div class="sp-title" id="subPopupTitle">Task name</div>
+        <div class="sp-count" id="subPopupCount">0 subtasks</div>
+      </div>
+      <button class="sp-close" onclick="closeSubtaskPopup()">&times;</button>
+    </div>
+    <div class="sp-list" id="subPopupList"></div>
+    <div class="sp-footer">
+      <input class="sp-input" id="subPopupInput" placeholder="Add a subtask..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSpSub();}">
+      <button class="sp-add-btn" onclick="addSpSub()">+ Add</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mOverlay" onclick="handleMBg(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <!-- Sticky header: title + type toggle -->
