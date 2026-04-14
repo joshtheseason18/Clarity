@@ -819,8 +819,7 @@ function renderYear(){
     } else if(taskTotal>0){
       countHtml=`<span class="ym-count has-tasks">${taskTotal} task${taskTotal!==1?'s':''}</span>`;
     }
-    const isExpanded=_yearExpandedMonth===mo;
-    html+=`<div class="year-month-card${hasToday?' has-today':''}${isExpanded?' expanded':''}" onclick="onYearMonthClick(${curYear},${mo})">
+    html+=`<div class="year-month-card${hasToday?' has-today':''}" onclick="openYearMonthPopup(${curYear},${mo})">
       <div class="ym-header"><div class="ym-name">${MONTHS_LONG[mo]}</div><div class="ym-counts">${countHtml}</div></div>
       <div class="ym-days-hdr">${orderedDayLabels().map(d=>`<div class="ym-day-lbl">${d[0]}</div>`).join('')}</div>
       <div class="ym-cal-grid">`;
@@ -833,24 +832,132 @@ function renderYear(){
     }
     const rem=(first+dim)%7;if(rem>0)for(let i=0;i<7-rem;i++)html+=`<div class="ym-day other"></div>`;
     html+=`</div>`;
-    if(isExpanded){html+=`<div class="ym-expand-actions"><button class="ym-expand-btn" onclick="event.stopPropagation();onYearGoMonth(${curYear},${mo})">Open in month view</button><button class="ym-expand-btn secondary" onclick="event.stopPropagation();_yearExpandedMonth=-1;renderYear()">Collapse</button></div>`;}
     html+=`</div>`;
   }
   document.getElementById('yearGrid').innerHTML=html;
 }
-function onYearMonthClick(y,mo){
-  if(_yearExpandedMonth===mo&&curYear===y){_yearExpandedMonth=-1;}
-  else{_yearExpandedMonth=mo;curYear=y;}
-  renderYear();
-}
 function onYearDayClick(key){openNew(key,'09:00')}
-function onYearGoMonth(y,mo){_yearExpandedMonth=-1;cursor=new Date(y,mo,1);selDate=new Date(y,mo,1);switchView('month');}
-let _yearExpandedMonth=-1;
+function onYearGoMonth(y,mo){cursor=new Date(y,mo,1);selDate=new Date(y,mo,1);switchView('month');}
+
+// ── Year Month Popup ──────────────────────────────────
+function openYearMonthPopup(y,mo){
+  const popup=document.getElementById('yearMonthPopup');
+  if(!popup)return;
+  const todayKey=dk(new Date());
+  const first=(new Date(y,mo,1).getDay()-weekStartDay+7)%7;
+  const dim=new Date(y,mo+1,0).getDate();
+  const mStart=new Date(y,mo,1),mEnd=new Date(y,mo,dim);
+  const allItems=expandedTasks(mStart,mEnd);
+  const monthTasks=allItems.filter(t=>(t.type||'task')==='task');
+  const monthEvents=allItems.filter(t=>(t.type||'task')==='event');
+  // Day counts for dots
+  const dayCount={},eventDayCount={};
+  allItems.forEach(t=>{
+    if(t.date){const d=fromDk(t.date);if(d.getMonth()===mo&&d.getFullYear()===y){
+      if((t.type||'task')==='event')eventDayCount[d.getDate()]=(eventDayCount[d.getDate()]||0)+1;
+      else dayCount[d.getDate()]=(dayCount[d.getDate()]||0)+1;
+    }}
+  });
+  let calHtml=`<div class="ymp-dow-row">${orderedDayLabels().map(d=>`<div class="ymp-dow">${d[0]}</div>`).join('')}</div><div class="ymp-cal-grid">`;
+  for(let i=0;i<first;i++)calHtml+=`<div class="ymp-day other"></div>`;
+  for(let d=1;d<=dim;d++){
+    const key=`${y}-${pad(mo+1)}-${pad(d)}`,n=(dayCount[d]||0)+(eventDayCount[d]||0),isT=key===todayKey;
+    const hasEv=(eventDayCount[d]||0)>0;
+    let dotCls=n===1?'d1':n===2?'d2':n<=4?'d3':n>4?'d4':'';
+    calHtml+=`<div class="ymp-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
+  }
+  const rem2=(first+dim)%7;if(rem2>0)for(let i=0;i<7-rem2;i++)calHtml+=`<div class="ymp-day other"></div>`;
+  calHtml+=`</div>`;
+  const inner=popup.querySelector('.ym-popup');
+  inner.innerHTML=`
+    <div class="ymp-hdr"><span class="ymp-title">${MONTHS_LONG[mo]} ${y}</span><button class="ymp-close" onclick="closeYearMonthPopup()">✕</button></div>
+    <div class="ymp-body" id="ympBody">
+      <div id="ympCalView">
+        ${calHtml}
+        <div class="ymp-stats">
+          <div class="ymp-stat-card" onclick="showYearMonthSummary('task',${y},${mo})" onmouseenter="this.classList.add('hover')" onmouseleave="this.classList.remove('hover')">
+            <span class="ymp-stat-num">${monthTasks.length}</span><span class="ymp-stat-label">Task${monthTasks.length!==1?'s':''}</span>
+          </div>
+          <div class="ymp-stat-card" onclick="showYearMonthSummary('event',${y},${mo})" onmouseenter="this.classList.add('hover')" onmouseleave="this.classList.remove('hover')">
+            <span class="ymp-stat-num">${monthEvents.length}</span><span class="ymp-stat-label">Event${monthEvents.length!==1?'s':''}</span>
+          </div>
+        </div>
+        <button class="ymp-open-month" onclick="closeYearMonthPopup();onYearGoMonth(${y},${mo})">Open in month view</button>
+      </div>
+    </div>`;
+  popup.classList.add('show');
+}
+function closeYearMonthPopup(){
+  const popup=document.getElementById('yearMonthPopup');
+  if(popup)popup.classList.remove('show');
+}
+// Change 10: Summary list view
+function showYearMonthSummary(type,y,mo){
+  const mStart=new Date(y,mo,1),mEnd=new Date(y,mo,new Date(y,mo+1,0).getDate());
+  const allItems=expandedTasks(mStart,mEnd);
+  const filtered=type==='event'?allItems.filter(t=>(t.type||'task')==='event'):allItems.filter(t=>(t.type||'task')==='task');
+  filtered.sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+  const label=type==='event'?'event':'task';
+  const maxShow=8;
+  const shown=filtered.slice(0,maxShow);
+  // Group by date
+  const groups={};
+  shown.forEach(t=>{
+    const dk2=t.date||t._instanceDate;
+    if(!groups[dk2])groups[dk2]=[];
+    groups[dk2].push(t);
+  });
+  let listHtml=`<div class="ymp-summary-hdr"><button class="ymp-back" onclick="openYearMonthPopup(${y},${mo})">← Back to ${MONTHS_LONG[mo]}</button><span class="ymp-summary-title">${filtered.length} ${label}${filtered.length!==1?'s':''} in ${MONTHS_LONG[mo]}</span></div><div class="ymp-summary-list">`;
+  Object.keys(groups).sort().forEach(dk2=>{
+    const d=fromDk(dk2);
+    const dayName=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+    listHtml+=`<div class="ymp-group-hdr">${dayName}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()}</div>`;
+    groups[dk2].forEach(t=>{
+      const isEvent=(t.type||'task')==='event';
+      const cc=isEvent?eventColor(t.category):catColor(t.category);
+      const timeStr=t.allday?'All Day':t.time?fmtT(t.time):'';
+      const badge=isEvent?'event':'task';
+      listHtml+=`<div class="ymp-item" onclick="closeYearMonthPopup();openEdit('${t.id}','${t._instanceDate||dk2}',event)">
+        <span class="ymp-item-dot" style="background:${cc}"></span>
+        <span class="ymp-item-name">${esc(t.name)}</span>
+        <span class="ymp-item-badge ${badge}">${badge}</span>
+        ${timeStr?`<span class="ymp-item-time">${timeStr}</span>`:''}
+      </div>`;
+    });
+  });
+  if(filtered.length>maxShow){
+    listHtml+=`<div class="ymp-more" onclick="closeYearMonthPopup();onYearGoMonth(${y},${mo})">View all ${filtered.length} in month view →</div>`;
+  }
+  listHtml+=`</div>`;
+  const body=document.getElementById('ympBody');
+  if(body)body.innerHTML=listHtml;
+}
 
 // ══ MONTH ════════════════════════════════════
 function renderMonth(){
   const y=cursor.getFullYear(),mo=cursor.getMonth(),first=(new Date(y,mo,1).getDay()-weekStartDay+7)%7,dim=new Date(y,mo+1,0).getDate(),dip=new Date(y,mo,0).getDate(),todayKey=dk(new Date());
-  let html=`<div class="month-grid-hdr">${orderedDayLabels().map(d=>`<div class="month-day-name">${d}</div>`).join('')}</div><div class="month-grid">`;
+  // Month-wide stats
+  const mStart=new Date(y,mo,1),mEnd=new Date(y,mo,dim);
+  const allMonth=expandedTasks(mStart,mEnd);
+  const mTasks=allMonth.filter(t=>(t.type||'task')==='task');
+  const mEvents=allMonth.filter(t=>(t.type||'task')==='event');
+  const mDone=mTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate||t.date)).length;
+  const mPlans=getMonthPlans(y+'-'+pad(mo+1));
+  const goalsDone=(mPlans.goals||[]).filter(g=>g.done).length;
+  const goalsTotal=(mPlans.goals||[]).length;
+  const goalPct=goalsTotal?Math.round(goalsDone/goalsTotal*100):0;
+  let statsHtml=`<div class="month-stats-bar" id="monthStatsBar">
+    <div class="month-stat-card" onmouseenter="monthGlow('tasks')" onmouseleave="monthGlow(null)" onclick="openYearMonthPopup(${y},${mo});showYearMonthSummary('task',${y},${mo})">
+      <span class="month-stat-num">${mTasks.length}</span><span class="month-stat-sub">${mDone} done</span><span class="month-stat-label">Tasks</span>
+    </div>
+    <div class="month-stat-card" onmouseenter="monthGlow('events')" onmouseleave="monthGlow(null)" onclick="openYearMonthPopup(${y},${mo});showYearMonthSummary('event',${y},${mo})">
+      <span class="month-stat-num">${mEvents.length}</span><span class="month-stat-sub">hover to highlight</span><span class="month-stat-label">Events</span>
+    </div>
+    <div class="month-stat-card">
+      <span class="month-stat-num">${goalsDone}/${goalsTotal||3}</span><span class="month-stat-sub">${goalPct}%</span><span class="month-stat-label">Goals</span>
+    </div>
+  </div>`;
+  let html=statsHtml+`<div class="month-grid-hdr">${orderedDayLabels().map(d=>`<div class="month-day-name">${d}</div>`).join('')}</div><div class="month-grid" id="monthGridInner">`;
   let cells=[];
   for(let i=first-1;i>=0;i--)cells.push({date:new Date(y,mo-1,dip-i),cur:false});
   for(let d=1;d<=dim;d++)cells.push({date:new Date(y,mo,d),cur:true});
@@ -859,8 +966,9 @@ function renderMonth(){
     const key=dk(date),isTod=key===todayKey;
     const dt=tasksOn(key);
     const events=dt.filter(t=>(t.type||'task')==='event');
+    const taskCount=dt.filter(t=>(t.type||'task')!=='event').length;
     const eventCount=events.length;
-    let cls='month-cell'+((!cur)?' other-month':'')+(isTod?' today':'');
+    let cls='month-cell m-cell'+((!cur)?' other-month':'')+(isTod?' today':'')+(eventCount?' has-event':'')+(taskCount?' has-task':'');
     // Show events first, then tasks sorted by priority
     const priOrder={high:0,medium:1,low:2,none:3};
     const sorted=[
@@ -885,55 +993,176 @@ function renderMonth(){
       <div class="cell-num-row"><span class="cell-num-circle">${date.getDate()}</span>${eventDot}</div>${chips}</div>`;
   });
   document.getElementById('monthGrid').innerHTML=html+'</div>';
-  // Load month notes preview
-  updateMonthNotesPreview();
-  if(_monthNotesOpen)loadMonthNotesUI();
+  // Load month planning
+  renderMonthPlan();
+}
+function monthGlow(type){
+  const grid=document.getElementById('monthGridInner');
+  if(!grid)return;
+  grid.classList.remove('glow-tasks','glow-events');
+  if(type==='tasks')grid.classList.add('glow-tasks');
+  else if(type==='events')grid.classList.add('glow-events');
 }
 function onMCell(k){openNew(k,'09:00')}
 
-// ── Month Notes ──────────────────────────────────────────────
-function monthNotesKey(){
+// ── Month Planning (replaces Month Notes) ─────────────────────────────
+function monthPlanKey(){
   return cursor.getFullYear()+'-'+pad(cursor.getMonth()+1);
 }
-function toggleMonthNotes(){
-  _monthNotesOpen=!_monthNotesOpen;
-  const body=document.getElementById('monthNotesBody');
-  const arrow=document.getElementById('monthNotesArrow');
-  if(body)body.style.display=_monthNotesOpen?'':'none';
-  if(arrow)arrow.textContent=_monthNotesOpen?'▾':'▸';
-  if(_monthNotesOpen)loadMonthNotesUI();
+let monthPlans={};
+try{monthPlans=JSON.parse(localStorage.getItem('clarity_monthPlans')||'{}')}catch{monthPlans={}}
+function saveMonthPlans(){try{localStorage.setItem('clarity_monthPlans',JSON.stringify(monthPlans))}catch(e){showToast('Storage full');console.error(e)}}
+function getMonthPlans(key){
+  if(!key)key=monthPlanKey();
+  if(!monthPlans[key])monthPlans[key]={goals:[],lookingForward:[],wentWell:[],toImprove:[]};
+  return monthPlans[key];
 }
-function loadMonthNotesUI(){
-  const key=monthNotesKey();
-  const text=monthNotes[key]||'';
-  const ta=document.getElementById('monthNotesTa');
-  if(ta)ta.value=text;
-  const hint=document.getElementById('monthNotesSaved');
-  if(hint)hint.classList.remove('show');
-  updateMonthNotesPreview();
+let _monthPlanOpen=localStorage.getItem('clarity_monthPlanOpen')!=='false';
+function toggleMonthPlan(){
+  _monthPlanOpen=!_monthPlanOpen;
+  localStorage.setItem('clarity_monthPlanOpen',_monthPlanOpen?'true':'false');
+  const grid=document.getElementById('monthPlanGrid');
+  const tog=document.getElementById('monthPlanToggle');
+  if(grid)grid.style.display=_monthPlanOpen?'':'none';
+  if(tog)tog.textContent=_monthPlanOpen?'collapse':'expand';
 }
-function onMonthNotesInput(){
-  const hint=document.getElementById('monthNotesSaved');
-  if(hint)hint.classList.remove('show');
+function renderMonthPlan(){
+  const grid=document.getElementById('monthPlanGrid');
+  const tog=document.getElementById('monthPlanToggle');
+  if(!grid)return;
+  grid.style.display=_monthPlanOpen?'':'none';
+  if(tog)tog.textContent=_monthPlanOpen?'collapse':'expand';
+  const key=monthPlanKey();
+  const p=getMonthPlans(key);
+  // ── Column 1: Goals ──
+  let goalsHtml=`<div class="mp-col"><div class="mp-col-title">Goals</div>`;
+  (p.goals||[]).forEach((g,i)=>{
+    goalsHtml+=`<div class="mp-goal${g.done?' done':''}" draggable="true"
+      ondragstart="onMpGoalDragStart(event,${i})" ondragover="onMpGoalDragOver(event)" ondrop="onMpGoalDrop(event,${i})" ondragend="onMpGoalDragEnd(event)">
+      <span class="mp-goal-grip" onmousedown="event.stopPropagation()">≡</span>
+      <div class="mp-goal-check${g.done?' checked':''}" onclick="toggleMpGoal(${i})"></div>
+      <span class="mp-goal-text" contenteditable="true" spellcheck="false"
+        onblur="saveMpGoalText(${i},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">${esc(g.text)}</span>
+      <span class="mp-goal-del" onclick="deleteMpGoal(${i})">✕</span>
+    </div>`;
+  });
+  const canAdd=(p.goals||[]).length<3;
+  goalsHtml+=`<div class="mp-add-goal${canAdd?'':' disabled'}" onclick="${canAdd?'addMpGoal()':''}">+ Add goal</div></div>`;
+  // ── Column 2: Looking forward to ──
+  let lfHtml=`<div class="mp-col"><div class="mp-col-title">Looking forward to</div>`;
+  (p.lookingForward||[]).forEach((item,i)=>{
+    lfHtml+=`<div class="mp-bullet">
+      <span class="mp-bullet-dot" style="background:var(--text3)"></span>
+      <span class="mp-bullet-text" contenteditable="false" id="mpLf${i}">${esc(item.text)}</span>
+      <span class="mp-bullet-actions">
+        <button class="mp-bullet-btn" onclick="editMpBullet('lookingForward',${i})">✎</button>
+        <button class="mp-bullet-btn del" onclick="deleteMpBullet('lookingForward',${i})">✕</button>
+      </span>
+    </div>`;
+  });
+  lfHtml+=`<input class="mp-input" placeholder="Add something you're excited about…" onkeydown="if(event.key==='Enter'&&this.value.trim()){addMpBullet('lookingForward',this.value.trim());this.value=''}">`;
+  lfHtml+=`</div>`;
+  // ── Column 3: Reflection ──
+  let refHtml=`<div class="mp-col"><div class="mp-col-title">Reflection</div>`;
+  // What went well
+  refHtml+=`<div class="mp-reflect-sub"><div class="mp-reflect-label">What went well?</div>`;
+  (p.wentWell||[]).forEach((item,i)=>{
+    refHtml+=`<div class="mp-bullet">
+      <span class="mp-bullet-dot" style="background:#10b981"></span>
+      <span class="mp-bullet-text" contenteditable="false" id="mpWw${i}">${esc(item.text)}</span>
+      <span class="mp-bullet-actions">
+        <button class="mp-bullet-btn" onclick="editMpBullet('wentWell',${i})">✎</button>
+        <button class="mp-bullet-btn del" onclick="deleteMpBullet('wentWell',${i})">✕</button>
+      </span>
+    </div>`;
+  });
+  refHtml+=`<input class="mp-input" placeholder="Something that went well…" onkeydown="if(event.key==='Enter'&&this.value.trim()){addMpBullet('wentWell',this.value.trim());this.value=''}">`;
+  refHtml+=`</div>`;
+  // What to improve
+  refHtml+=`<div class="mp-reflect-sub"><div class="mp-reflect-label">What to improve?</div>`;
+  (p.toImprove||[]).forEach((item,i)=>{
+    refHtml+=`<div class="mp-bullet">
+      <span class="mp-bullet-dot" style="background:#f59e0b"></span>
+      <span class="mp-bullet-text" contenteditable="false" id="mpTi${i}">${esc(item.text)}</span>
+      <span class="mp-bullet-actions">
+        <button class="mp-bullet-btn" onclick="editMpBullet('toImprove',${i})">✎</button>
+        <button class="mp-bullet-btn del" onclick="deleteMpBullet('toImprove',${i})">✕</button>
+      </span>
+    </div>`;
+  });
+  refHtml+=`<input class="mp-input" placeholder="Something to work on…" onkeydown="if(event.key==='Enter'&&this.value.trim()){addMpBullet('toImprove',this.value.trim());this.value=''}">`;
+  refHtml+=`</div></div>`;
+  grid.innerHTML=goalsHtml+lfHtml+refHtml;
 }
-function saveMonthNotes(){
-  const ta=document.getElementById('monthNotesTa');
-  if(!ta)return;
-  const key=monthNotesKey();
-  const text=ta.value.trim();
-  if(text)monthNotes[key]=text;
-  else delete monthNotes[key];
-  saveMonthNotesData();
-  const hint=document.getElementById('monthNotesSaved');
-  if(hint){hint.classList.add('show');setTimeout(()=>hint.classList.remove('show'),2000);}
-  updateMonthNotesPreview();
+// Goals functions
+function addMpGoal(){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  if((p.goals||[]).length>=3)return;
+  p.goals.push({id:'g'+Date.now(),text:'New goal',done:false});
+  saveMonthPlans();renderMonthPlan();
+  // Focus the new goal text
+  setTimeout(()=>{
+    const goals=document.querySelectorAll('.mp-goal-text');
+    if(goals.length)goals[goals.length-1].focus();
+  },50);
 }
-function updateMonthNotesPreview(){
-  const preview=document.getElementById('monthNotesPreview');
-  if(!preview)return;
-  const key=monthNotesKey();
-  const text=monthNotes[key]||'';
-  preview.textContent=text?text.slice(0,50)+(text.length>50?'…':''):'';
+function toggleMpGoal(i){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  if(p.goals[i])p.goals[i].done=!p.goals[i].done;
+  saveMonthPlans();renderMonthPlan();
+}
+function saveMpGoalText(i,el){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  const txt=(el.textContent||'').trim();
+  if(!txt){p.goals.splice(i,1);}else if(p.goals[i])p.goals[i].text=txt;
+  saveMonthPlans();renderMonthPlan();
+}
+function deleteMpGoal(i){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  p.goals.splice(i,1);saveMonthPlans();renderMonthPlan();
+}
+// Goal drag reorder
+let _mpGoalDragFrom=-1;
+function onMpGoalDragStart(e,i){_mpGoalDragFrom=i;e.dataTransfer.effectAllowed='move';e.target.style.opacity='.4'}
+function onMpGoalDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move'}
+function onMpGoalDrop(e,i){
+  e.preventDefault();
+  if(_mpGoalDragFrom<0||_mpGoalDragFrom===i)return;
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  const[moved]=p.goals.splice(_mpGoalDragFrom,1);
+  p.goals.splice(i,0,moved);
+  saveMonthPlans();renderMonthPlan();
+}
+function onMpGoalDragEnd(e){_mpGoalDragFrom=-1;e.target.style.opacity=''}
+// Bullet list functions (shared by lookingForward, wentWell, toImprove)
+function addMpBullet(field,text){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  if(!p[field])p[field]=[];
+  p[field].push({id:'b'+Date.now(),text:text});
+  saveMonthPlans();renderMonthPlan();
+}
+function deleteMpBullet(field,i){
+  const key=monthPlanKey();const p=getMonthPlans(key);
+  if(p[field])p[field].splice(i,1);
+  saveMonthPlans();renderMonthPlan();
+}
+function editMpBullet(field,i){
+  const prefixMap={lookingForward:'mpLf',wentWell:'mpWw',toImprove:'mpTi'};
+  const el=document.getElementById(prefixMap[field]+i);
+  if(!el)return;
+  el.contentEditable='true';el.focus();
+  // Select all text
+  const range=document.createRange();range.selectNodeContents(el);
+  const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  el.onblur=function(){
+    el.contentEditable='false';
+    const txt=(el.textContent||'').trim();
+    const key=monthPlanKey();const p=getMonthPlans(key);
+    if(!txt){if(p[field])p[field].splice(i,1);}
+    else if(p[field]&&p[field][i])p[field][i].text=txt;
+    saveMonthPlans();renderMonthPlan();
+  };
+  el.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();el.blur();}};
 }
 
 // ══ WEEK ════════════════════════════════════
@@ -962,22 +1191,23 @@ function renderWeek(){
   days.forEach(d=>{const k=dk(d);hdr+=`<div class="wk-day-head${k===todayKey?' today':''}" onclick="onWkDay('${k}')"><div class="wdh-name">${DAYS_S[d.getDay()]}</div><div class="wdh-num">${d.getDate()}</div></div>`;});
   document.getElementById('weekHdr').innerHTML=hdr;
 
-  // ── All-day row ────────────────────────────────────────────────────────────
-  const alldayTasks={};
+  // ── Events row (all events: all-day + timed) ────────────────────────────────
+  const eventsByDay={};
   days.forEach(d=>{
     const k=dk(d);
-    alldayTasks[k]=tasksOn(k).filter(t=>t.allday===true);
+    eventsByDay[k]=tasksOn(k).filter(t=>(t.type||'task')==='event');
   });
-  const hasAnyAllday=days.some(d=>alldayTasks[dk(d)].length>0);
+  const hasAnyEvents=days.some(d=>eventsByDay[dk(d)].length>0);
   let alldayRowHtml='';
-  if(hasAnyAllday){
+  if(hasAnyEvents){
     alldayRowHtml=`<div class="wk-allday-row">`;
-    alldayRowHtml+=`<div class="wk-allday-gutter">All-day</div>`;
+    alldayRowHtml+=`<div class="wk-allday-gutter">Events</div>`;
     days.forEach(d=>{
       const k=dk(d);
-      const pills=alldayTasks[k].map(t=>{
+      const pills=eventsByDay[k].map(t=>{
         const cc=eventColor(t.category);
-        return`<div class="wk-allday-pill" style="background:${cc};color:#fff" onclick="openEdit('${t.id}','${k}',event)" title="${esc(t.name)} · All Day">${esc(t.name)}</div>`;
+        const badge=t.allday?'All Day':t.time?fmtT(t.time):'';
+        return`<div class="wk-allday-pill" style="background:${cc};color:#fff" onclick="openEdit('${t.id}','${t._instanceDate||k}',event)" title="${esc(t.name)}${badge?' · '+badge:''}">${esc(t.name)}${badge?`<span class="wk-event-badge">${badge}</span>`:''}</div>`;
       }).join('');
       alldayRowHtml+=`<div class="wk-allday-cell">${pills}</div>`;
     });
@@ -986,7 +1216,7 @@ function renderWeek(){
   document.getElementById('weekAlldayRow').innerHTML=alldayRowHtml;
 
   const sl=slots();
-  const WK_SLOT_H=48;
+  const WK_SLOT_H=54;
   let g=`<div class="wk-time-col">${sl.map(s=>`<div class="time-lbl">${s.m===0?fmtT(sk(s.h,s.m)):''}</div>`).join('')}</div>`;
   days.forEach(d=>{
     const k=dk(d);
@@ -1050,14 +1280,17 @@ function renderWeek(){
         rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
       }
       const narrowCls=ci.total>=3?' wk-task-narrow':'';
+      const subs=t.subtasks||[];
+      const wkDurLabel=dur>30?`<span class="wk-task-block-dur">${durLabel(dur)}</span>`:'';
       const wkDurStep=dur>30?`<div class="wk-dur-stepper"><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',-15,event)">−</button><span class="wk-task-block-dur">${durLabel(dur)}</span><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',15,event)">+</button></div>`:'';
+      const wkSubPill=subs.length?`<span class="wk-sub-pill" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${t._instanceDate||k}')">☰ ${subs.length}</span>`:'';
       if(isEvent){
         return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc};border-top-color:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <span class="wk-task-block-name">${esc(t.name)}</span>
-          ${ci.total<=2?wkDurStep:''}
+          ${ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
         </div>`;
       }
       return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
@@ -1068,10 +1301,10 @@ function renderWeek(){
           ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
           <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${ci.total<=2&&t.recur?'<span class="recur-icon">↻</span>':''}
         </div>
-        ${ci.total<=2?wkDurStep:''}
+        ${ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
       </div>`;
     }).join('');
-    const WK_SLOT_H_R=48;
+    const WK_SLOT_H_R=54;
     let routineBandsHtml='';
     getRoutineForDay(k).forEach(b=>{
       const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
@@ -1083,7 +1316,7 @@ function renderWeek(){
       const rName=esc(b.customName||rt.label);
       const badgeCls=isW?'window':'block';
       routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}0c;--rb-color:${rt.color};border-left-color:${rt.color}">
-      </div><div class="wk-routine-banner" style="top:${topPx}px;background:${rt.color}18;color:${rt.color}"><span class="wk-routine-dot" style="background:${rt.color}"></span>${rName}</div>`;
+      </div><div class="wk-routine-banner" style="top:${topPx}px;background:${rt.color}cc;color:#fff"><span class="wk-routine-dot" style="background:#fff"></span>${rName}</div>`;
     });
     g+=`<div class="wk-day-col">${colSlots}<div class="wk-task-layer">${routineBandsHtml}${taskBlocks}</div></div>`;
   });
@@ -1411,7 +1644,7 @@ function renderDay(){
 
         let blockHtml;
         const durStep=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
-        const subPill=subs.length?`<div class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></div>`:'';
+        const subPillInline=subs.length?(ci.total===1?`<span class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></span>`:(ci.total<=3?`<span class="sub-pill-row sub-pill-compact" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length}</span>`:'')):'';
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
@@ -1422,8 +1655,7 @@ function renderDay(){
               <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
               ${ci.total<=3?timeRB:''}
             </div>
-            ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}</div>`:''}
-            ${ci.total<=3?subPill:''}
+            ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}${subPillInline}</div>`:''}
           </div>`;
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
@@ -1442,8 +1674,8 @@ function renderDay(){
               ${durStep}
               ${focusPill2}
               ${ci.total<=3&&(t.attachments||[]).length?`<span class="task-attach day-task-attach-pill">${IC_CLIP} ${(t.attachments||[]).length}</span>`:ci.total<=3&&t.link?`<a class="task-attach day-task-attach-pill" href="${esc(t.link)}" target="_blank" onclick="event.stopPropagation()">${IC_LINK}</a>`:''}
+              ${subPillInline}
             </div>`:''}
-            ${ci.total<=3?subPill:''}
           </div>`;
         }
 
@@ -1496,8 +1728,8 @@ function renderDay(){
         const badgeText=isW?'Window':'Block';
         const banner=document.createElement('div');
         banner.className='routine-banner';
-        banner.style.cssText=`color:${rtC.color};background:${rtC.color}18;border-bottom-color:${rtC.color}30;top:${topPx2}px;left:${lblW2}px;right:0`;
-        banner.innerHTML=`<span class="routine-banner-dot" style="background:${rtC.color}"></span><span class="routine-banner-name">${rName}</span><span class="routine-banner-badge ${badgeCls}">${badgeText}</span><span class="routine-banner-time">${fmtT(b.start)} – ${fmtT(b.end)}</span>`;
+        banner.style.cssText=`color:#fff;background:${rtC.color}cc;border-bottom-color:${rtC.color}30;top:${topPx2}px;left:${lblW2}px;right:0`;
+        banner.innerHTML=`<span class="routine-banner-dot" style="background:#fff"></span><span class="routine-banner-name">${rName}</span><span class="routine-banner-badge ${badgeCls}">${badgeText}</span><span class="routine-banner-time">${fmtT(b.start)} – ${fmtT(b.end)}</span>`;
         tl.appendChild(banner);
       });
     });
@@ -2198,70 +2430,299 @@ function doReflow(mode){
 // ══ SMART RESCHEDULE ════════════════════════════
 function checkOverdueTasks(){
   const todayKey=dk(new Date());
-  const yesterday=dk(addDays(new Date(),-1));
   const overdue=tasks.filter(t=>
     t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
     (t.type||'task')!=='event'&&
     !(t._smartRescheduleOffered||[]).includes(t.date)
   );
   if(!overdue.length)return;
-  // Show for the first overdue task
-  const t=overdue[0];
-  offerSmartReschedule(t);
+  openOverduePopup(overdue);
 }
-function offerSmartReschedule(t){
+
+// ── Overdue Popup (all tasks at once) ─────────────────────────────────
+let _overdueDismissedToday=false;
+function openOverduePopup(overdueList){
+  if(_overdueDismissedToday)return;
+  if(!overdueList||!overdueList.length){
+    const todayKey=dk(new Date());
+    overdueList=tasks.filter(t=>
+      t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+      (t.type||'task')!=='event'
+    );
+  }
+  if(!overdueList.length){showToast('No overdue tasks');return;}
+  // Sort by date (oldest first)
+  overdueList.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const todayKey=dk(new Date());
-  const tomorrowKey=dk(addDays(new Date(),1));
-  let html=`
-    <div style="text-align:center;margin-bottom:4px">
-      <div style="font-size:24px;margin-bottom:4px">⏰</div>
-      <div class="modal-title">"${esc(t.name)}" is overdue</div>
-      <div class="modal-sub">Scheduled for ${t.date} — what would you like to do?</div>
-    </div>
-    <div class="reschedule-opts">
-      <div class="reschedule-opt" onclick="smartReschedule('${t.id}','${todayKey}')">
-        <div class="reschedule-opt-title">Move to today</div>
-        <div class="reschedule-opt-sub">Reschedule to today at the same time</div>
+  const today=new Date();today.setHours(0,0,0,0);
+  // Calculate days overdue
+  const listHtml=overdueList.map(t=>{
+    const d=fromDk(t.date);
+    const diffDays=Math.floor((today-d)/(86400000));
+    const cc=catColor(t.category);
+    const durStr=t.duration?durLabel(t.duration):'30m';
+    const overdueStr=diffDays===1?'1 day overdue':diffDays+' days overdue';
+    const severeClass=diffDays>=7?' od-severe':'';
+    return`<div class="od-task-row">
+      <div class="od-task-color" style="background:${cc}"></div>
+      <div class="od-task-info" onclick="closeOverduePopup();openEdit('${t.id}','${t.date}',event)">
+        <div class="od-task-name">${esc(t.name)}</div>
+        <div class="od-task-meta"><span class="od-overdue-badge${severeClass}">${overdueStr}</span><span>${t.date} · ${durStr}</span></div>
       </div>
-      <div class="reschedule-opt" onclick="smartReschedule('${t.id}','${tomorrowKey}')">
-        <div class="reschedule-opt-title">Move to tomorrow</div>
-        <div class="reschedule-opt-sub">Push it to tomorrow</div>
-      </div>
-      <div class="reschedule-opt" onclick="smartRescheduleDismiss('${t.id}')">
-        <div class="reschedule-opt-title" style="opacity:.6">Leave it</div>
-        <div class="reschedule-opt-sub">Keep it where it is — I'll handle it</div>
+      <div class="od-task-actions">
+        <button class="od-act od-act-move" title="Move to today" onclick="overdueMoveSingle('${t.id}','${todayKey}')">↦</button>
+        <button class="od-act od-act-pick" title="Pick date" onclick="closeOverduePopup();openEdit('${t.id}','${t.date}',event)">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="2" y1="6.5" x2="14" y2="6.5" stroke="currentColor" stroke-width="1.3"/><line x1="5.5" y1="1.5" x2="5.5" y2="4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="10.5" y1="1.5" x2="10.5" y2="4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </button>
+        <button class="od-act od-act-done" title="Mark done" onclick="overdueMarkDone('${t.id}','${t.date}')">✓</button>
       </div>
     </div>`;
-  
-  let overlay=document.getElementById('smartRescheduleOverlay');
+  }).join('');
+  const scrollClass=overdueList.length>6?' od-scrollable':'';
+  const oldest=overdueList[0];
+  const oldestDays=Math.floor((today-fromDk(oldest.date))/(86400000));
+  const subText=overdueList.length===1?'This task is past its scheduled date':`Oldest is ${oldestDays} day${oldestDays!==1?'s':''} overdue`;
+  let overlay=document.getElementById('overduePopupOverlay');
   if(!overlay){
     overlay=document.createElement('div');
-    overlay.id='smartRescheduleOverlay';
+    overlay.id='overduePopupOverlay';
     overlay.className='modal-overlay';
-    overlay.onclick=function(e){if(e.target===this)this.classList.remove('open')};
-    overlay.innerHTML='<div class="modal" onclick="event.stopPropagation()" style="max-width:400px" id="smartRescheduleContent"></div>';
+    overlay.onclick=function(e){if(e.target===this)closeOverduePopup()};
+    overlay.innerHTML='<div class="modal od-modal" onclick="event.stopPropagation()" id="overduePopupContent"></div>';
     document.body.appendChild(overlay);
   }
-  document.getElementById('smartRescheduleContent').innerHTML=html;
+  document.getElementById('overduePopupContent').innerHTML=`
+    <div class="od-hdr">
+      <div class="od-hdr-icon">⏰</div>
+      <div class="od-hdr-text">
+        <div class="od-hdr-title">${overdueList.length} overdue task${overdueList.length!==1?'s':''}</div>
+        <div class="od-hdr-sub">${subText}</div>
+      </div>
+      <button class="od-close" onclick="closeOverduePopup()">✕</button>
+    </div>
+    <div class="od-batch-bar">
+      <button class="od-batch-btn od-batch-primary" onclick="overdueBatchMove('today')">Move all to today</button>
+      <button class="od-batch-btn" onclick="overdueBatchMove('tomorrow')">Move all to tomorrow</button>
+    </div>
+    <div class="od-task-list${scrollClass}" id="odTaskList">${listHtml}</div>
+    ${overdueList.length>6?'<div class="od-scroll-hint">scroll for more</div>':''}
+    <div class="od-footer">
+      <span class="od-footer-link" onclick="overdueDismissAll()">Dismiss all — I'll handle it</span>
+      <span class="od-footer-link" onclick="overdueDismissToday()">Don't show today</span>
+    </div>`;
   overlay.classList.add('open');
 }
-function smartReschedule(id,newDate){
+function closeOverduePopup(){
+  const overlay=document.getElementById('overduePopupOverlay');
+  if(overlay)overlay.classList.remove('open');
+}
+
+// ── Smart Placement: find open slots in routine windows ──────────────
+function findOpenSlots(dateKey,count,durations){
+  const existing=tasksOn(dateKey).filter(t=>t.time&&!t.allday);
+  const routines=getRoutineForDay(dateKey);
+  // Get schedulable windows
+  const windows=routines.filter(b=>{
+    const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+    return b.schedulable!==undefined?b.schedulable:rt.schedulable;
+  });
+  // Build occupied map (minutes → true)
+  const occupied=new Set();
+  existing.forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    const start=h*60+m, end=start+(t.duration||30);
+    for(let mm=start;mm<end;mm+=15)occupied.add(mm);
+  });
+  // Find open slots within windows
+  const slots=[];
+  const allWindows=windows.length?windows:[{start:'08:00',end:'18:00'}]; // fallback if no routine
+  allWindows.forEach(w=>{
+    const[sh,sm]=w.start.split(':').map(Number);
+    const[eh,em]=w.end.split(':').map(Number);
+    const wStart=sh*60+sm,wEnd=eh*60+em;
+    for(let mm=wStart;mm<wEnd&&slots.length<count;mm+=30){
+      const dur=durations[slots.length]||30;
+      let fits=true;
+      for(let t=mm;t<mm+dur;t+=15){if(occupied.has(t)){fits=false;break;}}
+      if(fits){
+        slots.push(pad(Math.floor(mm/60))+':'+pad(mm%60));
+        // Mark as occupied for subsequent tasks
+        for(let t=mm;t<mm+dur;t+=15)occupied.add(t);
+      }
+    }
+  });
+  return slots;
+}
+function checkConflicts(overdueList,dateKey){
+  const existing=tasksOn(dateKey).filter(t=>t.time&&!t.allday);
+  // Build slot usage count
+  const slotCount={};
+  existing.forEach(t=>{
+    if(!t.time)return;
+    const[h,m]=t.time.split(':').map(Number);
+    const slotKey=Math.floor((h*60+m)/30);
+    slotCount[slotKey]=(slotCount[slotKey]||0)+1;
+  });
+  const conflicts=[];
+  overdueList.forEach(t=>{
+    if(!t.time){conflicts.push({task:t,conflict:false});return;}
+    const[h,m]=t.time.split(':').map(Number);
+    const slotKey=Math.floor((h*60+m)/30);
+    const current=slotCount[slotKey]||0;
+    if(current>=3){conflicts.push({task:t,conflict:true,slotTime:t.time});}
+    else{
+      conflicts.push({task:t,conflict:false});
+      slotCount[slotKey]=(slotCount[slotKey]||0)+1;
+    }
+  });
+  return conflicts;
+}
+
+// ── Batch Move with conflict check ──────────────────────────────────
+function overdueBatchMove(target){
+  const todayKey=dk(new Date());
+  const targetKey=target==='tomorrow'?dk(addDays(new Date(),1)):todayKey;
+  const today=new Date();today.setHours(0,0,0,0);
+  const overdueList=tasks.filter(t=>
+    t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'
+  ).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!overdueList.length)return;
+  // Check for conflicts
+  const results=checkConflicts(overdueList,targetKey);
+  const hasConflicts=results.some(r=>r.conflict);
+  if(hasConflicts){
+    showOverdueConflictView(overdueList,results,targetKey,target);
+  } else {
+    // No conflicts — move all directly
+    overdueList.forEach(t=>{t.date=targetKey;});
+    save();renderAll();closeOverduePopup();
+    showToast(`Moved ${overdueList.length} task${overdueList.length!==1?'s':''} to ${target}`);
+  }
+}
+function showOverdueConflictView(overdueList,results,targetKey,targetLabel){
+  const conflictCount=results.filter(r=>r.conflict).length;
+  const durations=overdueList.map(t=>t.duration||30);
+  const smartSlots=findOpenSlots(targetKey,overdueList.length,durations);
+  const listHtml=results.map((r,i)=>{
+    const t=r.task;
+    const cc=catColor(t.category);
+    const timeStr=t.time||'unset';
+    if(r.conflict){
+      const newTime=smartSlots[i]?fmtT(smartSlots[i]):'no slot';
+      return`<div class="od-task-row">
+        <div class="od-task-color" style="background:${cc}"></div>
+        <div class="od-task-info">
+          <div class="od-task-name">${esc(t.name)}</div>
+          <div class="od-task-meta">${t.time?fmtT(t.time):'—'} → <span class="od-conflict-badge">conflict</span> → <span class="od-placed">${newTime}</span></div>
+        </div>
+      </div>`;
+    }
+    return`<div class="od-task-row">
+      <div class="od-task-color" style="background:${cc}"></div>
+      <div class="od-task-info">
+        <div class="od-task-name">${esc(t.name)}</div>
+        <div class="od-task-meta">${t.time?fmtT(t.time):'—'} → <span class="od-ok-badge">no conflict</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  const content=document.getElementById('overduePopupContent');
+  if(!content)return;
+  content.innerHTML=`
+    <div class="od-hdr">
+      <div class="od-hdr-icon od-hdr-icon-warn">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l6.5 12H1.5L8 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><line x1="8" y1="6.5" x2="8" y2="9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.5" r=".6" fill="currentColor"/></svg>
+      </div>
+      <div class="od-hdr-text">
+        <div class="od-hdr-title">${conflictCount} of ${overdueList.length} would conflict</div>
+        <div class="od-hdr-sub">Some ${targetLabel} slots are already full</div>
+      </div>
+      <button class="od-close" onclick="closeOverduePopup()">✕</button>
+    </div>
+    <div class="od-warn-bar">
+      <div class="od-warn-text"><strong>Smart placement available</strong> — move conflicting tasks to the next open slots in your routine windows?</div>
+    </div>
+    <div class="od-task-list" id="odTaskList">${listHtml}</div>
+    <div class="od-batch-bar">
+      <button class="od-batch-btn od-batch-primary" onclick="overdueSmartPlace('${targetKey}')">Smart place all</button>
+      <button class="od-batch-btn" onclick="overdueForceMove('${targetKey}','${targetLabel}')">Force move anyway</button>
+      <button class="od-batch-btn" onclick="openOverduePopup()">Back</button>
+    </div>`;
+}
+function overdueSmartPlace(targetKey){
+  const todayKey=dk(new Date());
+  const overdueList=tasks.filter(t=>
+    t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'
+  ).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const durations=overdueList.map(t=>t.duration||30);
+  const smartSlots=findOpenSlots(targetKey,overdueList.length,durations);
+  overdueList.forEach((t,i)=>{
+    t.date=targetKey;
+    if(smartSlots[i])t.time=smartSlots[i];
+  });
+  save();renderAll();closeOverduePopup();
+  showToast(`Smart-placed ${overdueList.length} task${overdueList.length!==1?'s':''}`);
+}
+function overdueForceMove(targetKey,targetLabel){
+  const todayKey=dk(new Date());
+  const overdueList=tasks.filter(t=>
+    t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'
+  );
+  overdueList.forEach(t=>{t.date=targetKey;});
+  save();renderAll();closeOverduePopup();
+  showToast(`Moved ${overdueList.length} task${overdueList.length!==1?'s':''} to ${targetLabel}`);
+}
+
+// ── Individual task actions ──────────────────────────────────
+function overdueMoveSingle(id,newDate){
   const t=tasks.find(t=>t.id===id);
   if(t){t.date=newDate;save();renderAll();}
-  document.getElementById('smartRescheduleOverlay').classList.remove('open');
-  showToast('Moved to '+newDate);
-  // Check for more overdue
-  setTimeout(checkOverdueTasks,500);
+  showToast('Moved to '+fmtDateShort(newDate));
+  // Re-open popup with remaining overdue
+  setTimeout(()=>{
+    const todayKey=dk(new Date());
+    const remaining=tasks.filter(t2=>
+      t2.scheduled&&t2.date&&t2.date<todayKey&&!t2.done&&!t2.recur&&
+      (t2.type||'task')!=='event'
+    );
+    if(remaining.length)openOverduePopup(remaining);
+    else closeOverduePopup();
+  },300);
 }
-function smartRescheduleDismiss(id){
+function overdueMarkDone(id,dateKey){
   const t=tasks.find(t=>t.id===id);
-  if(t){
+  if(t){t.done=true;save();renderAll();playDone();}
+  showToast('Marked done');
+  setTimeout(()=>{
+    const todayKey=dk(new Date());
+    const remaining=tasks.filter(t2=>
+      t2.scheduled&&t2.date&&t2.date<todayKey&&!t2.done&&!t2.recur&&
+      (t2.type||'task')!=='event'
+    );
+    if(remaining.length)openOverduePopup(remaining);
+    else closeOverduePopup();
+  },300);
+}
+function overdueDismissAll(){
+  const todayKey=dk(new Date());
+  tasks.filter(t=>
+    t.scheduled&&t.date&&t.date<todayKey&&!t.done&&!t.recur&&
+    (t.type||'task')!=='event'
+  ).forEach(t=>{
     if(!t._smartRescheduleOffered)t._smartRescheduleOffered=[];
-    t._smartRescheduleOffered.push(t.date);
-    save();
-  }
-  document.getElementById('smartRescheduleOverlay').classList.remove('open');
-  setTimeout(checkOverdueTasks,500);
+    if(!t._smartRescheduleOffered.includes(t.date))t._smartRescheduleOffered.push(t.date);
+  });
+  save();closeOverduePopup();
+}
+function overdueDismissToday(){
+  _overdueDismissedToday=true;
+  closeOverduePopup();
+}
+function fmtDateShort(dk2){
+  const d=fromDk(dk2);
+  return MONTHS_LONG[d.getMonth()]+' '+d.getDate();
 }
 // Check on app open (after splash)
 const _origEnterApp=enterApp;
@@ -3818,7 +4279,7 @@ function showUndoToast(msg,undoFn){
 function exportData(){
   const data={
     tasks,brainDump,categories,
-    routineBlocks,monthNotes,
+    routineBlocks,monthNotes,monthPlans,
     username:localStorage.getItem('clarity_username')||'',
     journal:JSON.parse(localStorage.getItem('clarity_journal')||'{}'),
     theme:currentTheme,dark:isDark,military:useMilitary,
@@ -3847,6 +4308,7 @@ function importData(e){
       if(data.military!==undefined)setTimeFormat(data.military);
       if(data.routineBlocks){routineBlocks=data.routineBlocks;saveRoutine();renderRoutineList();}
       if(data.monthNotes){monthNotes=data.monthNotes;saveMonthNotesData();}
+      if(data.monthPlans){monthPlans=data.monthPlans;saveMonthPlans();}
       if(data.weekStartDay!==undefined)setWeekStart(data.weekStartDay);
       if(data.username)localStorage.setItem('clarity_username',data.username);
       save();renderAll();
@@ -4653,8 +5115,7 @@ function updateOverdueBadge(){
 }
 
 function goOverdue(){
-  switchView('categories');
-  showToast('Showing overdue tasks in Categories');
+  openOverduePopup();
 }
 
 // ══ QUICK-ADD BAR ════════════════════════════════════════════════════════════
@@ -4746,7 +5207,6 @@ loadJournal();
 let monthNotes={};
 try{monthNotes=JSON.parse(localStorage.getItem('clarity_month_notes')||'{}')}catch{monthNotes={}}
 function saveMonthNotesData(){try{localStorage.setItem('clarity_month_notes',JSON.stringify(monthNotes))}catch(e){showToast('Storage full');console.error(e)}}
-let _monthNotesOpen=false;
 
 const MOOD_EMOJIS = ['😔','😐','🙂','😊','🌟'];
 const MOOD_LABELS = { '😔':'Rough day','😐':'Just okay','🙂':'Pretty good','😊':'Good day','🌟':'Amazing day' };
