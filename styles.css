@@ -1663,23 +1663,23 @@ header{
 /* ══ ROUTINE BANNER (overlay, z-index 5, above tasks) ═══════ */
 .routine-banner{
   position:absolute;z-index:5;pointer-events:none;
-  display:flex;align-items:center;gap:6px;
-  padding:6px 12px;font-size:12px;font-weight:600;
+  display:flex;align-items:center;gap:5px;
+  padding:2px 10px;font-size:10px;font-weight:600;
   color:var(--rb-color);letter-spacing:.15px;
   background:transparent;
   border-bottom:1px solid transparent;
   border-radius:0 10px 0 0;
 }
-.routine-banner-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.routine-banner-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .routine-banner-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .routine-banner-badge{
-  font-size:8px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
-  padding:2px 7px;border-radius:4px;flex-shrink:0;
+  font-size:7px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:1px 5px;border-radius:3px;flex-shrink:0;
 }
 .routine-banner-badge.window{background:rgba(0,0,0,.06)}
 .routine-banner-badge.block{color:var(--text3);background:var(--surface3)}
 [data-dark="true"] .routine-banner-badge.window{background:rgba(255,255,255,.08)}
-.routine-banner-time{margin-left:auto;font-size:10px;opacity:.6;font-weight:500;white-space:nowrap}
+.routine-banner-time{margin-left:auto;font-size:9px;opacity:.5;font-weight:500;white-space:nowrap}
 
 /* Week view banner */
 .wk-routine-banner{
