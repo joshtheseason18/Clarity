@@ -507,7 +507,7 @@ function eventRow(t,isPast=false){
   const timeLabel=t.allday?'All Day':t.time?fmtT(t.time):'';
   return`<div class="cat-task-row event-row${isPast?' past-event':''}" style="border-left-color:${cc};cursor:pointer"
     onclick="openCatEdit('${t.id}','${idate}',event)">
-    <div class="event-row-dot" style="background:${cc}"></div>
+    <div class="event-row-dot" style="background:${cc};border-top-color:${cc}"></div>
     <div class="cat-task-info" style="flex:1;min-width:0">
       <div class="cat-task-name">${esc(t.name)}${t.recur?' <span style="opacity:.5;font-size:10px">↻</span>':''}</div>
       <div class="cat-task-meta">
@@ -829,16 +829,11 @@ function renderYear(){
       const key=`${curYear}-${pad(mo+1)}-${pad(d)}`,n=(dayCount[d]||0)+(eventDayCount[d]||0),isT=key===todayKey;
       const hasEv=(eventDayCount[d]||0)>0;
       let dotCls=n===1?'d1':n===2?'d2':n<=4?'d3':n>4?'d4':'';
-      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')" title="Click to add task/event">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
+      html+=`<div class="ym-day${isT?' today':''}${n>0?' has-tasks':''}${hasEv?' has-event':''}" onclick="event.stopPropagation();onYearDayClick('${key}')" title="Click to add">${d}${n>0?`<span class="ym-dot ${dotCls}"></span>`:''}</div>`;
     }
     const rem=(first+dim)%7;if(rem>0)for(let i=0;i<7-rem;i++)html+=`<div class="ym-day other"></div>`;
     html+=`</div>`;
-    if(isExpanded){
-      html+=`<div class="ym-expand-actions">
-        <button class="ym-expand-btn" onclick="event.stopPropagation();onYearGoMonth(${curYear},${mo})">Open in month view</button>
-        <button class="ym-expand-btn secondary" onclick="event.stopPropagation();_yearExpandedMonth=-1;renderYear()">Collapse</button>
-      </div>`;
-    }
+    if(isExpanded){html+=`<div class="ym-expand-actions"><button class="ym-expand-btn" onclick="event.stopPropagation();onYearGoMonth(${curYear},${mo})">Open in month view</button><button class="ym-expand-btn secondary" onclick="event.stopPropagation();_yearExpandedMonth=-1;renderYear()">Collapse</button></div>`;}
     html+=`</div>`;
   }
   document.getElementById('yearGrid').innerHTML=html;
@@ -1081,7 +1076,7 @@ function renderWeek(){
       const topPx=(sh*60+sm)/30*WK_SLOT_H_R;
       const hPx=(eh*60+em)/30*WK_SLOT_H_R-topPx;
       const rName=esc(b.customName||rt.label);
-      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}0c;--rb-color:${rt.color};--rb-dim:${rt.color}18;border-left-color:${rt.color}">
+      routineBandsHtml+=`<div class="wk-routine-band" style="top:${topPx}px;height:${hPx}px;background:${rt.color}0c;--rb-color:${rt.color};border-left-color:${rt.color}">
         <span class="wk-routine-lbl" style="color:${rt.color}"><span class="wk-routine-dot" style="background:${rt.color}"></span>${rName}</span>
       </div>`;
     });
@@ -1327,24 +1322,18 @@ function renderDay(){
   });
 
   // Mark slots interior to a multi-slot NON-overlapping task
-  // For tasks > 2 hours, only collapse :30 half-hour slots — keep :00 hour slots
-  // visible at reduced height so time labels, routine shading, and now-line still work.
+  // All interior slots fully collapse to 0px. During drag, they expand via CSS (.drag-active).
+  // The task card's inline min-height drives the visual duration. Now-line uses interpolation.
   const interiorSlots=new Set();
-  const interiorHourSlots=new Set(); // :00 slots inside long tasks — reduced height, not collapsed
   _timedTasks.filter(t=>(t.duration||30)>30&&!overlapIds.has(t.id)).forEach(t=>{
     const[h,m]=t.time.split(':').map(Number);
     const startMins=h*60+m;
     const dur=t.duration||30;
-    const isLong=dur>120; // > 2 hours
     for(let offset=30;offset<dur;offset+=30){
       const mins=startMins+offset;
       if(mins>=1440)break;
       const slotKey=pad(Math.floor(mins/60))+':'+pad(mins%60);
-      if(isLong&&mins%60===0){
-        interiorHourSlots.add(slotKey);
-      } else {
-        interiorSlots.add(slotKey);
-      }
+      interiorSlots.add(slotKey);
     }
   });
 
@@ -1361,23 +1350,10 @@ function renderDay(){
     const isHalf=s.m===30;
     const tasksHere=taskMap[sk2]||[];
 
-    // Interior slots — collapsed :30 slots (expand during drag)
+    // Interior slots — fully collapsed (expand during drag via CSS)
     if(interiorSlots.has(sk2)&&!tasksHere.length){
       html+=`<div class="day-time-lbl day-lbl-interior">${!isHalf?fmtT(sk2):''}</div>
              <div class="day-slot day-slot-interior" data-time="${sk2}"
-               ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
-               ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
-      return;
-    }
-
-    // Interior hour slots — reduced height markers inside long tasks (keep time labels + routine visible)
-    if(interiorHourSlots.has(sk2)&&!tasksHere.length){
-      const rb2=routineAt(sk2);
-      const rt2=rb2?ROUTINE_TYPES[rb2.type]||ROUTINE_TYPES.custom:null;
-      const hrBorder=rt2?`border-right:2px solid ${rt2.color}`:'';
-      const hrBg=rt2?`background:${rt2.color}18`:'';
-      html+=`<div class="day-time-lbl day-lbl-hour-interior" style="${hrBorder}">${fmtT(sk2)}</div>
-             <div class="day-slot day-slot-hour-interior" data-time="${sk2}" style="${hrBg}"
                ondragover="onDO(event,'${key}','${sk2}')" ondragleave="onDL(event)"
                ondrop="onDropSlot(event,'${key}','${sk2}')"></div>`;
       return;
@@ -1537,20 +1513,12 @@ function renderDay(){
       const firstLbl2=tl.querySelector('.day-time-lbl');
       const lblW2=firstLbl2?firstLbl2.offsetWidth:80;
       tl.style.position='relative';
-
       routineBands.forEach(b=>{
         const rtC=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
-        const isW=b.schedulable!==undefined?b.schedulable:(rtC.schedulable||false);
-
-        // Find start slot element
         const startSlot=tl.querySelector(`.day-slot[data-time="${b.start}"]`);
         if(!startSlot)return;
-
-        // Find the last visible slot within this routine's range
-        const[eH,eM]=b.end.split(':').map(Number);
-        const endMins3=eH*60+eM;
-        const[sH,sM]=b.start.split(':').map(Number);
-        const startMins3=sH*60+sM;
+        const[eH,eM]=b.end.split(':').map(Number);const endMins3=eH*60+eM;
+        const[sH,sM]=b.start.split(':').map(Number);const startMins3=sH*60+sM;
         let endSlot=null;
         for(let mm=endMins3-30;mm>=0;mm-=30){
           const sk3=pad(Math.floor(mm/60))+':'+pad(mm%60);
@@ -1558,16 +1526,12 @@ function renderDay(){
           if(el&&el.offsetHeight>0){endSlot=el;break;}
         }
         if(!endSlot)endSlot=startSlot;
-
         const topPx2=startSlot.offsetTop;
         const bottomPx2=endSlot.offsetTop+endSlot.offsetHeight;
         const durationSlots=Math.ceil((endMins3-startMins3)/30);
         const timeH=durationSlots*DAY_SLOT_H;
-        const domH=bottomPx2-topPx2;
-        const hPx2=Math.max(domH,timeH);
+        const hPx2=Math.max(bottomPx2-topPx2,timeH);
         if(hPx2<=0)return;
-
-        // Container frame (z-index 1, behind tasks)
         const container=document.createElement('div');
         container.className='routine-container';
         container.style.cssText=`--rc-color:${rtC.color};--rc-dim:${rtC.color}20;--rc-bg:${rtC.color}06;top:${topPx2}px;height:${hPx2}px;left:${lblW2}px;right:0`;
@@ -2783,119 +2747,43 @@ document.getElementById('bdInput').addEventListener('keydown',e=>{
 
 // ══ QUICK EVENT ADD ════════════════════════════
 function parseQuickEvent(raw){
-  // Natural language parser: "Dentist Tuesday 2pm" or "Mom birthday April 20" or "Dinner Fri 7pm at Olive Garden"
   let text=raw.trim();if(!text)return null;
   let time=null,date=null,location=null,allday=false;
-
-  // Extract "at <location>" from end
   const atMatch=text.match(/\s+at\s+(.+)$/i);
   if(atMatch){location=atMatch[1].trim();text=text.slice(0,atMatch.index).trim();}
-
-  // Extract time patterns: 2pm, 2:30pm, 14:00, 2 pm
   const timeRe=/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)\b/;
-  const time24Re=/\b(\d{1,2}):(\d{2})\b/;
   const tm=text.match(timeRe);
   if(tm){
     let h=parseInt(tm[1]),m=parseInt(tm[2]||'0');
     const ampm=tm[3].toLowerCase();
-    if(ampm==='pm'&&h<12)h+=12;
-    if(ampm==='am'&&h===12)h=0;
-    time=pad(h)+':'+pad(m);
-    text=text.replace(tm[0],'').trim();
-  } else {
-    const tm2=text.match(time24Re);
-    if(tm2){time=pad(parseInt(tm2[1]))+':'+pad(parseInt(tm2[2]));text=text.replace(tm2[0],'').trim();}
-  }
-
-  // Check for "all day"
+    if(ampm==='pm'&&h<12)h+=12;if(ampm==='am'&&h===12)h=0;
+    time=pad(h)+':'+pad(m);text=text.replace(tm[0],'').trim();
+  } else {const tm2=text.match(/\b(\d{1,2}):(\d{2})\b/);if(tm2){time=pad(parseInt(tm2[1]))+':'+pad(parseInt(tm2[2]));text=text.replace(tm2[0],'').trim();}}
   if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
-
-  // Extract date: day names, "tomorrow", "today", or "Month Day"
   const today=new Date();today.setHours(0,0,0,0);
   const dayNames=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
   const dayNamesS=['sun','mon','tue','wed','thu','fri','sat'];
   const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
   const monthNamesS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-
-  // "today"
   if(/\btoday\b/i.test(text)){date=dk(today);text=text.replace(/\btoday\b/i,'').trim();}
-  // "tomorrow"
   else if(/\btomorrow\b/i.test(text)){date=dk(addDays(today,1));text=text.replace(/\btomorrow\b/i,'').trim();}
-  // Day name: "Tuesday", "Fri"
-  else{
-    for(let i=0;i<7;i++){
-      const re=new RegExp('\\b('+dayNames[i]+'|'+dayNamesS[i]+')\\b','i');
-      const dm=text.match(re);
-      if(dm){
-        const target=i,cur=today.getDay();
-        let diff=target-cur;if(diff<=0)diff+=7;
-        date=dk(addDays(today,diff));
-        text=text.replace(dm[0],'').trim();
-        break;
-      }
-    }
-  }
-
-  // "April 20" or "Apr 20" or "20 April"
-  if(!date){
-    for(let mi=0;mi<12;mi++){
-      const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');
-      const re2=new RegExp('\\b(\\d{1,2})\\s+('+monthNames[mi]+'|'+monthNamesS[mi]+')\\b','i');
-      const mm=text.match(re)||text.match(re2);
-      if(mm){
-        const dayNum=parseInt(mm[2])||parseInt(mm[1]);
-        const yr=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();
-        date=`${yr}-${pad(mi+1)}-${pad(dayNum)}`;
-        text=text.replace(mm[0],'').trim();
-        break;
-      }
-    }
-  }
-
-  // Fallback: if no date found, use today
+  else{for(let i=0;i<7;i++){const re=new RegExp('\\b('+dayNames[i]+'|'+dayNamesS[i]+')\\b','i');const dm=text.match(re);if(dm){let diff=i-today.getDay();if(diff<=0)diff+=7;date=dk(addDays(today,diff));text=text.replace(dm[0],'').trim();break;}}}
+  if(!date){for(let mi=0;mi<12;mi++){const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');const mm=text.match(re);if(mm){const dayNum=parseInt(mm[2]);const yr=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();date=`${yr}-${pad(mi+1)}-${pad(dayNum)}`;text=text.replace(mm[0],'').trim();break;}}}
   if(!date)date=dk(today);
-  // Fallback: if no time and not all-day, default 9am
   if(!time&&!allday)time='09:00';
-
-  // Remaining text is the event name
   const name=text.replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
   if(!name)return null;
-
   return{name,date,time:allday?null:time,allday,location};
 }
-
 function addQuickEvent(){
   const input=document.getElementById('qeInput');if(!input)return;
   const raw=input.value.trim();if(!raw)return;
   const parsed=parseQuickEvent(raw);
-  if(!parsed){showToast('Could not parse event — try "Dinner Friday 7pm"');return;}
-
-  tasks.push({
-    id:genId(),
-    name:parsed.name,
-    type:'event',
-    priority:'none',
-    category:'none',
-    notes:'',
-    date:parsed.date,
-    time:parsed.time,
-    allday:parsed.allday,
-    duration:60,
-    scheduled:true,
-    done:false,
-    location:parsed.location||'',
-    recur:false,recurN:1,recurU:'day',
-    subtasks:[],
-    doneOverrides:[],
-    deletedOccurrences:[]
-  });
-
-  input.value='';
-  save();renderAll();
+  if(!parsed){showToast('Could not parse — try "Dinner Friday 7pm"');return;}
+  tasks.push({id:genId(),name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]});
+  input.value='';save();renderAll();
   const d=fromDk(parsed.date);
-  const dateLabel=MONTHS_S[d.getMonth()]+' '+d.getDate();
-  const timeLabel=parsed.allday?'All Day':fmtT(parsed.time);
-  showToast(`Event "${parsed.name}" added · ${dateLabel} ${timeLabel}`);
+  showToast(`Event "${parsed.name}" · ${MONTHS_S[d.getMonth()]} ${d.getDate()} ${parsed.allday?'All Day':fmtT(parsed.time)}`);
 }
 
 function renderBD(){
@@ -2984,27 +2872,18 @@ function duplicateInSlot(dateKey, time, taskName, excludeId){
 
 function showWarnToast(msg,persist){
   let el=document.getElementById('slotWarnToast');
-  if(!el){
-    el=document.createElement('div');
-    el.id='slotWarnToast';
-    el.className='slot-warn-toast';
-    document.body.appendChild(el);
-  }
+  if(!el){el=document.createElement('div');el.id='slotWarnToast';el.className='slot-warn-toast';document.body.appendChild(el);}
   clearTimeout(el._t);
   if(persist){
     el.innerHTML=`<span class="warn-toast-msg">${msg}</span><button class="warn-toast-x" onclick="dismissWarnToast()" title="Dismiss">&times;</button>`;
     el.classList.add('show','persistent');
   } else {
     el.innerHTML=`<span class="warn-toast-msg">${msg}</span>`;
-    el.classList.remove('persistent');
-    el.classList.add('show');
+    el.classList.remove('persistent');el.classList.add('show');
     el._t=setTimeout(()=>el.classList.remove('show'),2800);
   }
 }
-function dismissWarnToast(){
-  const el=document.getElementById('slotWarnToast');
-  if(el){el.classList.remove('show','persistent');}
-}
+function dismissWarnToast(){const el=document.getElementById('slotWarnToast');if(el)el.classList.remove('show','persistent');}
 
 // ══ RECUR RESCHEDULE DIALOG ═══════════════════
 let _rrTaskId=null,_rrInstanceDate=null,_rrNewDate=null,_rrNewTime=null;
@@ -3913,7 +3792,7 @@ function onSearch(){
     const isBd=t._isBd;
     const meta=[isBd?'Brain Dump':t.date||'',t.time?fmtT(t.time):'',t.recur?'↻ '+recurLbl(t):''].filter(Boolean).join(' · ');
     return`<div class="search-result" onclick="onSearchSelect('${t.id}',${isBd?'true':'false'},'${t.date||''}')">
-      <span class="sr-dot" style="background:${cc}"></span>
+      <span class="sr-dot" style="background:${cc};border-top-color:${cc}"></span>
       <div><div class="sr-name">${esc(t.name)}</div><div class="sr-meta">${meta}</div></div>
     </div>`;
   }).join('');
@@ -5012,10 +4891,6 @@ function clarityInit(){
 
   // Quick event input — enter to add
   const qeInput=document.getElementById('qeInput');
-  if(qeInput){
-    qeInput.addEventListener('keydown',e=>{
-      if(e.key==='Enter'){e.preventDefault();addQuickEvent();}
-    });
-  }
+  if(qeInput)qeInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addQuickEvent();}});
 }
 document.addEventListener('DOMContentLoaded',clarityInit);
