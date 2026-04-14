@@ -1375,7 +1375,7 @@ function renderDay(){
         // If task starts at a routine band's start time, offset below the banner
         const tMins=h*60+m;
         const atBandStart=routineBands.some(b=>b.start===timeKey);
-        const bannerH=atBandStart?18:0;
+        const bannerH=atBandStart?30:0;
         const topPx=slotEl.offsetTop+bannerH;
         const dur=t.duration||30;
         const hPx=Math.max(36,dur/30*DAY_SLOT_H-bannerH);
