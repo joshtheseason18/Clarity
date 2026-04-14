@@ -2199,6 +2199,12 @@ let _focusOverlayOpen=false;
 
 function switchSideFocus(){
   populateFocusPicker();
+  // Safety: ensure overlay is hidden when no focus task
+  if(!_focusTaskId){
+    const overlay=document.getElementById('focusOverlay');
+    if(overlay){overlay.classList.remove('show');overlay.style.display='none';}
+    hideFocusMiniTimer();
+  }
   if(_focusTaskId){
     document.getElementById('focusEmpty').style.display='none';
     document.getElementById('focusActive').style.display='';
@@ -2263,6 +2269,7 @@ function openFocusOverlay(){
   const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
   _focusOverlayOpen=true;
   const overlay=document.getElementById('focusOverlay');
+  overlay.style.display='flex';
   overlay.classList.add('show');
   // Populate content
   document.getElementById('foTaskName').textContent=t.name;
@@ -2287,7 +2294,9 @@ function openFocusOverlay(){
 }
 function closeFocusOverlay(){
   _focusOverlayOpen=false;
-  document.getElementById('focusOverlay').classList.remove('show');
+  const overlay=document.getElementById('focusOverlay');
+  overlay.classList.remove('show');
+  overlay.style.display='none';
   // If timer is running, show mini-timer
   if(_focusRunning)showFocusMiniTimer();
   switchSideFocus();
@@ -2579,7 +2588,8 @@ function resetFocusUI(){
   _focusTaskId=null;_focusDate=null;_focusRunning=false;
   _focusOverlayOpen=false;
   clearInterval(_focusInterval);
-  document.getElementById('focusOverlay').classList.remove('show');
+  const overlay=document.getElementById('focusOverlay');
+  if(overlay){overlay.classList.remove('show');overlay.style.display='none';}
   hideFocusMiniTimer();
   switchSideFocus();
 }
