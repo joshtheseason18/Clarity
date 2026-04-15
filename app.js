@@ -1,3 +1,183 @@
+// ══ SUPABASE AUTH ══════════════════════════
+const SUPABASE_URL='https://owvevphwezdqzsiywrwm.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93dmV2cGh3ZXpkcXpzaXl3cndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNzEzMDUsImV4cCI6MjA5MTg0NzMwNX0.QAYElYBPc3dcbJvPAvHJo6hTifQcVNHJC8KyM6hZsUE';
+const EDGE_FN_URL=SUPABASE_URL+'/functions/v1/claude-proxy';
+
+let _supabase=null;
+let _authUser=null;
+let _isGuest=false;
+
+function initSupabase(){
+  if(window.supabase&&window.supabase.createClient){
+    _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  }
+}
+initSupabase();
+
+async function checkAuthState(){
+  if(!_supabase){showSplashAuth('guest');return;}
+  try{
+    const{data:{session}}=await _supabase.auth.getSession();
+    if(session&&session.user){
+      _authUser=session.user;
+      _isGuest=false;
+      // Set username from Google profile if not already set
+      const meta=session.user.user_metadata||{};
+      const currentName=localStorage.getItem('clarity_username');
+      if(!currentName&&meta.full_name){
+        localStorage.setItem('clarity_username',meta.full_name.split(' ')[0]);
+      }
+      showSplashAuth('authenticated');
+    } else {
+      showSplashAuth('unauthenticated');
+    }
+  }catch(e){
+    console.error('Auth check failed:',e);
+    showSplashAuth('unauthenticated');
+  }
+}
+
+function showSplashAuth(state){
+  const authWrap=document.getElementById('splashAuthWrap');
+  const authReady=document.getElementById('splashAuthReady');
+  const authLoading=document.getElementById('splashAuthLoading');
+  if(!authWrap)return;
+  authWrap.style.display='none';
+  authReady.style.display='none';
+  authLoading.style.display='none';
+  if(state==='authenticated'){
+    authReady.style.display='';
+  } else if(state==='loading'){
+    authLoading.style.display='';
+  } else if(state==='guest'){
+    // Supabase not loaded — show guest-only
+    authWrap.style.display='';
+    const gBtn=document.getElementById('googleSignInBtn');
+    if(gBtn)gBtn.style.display='none';
+    const divider=authWrap.querySelector('.splash-auth-divider');
+    if(divider)divider.style.display='none';
+  } else {
+    authWrap.style.display='';
+  }
+}
+
+async function signInWithGoogle(){
+  if(!_supabase){showToast('Authentication unavailable');return;}
+  showSplashAuth('loading');
+  try{
+    const{error}=await _supabase.auth.signInWithOAuth({
+      provider:'google',
+      options:{
+        redirectTo:window.location.origin+window.location.pathname
+      }
+    });
+    if(error)throw error;
+  }catch(e){
+    console.error('Google sign-in error:',e);
+    showToast('Sign-in failed — try again');
+    showSplashAuth('unauthenticated');
+  }
+}
+
+function enterAsGuest(){
+  _isGuest=true;
+  _authUser=null;
+  enterApp();
+}
+
+async function signOutUser(){
+  if(_supabase&&!_isGuest){
+    try{await _supabase.auth.signOut();}catch(e){console.error(e);}
+  }
+  _authUser=null;
+  _isGuest=false;
+  closeDrawer();
+  // Show splash again
+  const splash=document.getElementById('splash');
+  splash.style.display='';
+  splash.classList.remove('hiding');
+  showSplashAuth('unauthenticated');
+  initSplashName();
+}
+
+function updateAccountUI(){
+  const accSection=document.getElementById('accountSection');
+  const guestSection=document.getElementById('guestSection');
+  if(!accSection||!guestSection)return;
+  if(_authUser&&!_isGuest){
+    accSection.style.display='';
+    guestSection.style.display='none';
+    const meta=_authUser.user_metadata||{};
+    const name=meta.full_name||_authUser.email||'User';
+    const email=_authUser.email||'';
+    const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    document.getElementById('accountAvatar').textContent=initials;
+    document.getElementById('accountName').textContent=name;
+    document.getElementById('accountEmail').textContent=email;
+  } else {
+    accSection.style.display='none';
+    guestSection.style.display='';
+  }
+}
+
+// Get auth token for API calls
+async function getAuthToken(){
+  if(!_supabase||_isGuest)return null;
+  try{
+    const{data:{session}}=await _supabase.auth.getSession();
+    return session?.access_token||null;
+  }catch(e){return null;}
+}
+
+// Proxied API call — uses Edge Function when authenticated, direct when in artifact
+async function callClaudeAPI(messages,maxTokens=1000){
+  const token=await getAuthToken();
+  if(token){
+    // Authenticated — use Edge Function proxy
+    const res=await fetch(EDGE_FN_URL,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+token
+      },
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,messages})
+    });
+    return await res.json();
+  } else {
+    // Guest/artifact mode — try direct (works in claude.ai artifacts)
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,messages})
+    });
+    return await res.json();
+  }
+}
+
+// Listen for auth state changes (handles redirect back from Google)
+if(_supabase){
+  _supabase.auth.onAuthStateChange((event,session)=>{
+    if(event==='SIGNED_IN'&&session?.user){
+      _authUser=session.user;
+      _isGuest=false;
+      const meta=session.user.user_metadata||{};
+      const currentName=localStorage.getItem('clarity_username');
+      if(!currentName&&meta.full_name){
+        localStorage.setItem('clarity_username',meta.full_name.split(' ')[0]);
+      }
+      // If on splash, show authenticated state
+      const splash=document.getElementById('splash');
+      if(splash&&splash.style.display!=='none'){
+        showSplashAuth('authenticated');
+        initSplashName();
+      }
+    }
+  });
+}
+
+// Check auth on page load
+checkAuthState();
+
 // ══ AUDIO ══════════════════════════════════
 let AC=null;
 function getAC(){
@@ -489,6 +669,7 @@ function openUpcomingEdit(id, instanceDate){
 
 // ══ DRAWER ══════════════════════════════════
 function openDrawer(){
+  updateAccountUI();
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawerBackdrop').classList.add('open');
 }
@@ -546,7 +727,7 @@ function toggleDayJournal(){
 function enterApp(){
   const splash=document.getElementById('splash');
   splash.classList.add('hiding');
-  setTimeout(()=>{splash.style.display='none';renderAll();},500);
+  setTimeout(()=>{splash.style.display='none';updateAccountUI();renderAll();},500);
 }
 
 // ══ CONSTANTS ══════════════════════════════
@@ -4190,16 +4371,7 @@ Respond with ONLY a JSON array, no markdown, no backticks:
 Subtask format: {"name":"Review notes","duration":25}`;
 
   try{
-    const response=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",
-        max_tokens:1000,
-        messages:[{role:"user",content:prompt}]
-      })
-    });
-    const data=await response.json();
+    const data=await callClaudeAPI([{role:"user",content:prompt}],1000);
     const text=data.content.map(i=>i.text||'').join('');
     const clean=text.replace(/```json|```/g,'').trim();
     _aiTasks=JSON.parse(clean);
@@ -5399,11 +5571,7 @@ async function generateSubtasks(){
   btn.textContent='⏳ Generating…';btn.style.pointerEvents='none';
   try{
     const prompt=`The user has a task called "${taskName}" with ${dur} minutes total. Break it into focused subtasks with realistic durations in minutes. Include short breaks if >60min. Respond with ONLY a JSON array: [{"name":"Subtask","duration":25}]`;
-    const response=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{role:"user",content:prompt}]})
-    });
-    const data=await response.json();
+    const data=await callClaudeAPI([{role:"user",content:prompt}],500);
     const text=data.content.map(i=>i.text||'').join('');
     const clean=text.replace(/```json|```/g,'').trim();
     const subs=JSON.parse(clean);
