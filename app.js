@@ -305,14 +305,26 @@ function renderUpcomingEvents(){
   const el=document.getElementById('upcomingEvents');if(!el)return;
   const today=new Date();today.setHours(0,0,0,0);
   const todayKey=dk(today);
-  const weekEnd=addDays(today,7);
-  // Get events for the next 7 days
-  const upcoming=expandedTasks(today,weekEnd).filter(t=>(t.type||'task')==='event'&&t._instanceDate>=todayKey).sort((a,b)=>(a._instanceDate+(a.time||'')).localeCompare(b._instanceDate+(b.time||'')));
-  if(!upcoming.length){el.innerHTML='';return;}
-  const count=Math.min(upcoming.length,5);
-  const shown=upcoming.slice(0,count);
+  // Scope to the week containing the selected day
+  const sel=new Date(selDate);sel.setHours(0,0,0,0);
+  const dow=(sel.getDay()-weekStartDay+7)%7;
+  const weekStart=addDays(sel,-dow);
+  const weekEnd=addDays(weekStart,6);
+  // Get events for this week, starting from today (don't show past events)
+  const rangeStart=today>weekStart?today:weekStart;
+  if(rangeStart>weekEnd){el.innerHTML='';return;} // selected week is entirely in the past
+  const upcoming=expandedTasks(rangeStart,weekEnd).filter(t=>(t.type||'task')==='event'&&t._instanceDate>=todayKey).sort((a,b)=>(a._instanceDate+(a.time||'')).localeCompare(b._instanceDate+(b.time||'')));
+  // Deduplicate multi-day events
+  const seenMd=new Set();
+  const filtered=upcoming.filter(t=>{
+    if(t._isMultiDay){if(seenMd.has(t.id))return false;seenMd.add(t.id);}
+    return true;
+  });
+  if(!filtered.length){el.innerHTML='';return;}
+  const count=Math.min(filtered.length,5);
+  const shown=filtered.slice(0,count);
   let html=`<button class="upcoming-toggle" onclick="_upcomingExpanded=!_upcomingExpanded;renderUpcomingEvents()">
-    <span>${_upcomingExpanded?'▾':'▸'}</span> ${upcoming.length} upcoming event${upcoming.length!==1?'s':''}
+    <span>${_upcomingExpanded?'▾':'▸'}</span> ${filtered.length} event${filtered.length!==1?'s':''} this week
   </button>`;
   if(_upcomingExpanded){
     html+=`<div class="upcoming-list">`;
@@ -327,7 +339,7 @@ function renderUpcomingEvents(){
         ${t.location?`<span class="upcoming-item-loc">${IC_PIN} ${esc(t.location)}</span>`:''}
       </div>`;
     });
-    if(upcoming.length>5)html+=`<div style="text-align:center;font-size:10px;color:var(--text3);padding:4px">+${upcoming.length-5} more</div>`;
+    if(filtered.length>5)html+=`<div style="text-align:center;font-size:10px;color:var(--text3);padding:4px">+${filtered.length-5} more</div>`;
     html+=`</div>`;
   }
   el.innerHTML=html;
@@ -470,27 +482,66 @@ function renderEvents(){
   // Deduplicate by id+instanceDate
   const seen=new Set();
   const events=allEvents.filter(t=>{const k=t.id+'|'+(t._instanceDate||'');if(seen.has(k))return false;seen.add(k);return true;});
+  // Truncate recurring events: max 3 instances per recurring source, then summary
+  const recurCount={};
+  const MAX_RECUR_SHOW=3;
+  const truncated=[];
+  const recurSummaries={};
+  events.forEach(t=>{
+    if(t.recur&&t._virtual){
+      const rid=t.id;
+      recurCount[rid]=(recurCount[rid]||0)+1;
+      if(recurCount[rid]<=MAX_RECUR_SHOW){
+        truncated.push(t);
+      } else if(recurCount[rid]===MAX_RECUR_SHOW+1){
+        // Add a summary placeholder
+        const unitLabel=t.recurU==='day'?'daily':t.recurU==='week'?(t.recurN===1?'weekly':'every '+t.recurN+' weeks'):(t.recurN===1?'monthly':'every '+t.recurN+' months');
+        recurSummaries[rid]={name:t.name,unit:unitLabel,id:rid,idate:t._instanceDate};
+      }
+    } else {
+      truncated.push(t);
+    }
+  });
   const todayKey=dk(today);
   let html='';
-  if(!events.length){
+  if(!truncated.length&&!Object.keys(recurSummaries).length){
     html=`<div class="cat-empty" style="padding:40px 0;text-align:center">
       <div style="font-size:28px;margin-bottom:8px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.5" opacity=".5"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg></div>
       <div style="font-size:13px;font-weight:500;color:var(--text)">No events yet</div>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Create an event from the Day or Week view</div>
     </div>`;
   } else {
-    // Group by upcoming vs today vs past
-    const upcoming=events.filter(t=>t._instanceDate>todayKey);
-    const todayEvs=events.filter(t=>t._instanceDate===todayKey);
-    const pastEvs=events.filter(t=>t._instanceDate<todayKey);
+    const upcoming=truncated.filter(t=>t._instanceDate>todayKey);
+    const todayEvs=truncated.filter(t=>t._instanceDate===todayKey);
+    const pastEvs=truncated.filter(t=>t._instanceDate<todayKey);
     if(todayEvs.length){
       html+=`<div class="cat-section"><div class="cat-sec-title">Today</div>`;
       todayEvs.forEach(t=>{html+=eventRow(t)});
       html+=`</div>`;
     }
-    if(upcoming.length){
+    if(upcoming.length||Object.keys(recurSummaries).length){
       html+=`<div class="cat-section"><div class="cat-sec-title">Upcoming</div>`;
-      upcoming.forEach(t=>{html+=eventRow(t)});
+      upcoming.forEach(t=>{
+        html+=eventRow(t);
+        // Insert recurrence summary after the last shown instance
+        const rid=t.id;
+        if(recurSummaries[rid]&&recurCount[rid]&&t===upcoming.filter(u=>u.id===rid).pop()){
+          const s=recurSummaries[rid];
+          const extraCount=(recurCount[rid]||0)-MAX_RECUR_SHOW;
+          html+=`<div class="recur-summary-row" onclick="openCatEdit('${s.id}','${s.idate}',event)">
+            <span class="recur-summary-icon">↻</span>
+            <span class="recur-summary-text">Repeats ${s.unit}${extraCount>0?' · '+extraCount+' more upcoming':''}</span>
+          </div>`;
+          delete recurSummaries[rid];
+        }
+      });
+      // Any remaining summaries (e.g., no upcoming instances in truncated but still recurring)
+      Object.values(recurSummaries).forEach(s=>{
+        html+=`<div class="recur-summary-row" onclick="openCatEdit('${s.id}','${s.idate}',event)">
+          <span class="recur-summary-icon">↻</span>
+          <span class="recur-summary-text">Repeats ${s.unit}</span>
+        </div>`;
+      });
       html+=`</div>`;
     }
     if(showPastEvents&&pastEvs.length){
@@ -4499,11 +4550,12 @@ function setItemType(type){
   document.getElementById('fName').placeholder=type==='event'?'What\'s happening?':'What needs to get done?';
   document.getElementById('fLocationWrap').style.display=type==='event'?'':'none';
   document.getElementById('fAlldayWrap').style.display=type==='event'?'':'none';
+  document.getElementById('fMultiDayWrap').style.display=type==='event'?'':'none';
   document.getElementById('fPriRow').style.display=type==='event'?'none':'';
   document.getElementById('fRecurLabel').textContent=type==='event'?'event':'task';
   document.getElementById('mTitle').textContent=mMode==='edit'?'Edit '+(type==='event'?'Event':'Task'):'New '+(type==='event'?'Event':'Task');
-  // When switching away from event, clear all-day
-  if(type!=='event')setAlldayModal(false);
+  // When switching away from event, clear all-day and multi-day
+  if(type!=='event'){setAlldayModal(false);setMultiDayModal(false);}
   // Update done checkbox visibility
   updateModalDoneCheck();
 }
@@ -4521,13 +4573,12 @@ function setAlldayModal(val){
   // Hide duration when all-day
   const durWrap=document.querySelector('.dur-spinner-row')?.closest('.fg');
   if(durWrap)durWrap.style.display=val?'none':'';
-  // Show/hide multi-day toggle
-  const mdWrap=document.getElementById('fMultiDayWrap');
-  if(mdWrap)mdWrap.style.display=val?'':'none';
-  // Show/hide suppress routines toggle
+  // Show/hide suppress routines toggle (visible when all-day OR multi-day)
   const supWrap=document.getElementById('fSuppressWrap');
-  if(supWrap)supWrap.style.display=val?'':'none';
-  if(!val){setMultiDayModal(false);setSuppressModal(false);}
+  if(supWrap)supWrap.style.display=(val||_modalMultiDay)?'':'none';
+  // If all-day turned off, also turn off multi-day (multi-day requires all-day)
+  if(!val&&_modalMultiDay){setMultiDayModal(false);}
+  if(!val&&!_modalMultiDay){setSuppressModal(false);}
   // Update modal subtitle — remove time when all-day
   const subEl=document.getElementById('mSub');
   if(subEl&&mDate){
@@ -4546,6 +4597,11 @@ function setMultiDayModal(val){
   const colorWrap=document.getElementById('fEventColorWrap');
   if(datesRow)datesRow.style.display=val?'':'none';
   if(colorWrap)colorWrap.style.display=val?'':'none';
+  // Auto-enable All Day when multi-day is turned on
+  if(val&&!_modalAllday){setAlldayModal(true);}
+  // Show suppress toggle when multi-day or all-day
+  const supWrap=document.getElementById('fSuppressWrap');
+  if(supWrap)supWrap.style.display=(val||_modalAllday)?'':'none';
   if(val){
     // Default start to current mDate, end to mDate+1
     const startEl=document.getElementById('fMultiStart');
@@ -4556,9 +4612,29 @@ function setMultiDayModal(val){
       endEl.value=dk(d);
     }
     renderEventColorPicker();
+    updateMultiDaySub();
+  } else {
+    // Reset subtitle when turning off
+    const sub=document.getElementById('fMultiDaySub');
+    if(sub)sub.textContent='Spans multiple days like a vacation or conference';
   }
 }
 function toggleMultiDayModal(){setMultiDayModal(!_modalMultiDay);}
+
+function updateMultiDaySub(){
+  const sub=document.getElementById('fMultiDaySub');if(!sub)return;
+  const startVal=document.getElementById('fMultiStart').value;
+  const endVal=document.getElementById('fMultiEnd').value;
+  if(startVal&&endVal&&endVal>=startVal){
+    const sd=fromDk(startVal),ed=fromDk(endVal);
+    const days=Math.round((ed-sd)/86400000)+1;
+    sub.textContent=`${MONTHS_S[sd.getMonth()]} ${sd.getDate()} – ${MONTHS_S[ed.getMonth()]} ${ed.getDate()} · ${days} day${days!==1?'s':''}`;
+    sub.style.color='var(--accent)';
+  } else {
+    sub.textContent='Spans multiple days like a vacation or conference';
+    sub.style.color='var(--text3)';
+  }
+}
 
 function renderEventColorPicker(){
   const row=document.getElementById('fEventColorRow');if(!row)return;
@@ -4925,9 +5001,11 @@ function openNew(dateKey,time){
   document.getElementById('fMultiStart').value='';
   document.getElementById('fMultiEnd').value='';
   document.getElementById('fMultiDayDates').style.display='none';
-  document.getElementById('fMultiDayWrap').style.display='none';
   document.getElementById('fEventColorWrap').style.display='none';
+  document.getElementById('fSuppressWrap').style.display='none';
   const mdTog=document.getElementById('fMultiDayToggle');if(mdTog)mdTog.classList.remove('on');
+  const supTog=document.getElementById('fSuppressToggle');if(supTog)supTog.classList.remove('on');
+  const mdSub=document.getElementById('fMultiDaySub');if(mdSub){mdSub.textContent='Spans multiple days like a vacation or conference';mdSub.style.color='var(--text3)';}
   document.getElementById('btnDel').style.display='none';
   const stEl=document.getElementById('fStartTime');if(stEl)stEl.value=time;
   setDurSpinner(30);
@@ -4986,18 +5064,19 @@ function openEdit(id,instanceDate,e){
   // Multi-day fields
   _modalMultiDay=!!(t.multiDay);
   _modalEventColor=t.eventColor||'';
-  if(_itemType==='event'&&_modalAllday){
+  if(_itemType==='event'){
     setMultiDayModal(_modalMultiDay);
     if(_modalMultiDay){
       document.getElementById('fMultiStart').value=t.date||'';
       document.getElementById('fMultiEnd').value=t.endDate||'';
+      updateMultiDaySub();
     }
   } else {
     setMultiDayModal(false);
   }
   // Suppress routines
   _modalSuppressRoutines=!!(t.suppressRoutines);
-  if(_itemType==='event'&&_modalAllday){setSuppressModal(_modalSuppressRoutines);}
+  if(_itemType==='event'&&(_modalAllday||_modalMultiDay)){setSuppressModal(_modalSuppressRoutines);}
   else{setSuppressModal(false);}
   document.getElementById('btnDel').style.display='block';
   const stEl2=document.getElementById('fStartTime');if(stEl2)stEl2.value=t.time||'09:00';
@@ -5039,10 +5118,19 @@ function closeModal(){
     body.removeEventListener('scroll',body._scrollHandler);
     body._scrollHandler=null;
   }
-  // If user cancelled, restore original subtasks
+  // If user cancelled editing...
   if(mMode==='edit'&&mId&&!_modalCommitted){
     const t=tasks.find(t=>t.id===mId);
-    if(t){t.subtasks=_editOrigSubtasks;if(curView==='day')renderDay();}
+    if(t){
+      // Draft tasks (from quick-add) get removed on cancel
+      if(t._draft){
+        tasks=tasks.filter(x=>x.id!==mId);
+        save();renderAll();
+      } else {
+        // Restore original subtasks for non-draft tasks
+        t.subtasks=_editOrigSubtasks;if(curView==='day')renderDay();
+      }
+    }
   }
   _modalCommitted=false;
 }
@@ -5119,7 +5207,7 @@ function saveTask(){
     }
   }
   if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});if(t&&multiDay)t.date=mDate;}
+  else{const t=tasks.find(t=>t.id===mId);if(t){Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});delete t._draft;}if(t&&multiDay)t.date=mDate;}
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){
@@ -6213,27 +6301,36 @@ function closeQuickAdd(){
 function saveQuickAdd(){
   const name=document.getElementById('qaName').value.trim();
   if(!name){document.getElementById('qaName').focus();return;}
-  const dateVal=document.getElementById('qaDate').value||dk(new Date());
-  const timeVal=document.getElementById('qaTime').value||'09:00';
+  const dateVal=document.getElementById('qaDate').value;
+  const timeVal=document.getElementById('qaTime').value;
   const priority=document.getElementById('qaPri').value;
   const type=_qaType;
-  // ── Guardrails ──
-  // 1. Blocked routine check
+  const isIncomplete=!dateVal||!timeVal;
+  // ── Incomplete → save to brain dump for later scheduling ──
+  if(isIncomplete){
+    brainDump.push({
+      id:genId(),name,type,category:'none',priority:type==='event'?'none':priority,
+      notes:'',subtasks:[],
+      _pendingDate:dateVal||'',_pendingTime:timeVal||''
+    });
+    save();renderAll();closeQuickAdd();
+    showToast('"'+name+'" saved to Brain Dump — add missing details to schedule it');
+    return;
+  }
+  // ── Complete → schedule with draft flag ──
+  // Guardrails
   if(type==='task'){
     const rBlock=isBlockedByRoutine(dateVal,timeVal);
     if(rBlock.blocked){
       if(!confirm(`${rBlock.routineName} blocks ${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)}.\n\nSchedule here anyway?`))return;
     }
   }
-  // 2. Slot full check
   if(slotFull(dateVal,timeVal,null)){
     if(!confirm(`This time slot already has ${MAX_TASKS_PER_SLOT} items.\n\nAdd anyway?`))return;
   }
-  // 3. Duplicate check
   if(duplicateInSlot(dateVal,timeVal,name,null)){
     if(!confirm(`"${name}" is already in this time slot.\n\nAdd a duplicate?`))return;
   }
-  // 4. Duration overflow into blocked routine
   const routineOverflow=checkRoutineOverflow(dateVal,timeVal,_qaDur);
   if(routineOverflow.blocked){
     showToast(`Note: extends into ${routineOverflow.routineName} at ${fmtT(routineOverflow.routineStart)}`);
@@ -6242,11 +6339,11 @@ function saveQuickAdd(){
     id:genId(),name,type,priority:type==='event'?'none':priority,category:'none',notes:'',attachments:[],location:'',
     date:dateVal,time:timeVal,allday:false,duration:_qaDur,scheduled:true,done:false,
     recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],
-    multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
+    multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,
+    _draft:true
   };
   tasks.push(newTask);
   save();renderAll();closeQuickAdd();
-  // Undo toast so user can easily revert a quick add
   showUndoToast('"'+name+'" added',()=>{
     tasks=tasks.filter(t=>t.id!==newTask.id);
     save();renderAll();

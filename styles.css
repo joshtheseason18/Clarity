@@ -1678,6 +1678,15 @@ header{
 /* ══ EVENT ROW in Schedule tab ═══════════════ */
 .event-row .event-row-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .event-row.past-event{opacity:.55}
+.recur-summary-row{
+  display:flex;align-items:center;gap:8px;padding:6px 12px;
+  margin-bottom:5px;border-radius:8px;cursor:pointer;
+  background:var(--surface2);border:1px dashed var(--border);
+  transition:background .12s;
+}
+.recur-summary-row:hover{background:var(--surface3)}
+.recur-summary-icon{font-size:14px;color:var(--accent);flex-shrink:0}
+.recur-summary-text{font-size:11px;color:var(--text2);font-weight:500}
 /* ══ IDEA MODAL ══════════════════════════════ */
 .idea-modal-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:2px}
 .idea-modal-color-bar{width:4px;border-radius:99px;flex-shrink:0;align-self:stretch;min-height:36px}
@@ -2591,6 +2600,38 @@ header{
   .rt-bk{padding:9px 10px}
   .rt-bk-name{font-size:12px}
   .routine-add-btn{font-size:12px;padding:8px 22px}
+
+  /* ── Day routine chips mobile ── */
+  .day-routine-chips{padding:6px 12px;gap:4px}
+  .day-rt-chip{font-size:10px;padding:3px 5px 3px 7px}
+  .day-rt-chip-btn{font-size:9px;padding:2px 6px}
+
+  /* ── Schedule tab 4-button bar mobile ── */
+  .sched-seg-btn{padding:5px 8px;font-size:10px}
+
+  /* ── Recur day-of-week buttons in modal ── */
+  .recur-day-btn{width:24px;height:24px;font-size:10px}
+
+  /* ── Multi-day subtitle mobile ── */
+  .toggle-row>div{min-width:0;flex:1}
+  .toggle-row .toggle-sub{font-size:9px}
+
+  /* ── Holiday items mobile ── */
+  .holiday-item{padding:8px 10px;gap:8px}
+  .holiday-name{font-size:12px}
+  .holiday-date{font-size:10px}
+  .holiday-year-title{font-size:14px}
+  .holiday-action-btn{font-size:10px;padding:3px 10px}
+
+  /* ── Month multi-day chip mobile ── */
+  .m-chip-multiday{margin-left:-2px;margin-right:-2px;font-size:8px;padding:1px 3px}
+
+  /* ── Week multi-day bar mobile ── */
+  .wk-multiday-bar{height:16px;font-size:8px;padding:0 4px}
+
+  /* ── Recur summary row mobile ── */
+  .recur-summary-row{padding:5px 10px}
+  .recur-summary-text{font-size:10px}
 }
 
 /* ══════════════════════════════════════════
@@ -2628,6 +2669,13 @@ header{
   .day-add-sub-btn{width:26px;height:26px}
   .attach-item-del{padding:2px 6px}
   .subtask-item .subtask-del{padding:2px 6px}
+
+  /* Phase 3 touch overrides */
+  .day-rt-chip-btn{opacity:1;min-height:28px;min-width:44px}
+  .holiday-item{min-height:44px}
+  .event-color-swatch{width:32px;height:32px}
+  .recur-day-btn{min-width:28px;min-height:28px}
+  .rt-day-btn{min-width:28px;min-height:28px}
 }
 @media(max-width:380px){
   .nav-tab{padding:4px 6px;font-size:9px}
@@ -2638,6 +2686,12 @@ header{
   .week-grid{grid-template-columns:32px repeat(7,1fr)}
   .wk-allday-row{grid-template-columns:32px repeat(7,1fr)}
   .wdh-name{font-size:9px}.wdh-num{font-size:10px}
+  .sched-seg-btn{padding:4px 6px;font-size:9px}
+  .rt-day-btn{width:22px;height:22px;font-size:10px}
+  .rt-day-preset{font-size:9px;padding:3px 7px}
+  .rt-day-selector{gap:6px}
+  .day-rt-chip-time{display:none}
+  .recur-day-btn{width:22px;height:22px;font-size:9px}
 }
 
 /* ══ AI BRAIN DUMP CHIPS ═══════════════════════ */

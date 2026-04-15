@@ -451,28 +451,31 @@
           <div class="toggle-thumb"></div>
         </button>
       </div>
-      <!-- Multi-day toggle (events only, shown when all-day is on) -->
+      <!-- Multi-day toggle (events only — always visible for events) -->
       <div class="toggle-row" id="fMultiDayWrap" style="display:none">
-        <span class="toggle-label" style="font-size:12px">Multi-day</span>
+        <div>
+          <span class="toggle-label" style="font-size:12px">Multi-day event</span>
+          <div id="fMultiDaySub" style="font-size:10px;color:var(--text3);margin-top:1px">Spans multiple days like a vacation or conference</div>
+        </div>
         <button class="toggle-track" id="fMultiDayToggle" onclick="toggleMultiDayModal()">
           <div class="toggle-thumb"></div>
         </button>
       </div>
       <!-- Multi-day date range (shown when multi-day is on) -->
       <div class="frow" id="fMultiDayDates" style="display:none">
-        <div class="fg"><label class="flbl">Start date</label><input class="fi" type="date" id="fMultiStart" style="font-size:12px;padding:6px 9px"></div>
-        <div class="fg"><label class="flbl">End date</label><input class="fi" type="date" id="fMultiEnd" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">Start date</label><input class="fi" type="date" id="fMultiStart" style="font-size:12px;padding:6px 9px" onchange="updateMultiDaySub()"></div>
+        <div class="fg"><label class="flbl">End date</label><input class="fi" type="date" id="fMultiEnd" style="font-size:12px;padding:6px 9px" onchange="updateMultiDaySub()"></div>
       </div>
       <!-- Event color picker (shown when multi-day is on) -->
       <div class="fg" id="fEventColorWrap" style="display:none">
         <label class="flbl">Event color</label>
         <div class="event-color-row" id="fEventColorRow"></div>
       </div>
-      <!-- Suppress routines toggle (shown when all-day is on) -->
+      <!-- Suppress routines toggle (shown when all-day or multi-day is on) -->
       <div class="toggle-row" id="fSuppressWrap" style="display:none">
         <div>
-          <span class="toggle-label" style="font-size:12px">Suppress routines</span>
-          <div class="toggle-sub" id="fSuppressSub" style="font-size:10px;color:var(--text3);margin-top:1px">Blocked routines paused for this day</div>
+          <span class="toggle-label" style="font-size:12px">Pause routines</span>
+          <div class="toggle-sub" id="fSuppressSub" style="font-size:10px;color:var(--text3);margin-top:1px">Routine blocks won't apply — time stays open for tasks</div>
         </div>
         <button class="toggle-track" id="fSuppressToggle" onclick="toggleSuppressModal()">
           <div class="toggle-thumb"></div>
