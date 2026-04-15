@@ -281,6 +281,7 @@
               <div id="journalPastEntries"></div>
             </div>
           </div>
+          <div class="day-routine-chips" id="dayRoutineChips"></div>
           <div class="day-timeline" id="dayTimeline"></div>
         </div>
       </div>
@@ -297,6 +298,7 @@
               <button class="sched-seg-btn active" id="schedTabTasks" onclick="switchScheduleTab('tasks')">Tasks</button>
               <button class="sched-seg-btn" id="schedTabEvents" onclick="switchScheduleTab('events')">Events</button>
               <button class="sched-seg-btn" id="schedTabRoutine" onclick="switchScheduleTab('routine')">My Routine</button>
+              <button class="sched-seg-btn" id="schedTabHolidays" onclick="switchScheduleTab('holidays')">Holidays</button>
             </div>
           </div>
           <!-- Row 2: category chips — visible on Tasks tab only -->
@@ -320,6 +322,10 @@
         <!-- Routine area -->
         <div id="catRoutineArea" style="display:none;flex:1;flex-direction:column;overflow-y:auto;padding:16px 18px">
           <div id="routineList" style="display:flex;flex-direction:column;min-height:100%"></div>
+        </div>
+        <!-- Holidays area -->
+        <div id="catHolidaysArea" style="display:none;flex:1;overflow-y:auto;padding:16px 18px">
+          <div id="holidaysList"></div>
         </div>
       </div>
     </div>
@@ -445,6 +451,33 @@
           <div class="toggle-thumb"></div>
         </button>
       </div>
+      <!-- Multi-day toggle (events only, shown when all-day is on) -->
+      <div class="toggle-row" id="fMultiDayWrap" style="display:none">
+        <span class="toggle-label" style="font-size:12px">Multi-day</span>
+        <button class="toggle-track" id="fMultiDayToggle" onclick="toggleMultiDayModal()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
+      <!-- Multi-day date range (shown when multi-day is on) -->
+      <div class="frow" id="fMultiDayDates" style="display:none">
+        <div class="fg"><label class="flbl">Start date</label><input class="fi" type="date" id="fMultiStart" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">End date</label><input class="fi" type="date" id="fMultiEnd" style="font-size:12px;padding:6px 9px"></div>
+      </div>
+      <!-- Event color picker (shown when multi-day is on) -->
+      <div class="fg" id="fEventColorWrap" style="display:none">
+        <label class="flbl">Event color</label>
+        <div class="event-color-row" id="fEventColorRow"></div>
+      </div>
+      <!-- Suppress routines toggle (shown when all-day is on) -->
+      <div class="toggle-row" id="fSuppressWrap" style="display:none">
+        <div>
+          <span class="toggle-label" style="font-size:12px">Suppress routines</span>
+          <div class="toggle-sub" id="fSuppressSub" style="font-size:10px;color:var(--text3);margin-top:1px">Blocked routines paused for this day</div>
+        </div>
+        <button class="toggle-track" id="fSuppressToggle" onclick="toggleSuppressModal()">
+          <div class="toggle-thumb"></div>
+        </button>
+      </div>
       <!-- Start / End time row -->
       <div class="frow" id="fTimeRow">
         <div class="fg"><label class="flbl">Start time</label><input class="fi" type="time" id="fStartTime" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></div>
@@ -473,9 +506,21 @@
         <div class="recur-opts" id="recurOpts" style="display:none">
           <span style="font-size:12px;color:var(--text2)">Every</span>
           <input class="fi" id="fRecurN" type="number" min="1" max="99" value="1" style="width:50px;padding:4px 7px;font-size:12px">
-          <select class="fi" id="fRecurU" style="font-size:12px;padding:4px 7px">
+          <select class="fi" id="fRecurU" style="font-size:12px;padding:4px 7px" onchange="onRecurUnitChange()">
             <option value="day">Day(s)</option><option value="week">Week(s)</option><option value="month">Month(s)</option>
           </select>
+        </div>
+        <div class="recur-days-row" id="recurDaysRow" style="display:none">
+          <span style="font-size:11px;color:var(--text3);margin-right:4px">On:</span>
+          <div class="recur-days-btns" id="recurDaysBtns">
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,0)">S</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,1)">M</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,2)">T</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,3)">W</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,4)">T</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,5)">F</button>
+            <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,6)">S</button>
+          </div>
         </div>
       </div>
       <!-- Detail Tabs -->

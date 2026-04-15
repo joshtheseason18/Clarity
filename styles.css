@@ -20,6 +20,7 @@
 
 /* LIGHT MODE BASE */
 :root{
+  color-scheme:light;
   --bg:#fafaf9;--surface:#ffffff;--surface2:#f5f5f4;--surface3:#eeece9;
   --border:#e7e5e4;--border2:#d6d3d1;
   --text:#1c1917;--text2:#78716c;--text3:#a8a29e;
@@ -30,12 +31,56 @@
 
 /* DARK MODE */
 [data-dark="true"]{
+  color-scheme:dark;
   --bg:#0f0f0f;--surface:#1a1a1a;--surface2:#242424;--surface3:#2e2e2e;
   --border:#2e2e2e;--border2:#3a3a3a;
   --text:#f5f5f4;--text2:#a8a29e;--text3:#78716c;
   --shadow-color:rgba(0,0,0,.3);
   --red:#f87171;--red-pale:#2d1a1a;
   --amber-warn:#fbbf24;
+  --accent-pale:rgba(var(--accent-rgb),.08);
+  --accent-light:rgba(var(--accent-rgb),.18);
+}
+/* Dark mode native form controls */
+[data-dark="true"] select,
+[data-dark="true"] input,
+[data-dark="true"] textarea{
+  color-scheme:dark;
+}
+[data-dark="true"] select.fi,
+[data-dark="true"] input.fi,
+[data-dark="true"] textarea.fi{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] select.fi option{
+  background:var(--surface2);color:var(--text);
+}
+[data-dark="true"] .dur-spinner-input{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] .journal-ta{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] .splash-name-input{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] .search-input{
+  color:var(--text);
+}
+[data-dark="true"] .sp-input{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] .qe-input{
+  background:var(--surface2);color:var(--text);border-color:var(--accent);
+}
+[data-dark="true"] .bd-ta{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
+}
+[data-dark="true"] .qa-input{
+  background:var(--surface2);color:var(--text);
+}
+[data-dark="true"] .qa-fi{
+  background:var(--surface2);color:var(--text);border-color:var(--border);
 }
 
 *{margin:0;padding:0;box-sizing:border-box}
@@ -959,6 +1004,34 @@ header{
 }
 .allday-pill-edit{font-size:10px;opacity:.6;margin-left:2px;color:inherit}
 
+/* Day routine chips (skip/unskip) */
+.day-routine-chips{
+  display:flex;flex-wrap:wrap;gap:6px;padding:8px 20px;
+}
+.day-routine-chips:empty{display:none}
+.day-rt-chip{
+  display:flex;align-items:center;gap:5px;padding:4px 6px 4px 8px;
+  border-radius:8px;background:var(--surface2);border:1px solid var(--border);
+  font-size:11px;color:var(--text);transition:all .15s;
+}
+.day-rt-chip.skipped{opacity:.45;text-decoration:line-through}
+.day-rt-chip.skipped .day-rt-chip-name{text-decoration:line-through}
+.day-rt-chip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.day-rt-chip-name{font-weight:600;white-space:nowrap}
+.day-rt-chip-time{font-size:10px;color:var(--text3);white-space:nowrap}
+.day-rt-chip-btn{
+  font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;
+  border:1px solid var(--border);background:none;color:var(--text3);
+  cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .12s;
+  opacity:0;margin-left:2px;
+}
+.day-rt-chip:hover .day-rt-chip-btn{opacity:1}
+.day-rt-chip-btn:hover{color:var(--accent);border-color:var(--accent)}
+.day-rt-chip-btn.undo{opacity:1;color:var(--accent);border-color:var(--accent)}
+.day-rt-chip-badge{font-size:9px;font-weight:600;color:var(--text3);font-style:italic;margin-left:2px}
+@media(hover:none){.day-rt-chip-btn{opacity:1}}
+[data-dark="true"] .day-rt-chip{background:var(--surface2);border-color:var(--border)}
+
 .day-scroll{flex:1;overflow-y:auto;overflow-x:hidden} /* overflow-x:hidden forces grid 1fr to reflow when sidebar toggles */
 
 /* Timeline grid: two columns — time labels | slots */
@@ -1013,11 +1086,7 @@ header{
   border-bottom:1px dashed var(--border);opacity:.6;
   transition:min-height .15s;
 }
-/* During drag: let drops pass through task blocks to reach slots */
-.drag-active .day-overlay-layer{pointer-events:none!important}
-.drag-active .day-overlay-layer *{pointer-events:none!important}
-.drag-active .wk-task-layer{pointer-events:none!important}
-.drag-active .wk-task-layer *{pointer-events:none!important}
+/* During drag: handled by JS in _setDragActive — no CSS needed */
 /* Blocked routine slots — subtle hatching */
 .day-slot.routine-blocked .day-slot-interior{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.05) 5px,rgba(239,68,68,.05) 10px);cursor:not-allowed}
 .wk-slot.routine-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(239,68,68,.05) 4px,rgba(239,68,68,.05) 8px);cursor:not-allowed}
@@ -1462,6 +1531,16 @@ header{
 .recur-box label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;user-select:none;white-space:nowrap;color:var(--text)}
 .rcb{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
 .recur-opts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.recur-days-row{display:flex;align-items:center;gap:4px;padding:6px 0 2px;flex-wrap:wrap}
+.recur-days-btns{display:flex;gap:3px}
+.recur-day-btn{
+  width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);
+  background:none;color:var(--text3);font-size:11px;font-weight:600;
+  font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.recur-day-btn:hover{border-color:var(--accent);color:var(--accent)}
+.recur-day-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 /* Used by all non-task modals (delete, add category, etc.) */
 .modal-acts{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;}
 .btn-c{padding:7px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;transition:all .15s}
@@ -1522,6 +1601,34 @@ header{
 .wk-allday-pill:hover{opacity:.8}
 .wk-event-badge{font-size:8px;opacity:.75;margin-left:3px;font-weight:400}
 
+/* Week multi-day spanning bars */
+.wk-multiday-row{display:grid;padding:2px 0;gap:0;align-items:center}
+.wk-multiday-bar{
+  height:20px;display:flex;align-items:center;padding:0 8px;
+  color:#fff;font-size:9px;font-weight:600;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:opacity .12s;
+}
+.wk-multiday-bar:hover{opacity:.85}
+
+/* Event color picker */
+.event-color-row{display:flex;gap:8px;padding:4px 0}
+.event-color-swatch{
+  width:26px;height:26px;border-radius:50%;border:2.5px solid transparent;
+  cursor:pointer;transition:all .15s;
+}
+.event-color-swatch:hover{transform:scale(1.15)}
+.event-color-swatch.on{border-color:var(--text);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--text)}
+
+/* Month multi-day chip */
+.m-chip-multiday{
+  font-weight:700;font-size:9px;
+  border-left-width:0!important;
+  margin-left:-3px;margin-right:-3px;
+  padding:2px 5px;min-height:16px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
 /* ══ MONTH ALLDAY CHIP ════════════════════════ */
 .m-chip-allday{
   font-weight:700;color:#fff!important;
@@ -1533,6 +1640,29 @@ header{
 .ym-counts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .ym-count-tasks{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.12);color:var(--accent)}
 .ym-count-events{font-size:9px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.08);color:var(--accent-dim)}
+
+/* ══ HOLIDAY SCHEDULER ══════════════════════ */
+.holiday-year-section{margin-bottom:20px}
+.holiday-year-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px}
+.holiday-year-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--text)}
+.holiday-year-actions{display:flex;gap:6px}
+.holiday-action-btn{
+  font-size:11px;padding:4px 12px;border-radius:20px;border:1.5px solid var(--border);
+  background:none;color:var(--text3);font-weight:500;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.holiday-action-btn:hover{border-color:var(--accent);color:var(--accent)}
+.holiday-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border-radius:10px;cursor:pointer;transition:background .12s;
+  border:1px solid transparent;
+}
+.holiday-item:hover{background:var(--surface2)}
+.holiday-item.on{background:rgba(var(--accent-rgb),.06);border-color:rgba(var(--accent-rgb),.12)}
+.holiday-cb{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.holiday-info{display:flex;flex-direction:column;gap:1px}
+.holiday-name{font-size:13px;font-weight:500;color:var(--text)}
+.holiday-date{font-size:11px;color:var(--text3)}
 
 /* ══ SCHEDULE TAB TOGGLE ════════════════════ */
 .sched-seg-wrap{
@@ -1962,6 +2092,7 @@ header{
 }
 .wp-intention:focus{border-color:var(--accent)}
 .wp-intention::placeholder{color:var(--text3);font-style:italic}
+[data-dark="true"] .wp-intention{background:var(--surface2);border-color:var(--border)}
 @media(max-width:640px){
   .wp-grid{grid-template-columns:repeat(2,1fr)}
 }
@@ -2063,10 +2194,15 @@ header{
 /* In-overlay notification */
 .fo-notify{display:none;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:8px;border-left:3px solid var(--accent);background:var(--accent-pale);margin:6px 0;font-size:11px;color:var(--text);line-height:1.4;border-radius:0 8px 8px 0}
 .fo-notify.show{display:flex}
+.fo-notify-ok{background:var(--accent-pale)}
+.fo-notify-warn{background:rgba(245,158,11,.1)}
+.fo-notify-error{background:var(--red-pale)}
 .fo-notify-msg{flex:1}
 .fo-notify-x{border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;font-family:'DM Sans',sans-serif;flex-shrink:0}
 .fo-notify-x:hover{color:var(--text)}
-[data-dark="true"] .fo-notify{background:rgba(var(--accent-rgb),.1)}
+[data-dark="true"] .fo-notify-ok{background:rgba(var(--accent-rgb),.15)}
+[data-dark="true"] .fo-notify-warn{background:rgba(251,191,36,.12)}
+[data-dark="true"] .fo-notify-error{background:rgba(248,113,113,.12)}
 /* Completion state */
 .fo-complete-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:8px}
 .fo-complete-icon{margin-bottom:4px}
@@ -2110,7 +2246,7 @@ header{
 /* ══ MY ROUTINE ═══════════════════════════════════ */
 .routine-hero{
   background:var(--surface2);border-radius:12px;padding:12px 16px 10px;margin-bottom:14px;
-  display:flex;flex-direction:column;max-height:180px;min-height:0;
+  display:flex;flex-direction:column;max-height:220px;min-height:0;
 }
 .routine-hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;flex-shrink:0}
 .routine-hero-title{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text)}
@@ -2120,6 +2256,28 @@ header{
 .rt-hero-tab:last-child{border-right:none}
 .rt-hero-tab.on{color:var(--accent);background:var(--accent-pale)}
 [data-dark="true"] .rt-hero-tab.on{background:rgba(var(--accent-rgb),.15)}
+
+/* Day selector */
+.rt-day-selector{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;flex-shrink:0}
+.rt-day-btns{display:flex;gap:4px}
+.rt-day-btn{
+  width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);
+  background:none;color:var(--text3);font-size:12px;font-weight:600;
+  font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.rt-day-btn:hover{border-color:var(--accent);color:var(--accent)}
+.rt-day-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.rt-day-presets{display:flex;gap:4px;margin-left:2px}
+.rt-day-preset{
+  font-size:11px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);
+  background:none;color:var(--text3);font-weight:500;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.rt-day-preset:hover{border-color:var(--accent);color:var(--accent)}
+.rt-day-preset.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+[data-dark="true"] .rt-day-btn{border-color:var(--border)}
+[data-dark="true"] .rt-day-preset{border-color:var(--border)}
 
 /* Strip */
 .rt-strip-wrap{margin-bottom:4px;flex:1;display:flex;flex-direction:column;min-height:0}
@@ -2426,7 +2584,8 @@ header{
   /* ── Routine section mobile ── */
   .routine-hero{padding:14px 12px 10px}
   .routine-hero-title{font-size:16px}
-  .rt-hero-tab{font-size:10px;padding:5px 10px}
+  .rt-day-btn{width:26px;height:26px;font-size:11px}
+  .rt-day-preset{font-size:10px;padding:4px 9px}
   .routine-lower{flex-direction:column;gap:14px}
   .routine-instr{width:100%}
   .rt-bk{padding:9px 10px}

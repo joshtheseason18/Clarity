@@ -434,9 +434,11 @@ function switchScheduleTab(tab){
   document.getElementById('schedTabTasks').classList.toggle('active',tab==='tasks');
   document.getElementById('schedTabEvents').classList.toggle('active',tab==='events');
   document.getElementById('schedTabRoutine').classList.toggle('active',tab==='routine');
+  document.getElementById('schedTabHolidays').classList.toggle('active',tab==='holidays');
   document.getElementById('catTasksArea').style.display=tab==='tasks'?'':'none';
   document.getElementById('catEventsArea').style.display=tab==='events'?'flex':'none';
   document.getElementById('catRoutineArea').style.display=tab==='routine'?'flex':'none';
+  document.getElementById('catHolidaysArea').style.display=tab==='holidays'?'flex':'none';
   // Chips row: visible on tasks only
   const chipsRow=document.getElementById('catChips');
   if(chipsRow)chipsRow.style.display=tab==='tasks'?'flex':'none';
@@ -448,6 +450,7 @@ function switchScheduleTab(tab){
   if(evControls)evControls.style.display=tab==='events'?'flex':'none';
   if(tab==='events')renderEvents();
   else if(tab==='routine')renderRoutineList();
+  else if(tab==='holidays')renderHolidaysList();
   else renderCat();
 }
 let showPastEvents=false;
@@ -652,6 +655,27 @@ function expandedTasks(start,end){
   const out=[];const seen=new Set();
   tasks.forEach(t=>{
     if(t.scheduled&&t.date){
+      // ── Multi-day events: emit instance for each day in range ──
+      if(t.multiDay&&t.endDate){
+        const mdStart=fromDk(t.date);
+        const mdEnd=fromDk(t.endDate);
+        mdStart.setHours(0,0,0,0);mdEnd.setHours(23,59,59,999);
+        // Only process if ranges overlap
+        if(mdEnd>=s&&mdStart<=e){
+          const loopStart=new Date(Math.max(mdStart.getTime(),s.getTime()));
+          const loopEnd=new Date(Math.min(mdEnd.getTime(),e.getTime()));
+          const totalDays=Math.round((mdEnd-mdStart)/86400000)+1;
+          for(let d=new Date(loopStart);d<=loopEnd;d.setDate(d.getDate()+1)){
+            const ndk=dk(d);
+            const dayNum=Math.round((d-mdStart)/86400000)+1;
+            const key=t.id+'|'+ndk;
+            if(!seen.has(key)){seen.add(key);
+              out.push({...t,date:ndk,_instanceDate:ndk,_isMultiDay:true,_multiDayNum:dayNum,_multiDayTotal:totalDays,_multiDayStart:t.date,_multiDayEnd:t.endDate});
+            }
+          }
+        }
+        return; // skip normal single-day handling for multi-day events
+      }
       const td=fromDk(t.date);
       if(td>=s&&td<=e){
         const del=(t.deletedOccurrences||[]).includes(t.date);
@@ -665,7 +689,37 @@ function expandedTasks(start,end){
       }
       if(t.recur){
         let base=fromDk(t.date);
-        // Fast-forward: estimate starting i to skip past occurrences before range
+        const hasRecurDays=t.recurU==='week'&&t.recurDays&&t.recurDays.length>0;
+        if(hasRecurDays){
+          // Day-of-week recurrence: iterate by week intervals, emit on matching days
+          const baseDow=base.getDay();
+          // Find the Monday (or start) of the base week
+          const baseWeekStart=new Date(base);baseWeekStart.setDate(baseWeekStart.getDate()-baseDow);
+          let iStart=0;
+          const daysBetween=Math.floor((s-baseWeekStart)/(86400000));
+          if(daysBetween>0){const weekStep=t.recurN*7;iStart=Math.max(0,Math.floor(daysBetween/weekStep)-1);}
+          for(let i=iStart;i<=104;i++){
+            const weekStart=new Date(baseWeekStart);weekStart.setDate(weekStart.getDate()+t.recurN*7*i);
+            if(weekStart>e)break; // past end of range
+            for(const dow of t.recurDays){
+              const dayDate=new Date(weekStart);dayDate.setDate(dayDate.getDate()+dow);
+              if(dayDate<=base)continue; // skip before/on base date (base date already handled above)
+              if(dayDate>e)continue;
+              if(dayDate>=s){
+                const ndk=dk(dayDate);
+                const del2=(t.deletedOccurrences||[]).includes(ndk);
+                if(!del2){
+                  const key2=t.id+'|'+ndk;
+                  if(!seen.has(key2)){seen.add(key2);
+                    const doneOv2=(t.doneOverrides||[]).includes(ndk);
+                    out.push({...t,date:ndk,done:doneOv2,_virtual:true,_instanceDate:ndk});
+                  }
+                }
+              }
+            }
+          }
+        } else {
+        // Standard recurrence (day/week/month without recurDays)
         let iStart=1;
         const daysBetween=Math.floor((s-base)/(86400000));
         if(daysBetween>0){
@@ -689,6 +743,7 @@ function expandedTasks(start,end){
               }
             }
           }
+        }
         }
       }
     }
@@ -769,6 +824,7 @@ function renderAll(){
   else if(curView==='day')renderDay();
   else if(_scheduleTab==='events')renderEvents();
   else if(_scheduleTab==='routine')renderRoutineList();
+  else if(_scheduleTab==='holidays')renderHolidaysList();
   else renderCat();
   // Only render sidebar panels if sidebar is visible
   if(sidebarOpen){
@@ -904,7 +960,16 @@ function closeYearMonthPopup(){
 function showYearMonthSummary(type,y,mo){
   const mStart=new Date(y,mo,1),mEnd=new Date(y,mo,new Date(y,mo+1,0).getDate());
   const allItems=expandedTasks(mStart,mEnd);
-  const filtered=type==='event'?allItems.filter(t=>(t.type||'task')==='event'):allItems.filter(t=>(t.type||'task')==='task');
+  let filtered=type==='event'?allItems.filter(t=>(t.type||'task')==='event'):allItems.filter(t=>(t.type||'task')==='task');
+  // Deduplicate multi-day events (only show once, on their start date or first visible date)
+  const seenMdIds=new Set();
+  filtered=filtered.filter(t=>{
+    if(t._isMultiDay){
+      if(seenMdIds.has(t.id))return false;
+      seenMdIds.add(t.id);
+    }
+    return true;
+  });
   filtered.sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
   const label=type==='event'?'event':'task';
   const maxShow=8;
@@ -923,10 +988,15 @@ function showYearMonthSummary(type,y,mo){
     listHtml+=`<div class="ymp-group-hdr">${dayName}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()}</div>`;
     groups[dk2].forEach(t=>{
       const isEvent=(t.type||'task')==='event';
-      const cc=isEvent?eventColor(t.category):catColor(t.category);
-      const timeStr=t.allday?'All Day':t.time?fmtT(t.time):'';
+      const cc=isEvent?(t.eventColor||eventColor(t.category)):catColor(t.category);
+      let timeStr=t.allday?'All Day':t.time?fmtT(t.time):'';
+      if(t._isMultiDay){
+        const sd=fromDk(t._multiDayStart),ed=fromDk(t._multiDayEnd);
+        timeStr=`${MONTHS_S[sd.getMonth()]} ${sd.getDate()} – ${MONTHS_S[ed.getMonth()]} ${ed.getDate()}`;
+      }
       const badge=isEvent?'event':'task';
-      listHtml+=`<div class="ymp-item" onclick="closeYearMonthPopup();openEdit('${t.id}','${t._instanceDate||dk2}',event)">
+      const editDate=t._isMultiDay?t._multiDayStart:(t._instanceDate||dk2);
+      listHtml+=`<div class="ymp-item" onclick="closeYearMonthPopup();openEdit('${t.id}','${editDate}',event)">
         <span class="ymp-item-dot" style="background:${cc}"></span>
         <span class="ymp-item-name">${esc(t.name)}</span>
         <span class="ymp-item-badge ${badge}">${badge}</span>
@@ -986,9 +1056,17 @@ function renderMonth(){
     ].slice(0,5);
     let chips=sorted.map(t=>{
       const isEvent=(t.type||'task')==='event';
-      const cc=isEvent?eventColor(t.category):catColor(t.category);
+      const cc=isEvent?(t.eventColor||eventColor(t.category)):catColor(t.category);
       const isAllday=isEvent&&t.allday;
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||key);
+      // Multi-day event bar
+      if(t._isMultiDay){
+        const isFirst=t._multiDayNum===1;
+        const isLast=t._multiDayNum===t._multiDayTotal;
+        const rndL=isFirst?'4px':'0';const rndR=isLast?'4px':'0';
+        const label=isFirst?esc(t.name):'';
+        return`<span class="m-chip m-chip-multiday" style="background:${cc};border-radius:${rndL} ${rndR} ${rndR} ${rndL};color:#fff;border-left-color:${cc}" onclick="openEdit('${t.id}','${t._multiDayStart}',event)">${label||'&nbsp;'}</span>`;
+      }
       let c='m-chip'+(isDone?' done':'')+(isEvent?' m-chip-event':'')+(isAllday?' m-chip-allday':'');
       const priDot=!isEvent&&t.priority&&t.priority!=='none'?`<span class="m-chip-pri pri-${t.priority[0]}"></span>`:'';
       const timeStr=isAllday?`<span class="m-chip-time">All Day</span>`:t.time?`<span class="m-chip-time">${fmtT(t.time)}</span>`:'';
@@ -1215,9 +1293,29 @@ function renderWeek(){
   const eventsByDay={};
   days.forEach(d=>{
     const k=dk(d);
-    eventsByDay[k]=tasksOn(k).filter(t=>(t.type||'task')==='event');
+    eventsByDay[k]=tasksOn(k).filter(t=>(t.type||'task')==='event'&&!t._isMultiDay);
   });
-  const hasAnyEvents=days.some(d=>eventsByDay[dk(d)].length>0);
+  // Collect multi-day events visible this week
+  const weekStart=days[0],weekEnd=days[days.length-1];
+  const wkMultiDay=[];
+  const seenMd=new Set();
+  days.forEach(d=>{
+    const k=dk(d);
+    tasksOn(k).filter(t=>t._isMultiDay).forEach(t=>{
+      if(seenMd.has(t.id))return;seenMd.add(t.id);
+      const mdS=fromDk(t._multiDayStart),mdE=fromDk(t._multiDayEnd);
+      const visStart=Math.max(mdS.getTime(),weekStart.getTime());
+      const visEnd=Math.min(mdE.getTime(),weekEnd.getTime());
+      const startCol=days.findIndex(dd=>dk(dd)===dk(new Date(visStart)));
+      const endCol=days.findIndex(dd=>dk(dd)===dk(new Date(visEnd)));
+      if(startCol>=0&&endCol>=0){
+        wkMultiDay.push({...t,_visStartCol:startCol,_visEndCol:endCol,
+          _isFirst:dk(new Date(visStart))===t._multiDayStart,
+          _isLast:dk(new Date(visEnd))===t._multiDayEnd});
+      }
+    });
+  });
+  const hasAnyEvents=days.some(d=>eventsByDay[dk(d)].length>0)||wkMultiDay.length>0;
   let alldayRowHtml='';
   if(hasAnyEvents){
     alldayRowHtml=`<div class="wk-allday-row">`;
@@ -1232,6 +1330,20 @@ function renderWeek(){
       alldayRowHtml+=`<div class="wk-allday-cell">${pills}</div>`;
     });
     alldayRowHtml+=`</div>`;
+    // Multi-day spanning bars
+    if(wkMultiDay.length){
+      alldayRowHtml+=`<div class="wk-multiday-row" style="grid-template-columns:${gridCols}">`;
+      alldayRowHtml+=`<div class="wk-allday-gutter"></div>`;
+      // Use grid placement for each multi-day bar
+      wkMultiDay.forEach(md=>{
+        const cc=md.eventColor||eventColor(md.category);
+        const span=md._visEndCol-md._visStartCol+1;
+        const rndL=md._isFirst?'8px':'0';const rndR=md._isLast?'8px':'0';
+        const label=md._visStartCol===0||md._isFirst?esc(md.name):'';
+        alldayRowHtml+=`<div class="wk-multiday-bar" style="grid-column:${md._visStartCol+2}/span ${span};background:${cc};border-radius:${rndL} ${rndR} ${rndR} ${rndL}" onclick="openEdit('${md.id}','${md._multiDayStart}',event)" title="${esc(md.name)} · ${md._multiDayStart} to ${md._multiDayEnd}">${label?`<span>${label}</span>`:''}</div>`;
+      });
+      alldayRowHtml+=`</div>`;
+    }
   }
   document.getElementById('weekAlldayRow').innerHTML=alldayRowHtml;
 
@@ -1499,12 +1611,13 @@ function renderDay(){
   if(alldayBar){
     if(_alldayTasks.length){
       alldayBar.innerHTML=_alldayTasks.map(t=>{
-        const cc=eventColor(t.category);
+        const cc=t.eventColor||eventColor(t.category);
         const isDone=t.done;
+        const mdBadge=t._isMultiDay?` · Day ${t._multiDayNum} of ${t._multiDayTotal}`:'';
         return`<span class="allday-pill${isDone?' done':''}" style="background:${cc};border-color:${cc};color:#fff"
-          onclick="openEdit('${t.id}','${key}',event)" title="Click to edit">
+          onclick="openEdit('${t.id}','${t._multiDayStart||key}',event)" title="Click to edit">
           <span class="allday-pill-type">Event</span>
-          ${esc(t.name)}${t.recur?' ↻':''} · All Day
+          ${esc(t.name)}${t.recur?' ↻':''} · All Day${mdBadge}
           <span class="allday-pill-edit">✎</span>
         </span>`;
       }).join('');
@@ -1577,8 +1690,36 @@ function renderDay(){
 
   // Routine block lookup
   const routineBands=getRoutineForDay(key);
+  const allDayRoutines=getAllRoutinesForDay(key);
   function routineAt(slotTime){
     return routineBands.find(b=>slotTime>=b.start&&slotTime<b.end)||null;
+  }
+  // ── Routine chips (skip/unskip) ──
+  const chipsEl=document.getElementById('dayRoutineChips');
+  const daySuppressed=isRoutineSuppressed(key);
+  if(chipsEl){
+    if(allDayRoutines.length){
+      chipsEl.innerHTML=allDayRoutines.map(b=>{
+        const idx=routineBlocks.indexOf(b);
+        const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+        const isSkipped=(b.skipDates||[]).includes(key);
+        const isBlocked=b.schedulable!==undefined?!b.schedulable:!rt.schedulable;
+        const isSup=daySuppressed&&isBlocked&&!isSkipped;
+        const label=esc(b.customName||rt.label);
+        const timeRange=fmtT(b.start)+' – '+fmtT(b.end);
+        if(isSkipped){
+          return`<div class="day-rt-chip skipped" style="--chip-color:${rt.color}"><span class="day-rt-chip-dot" style="background:${rt.color}"></span><span class="day-rt-chip-name">${label}</span><span class="day-rt-chip-time">${timeRange}</span><button class="day-rt-chip-btn undo" onclick="unskipRoutineToday(${idx},'${key}')" title="Undo skip">Undo</button></div>`;
+        }
+        if(isSup){
+          return`<div class="day-rt-chip skipped" style="--chip-color:${rt.color}"><span class="day-rt-chip-dot" style="background:${rt.color}"></span><span class="day-rt-chip-name">${label}</span><span class="day-rt-chip-time">${timeRange}</span><span class="day-rt-chip-badge">paused</span></div>`;
+        }
+        return`<div class="day-rt-chip" style="--chip-color:${rt.color}"><span class="day-rt-chip-dot" style="background:${rt.color}"></span><span class="day-rt-chip-name">${label}</span><span class="day-rt-chip-time">${timeRange}</span><button class="day-rt-chip-btn" onclick="skipRoutineToday(${idx},'${key}')" title="Skip today">Skip</button></div>`;
+      }).join('');
+      chipsEl.style.display='';
+    } else {
+      chipsEl.innerHTML='';
+      chipsEl.style.display='none';
+    }
   }
 
   // ── Build slot grid: consistent heights, NO task blocks, NO inline labels ──
@@ -1985,7 +2126,17 @@ function onRoutineTypeChange(){
   if(toggle)toggle.classList.toggle('on',rt.schedulable||false);
 }
 
-let _routineStripTab='all';
+let _routineStripDay=new Date().getDay(); // 0=Sun..6=Sat
+let _routineStripMode='day'; // 'day','weekdays','weekends'
+
+function setRoutineStripDay(d){_routineStripMode='day';_routineStripDay=d;renderRoutineList();}
+function setRoutineStripPreset(mode){_routineStripMode=mode;renderRoutineList();}
+
+function _routineStripActiveDays(){
+  if(_routineStripMode==='weekdays')return[1,2,3,4,5];
+  if(_routineStripMode==='weekends')return[0,6];
+  return[_routineStripDay];
+}
 
 function renderRoutineList(){
   const el=document.getElementById('routineList');if(!el)return;
@@ -2019,28 +2170,22 @@ function renderRoutineList(){
     </div>`;
     return;
   }
-  // ── Group blocks by day pattern for tabs ──
-  function dayPK(days){return days.slice().sort((a,b)=>a-b).join(',')}
-  function dayPLabel(days){
-    const s=days.slice().sort((a,b)=>a-b);
-    if(s.length===7)return'Every day';if(s.join(',')==='1,2,3,4,5')return'Weekdays';if(s.join(',')==='0,6')return'Weekends';
-    if(s.length===1)return['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][s[0]];
-    return s.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ');
+  // ── Day selector buttons ──
+  const dayLetters=['S','M','T','W','T','F','S'];
+  const activeDays=_routineStripActiveDays();
+  let tabsHtml=`<div class="rt-day-selector">`;
+  tabsHtml+=`<div class="rt-day-btns">`;
+  for(let d=0;d<7;d++){
+    const isOn=_routineStripMode==='day'&&_routineStripDay===d;
+    tabsHtml+=`<button class="rt-day-btn${isOn?' on':''}" onclick="setRoutineStripDay(${d})">${dayLetters[d]}</button>`;
   }
-  const patMap=new Map();
-  routineBlocks.forEach(b=>{const pk=dayPK(b.days);if(!patMap.has(pk))patMap.set(pk,{days:b.days,label:dayPLabel(b.days),blocks:[]});patMap.get(pk).blocks.push(b);});
-  const patterns=[...patMap.entries()];
-  if(_routineStripTab!=='all'&&!patMap.has(_routineStripTab))_routineStripTab=patterns[0]?.[0]||'all';
-  if(patterns.length===1)_routineStripTab=patterns[0][0];
-  // ── Tabs ──
-  let tabsHtml='';
-  if(patterns.length>1){
-    tabsHtml=`<div class="rt-hero-tabs">`;
-    patterns.forEach(([pk,grp])=>{tabsHtml+=`<button class="rt-hero-tab${_routineStripTab===pk?' on':''}" onclick="_routineStripTab='${pk}';renderRoutineList()">${esc(grp.label)}</button>`;});
-    tabsHtml+=`</div>`;
-  }
-  // ── Strip blocks ──
-  const activeBlocks=_routineStripTab==='all'?routineBlocks:patMap.get(_routineStripTab)?.blocks||routineBlocks;
+  tabsHtml+=`</div>`;
+  tabsHtml+=`<div class="rt-day-presets">`;
+  tabsHtml+=`<button class="rt-day-preset${_routineStripMode==='weekdays'?' on':''}" onclick="setRoutineStripPreset('weekdays')">Weekdays</button>`;
+  tabsHtml+=`<button class="rt-day-preset${_routineStripMode==='weekends'?' on':''}" onclick="setRoutineStripPreset('weekends')">Weekends</button>`;
+  tabsHtml+=`</div></div>`;
+  // ── Strip blocks — show blocks active on selected day(s) ──
+  const activeBlocks=routineBlocks.filter(b=>activeDays.some(d=>b.days.includes(d)));
   let stripHtml='';
   activeBlocks.slice().sort((a,b)=>a.start.localeCompare(b.start)).forEach(b=>{
     const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
@@ -2067,7 +2212,8 @@ function renderRoutineList(){
     return`<div class="rt-bk" onclick="editRoutine(${i})"><div class="rt-bk-bar" style="background:${rt.color}"></div><div class="rt-bk-info"><div class="rt-bk-name">${esc(b.customName||rt.label)}</div><div class="rt-bk-meta"><span>${fmtT(b.start)} – ${fmtT(b.end)}</span>${badge}<span class="rt-bk-days">${ds}</span></div></div><button class="rt-bk-del" onclick="event.stopPropagation();delRoutine(${i})" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div>`;
   }).join('');
 
-  el.innerHTML=`<div class="routine-hero"><div class="routine-hero-top"><div class="routine-hero-title">My Routine</div>${tabsHtml}</div>
+  el.innerHTML=`<div class="routine-hero"><div class="routine-hero-top"><div class="routine-hero-title">My Routine</div></div>
+    ${tabsHtml}
     <div class="rt-strip-wrap"><div class="rt-strip">${stripHtml}</div>
     <div class="rt-strip-times"><span>12am</span><span>3am</span><span>6am</span><span>9am</span><span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span></div></div></div>
     <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>
@@ -2112,8 +2258,11 @@ function editRoutine(idx){
 }
 function saveRoutineFromModal(){
   const validated=validateRoutineInput(_routineEditIdx);if(!validated)return;
-  if(_routineEditIdx>=0){routineBlocks[_routineEditIdx]=validated;showToast('Routine block updated');}
-  else{routineBlocks.push(validated);showToast('Routine block added');}
+  if(_routineEditIdx>=0){
+    validated.skipDates=routineBlocks[_routineEditIdx].skipDates||[];
+    routineBlocks[_routineEditIdx]=validated;showToast('Routine block updated');
+  }
+  else{validated.skipDates=[];routineBlocks.push(validated);showToast('Routine block added');}
   saveRoutine();renderRoutineList();closeRoutineModal();
 }
 
@@ -2189,7 +2338,42 @@ function delRoutine(i){routineBlocks.splice(i,1);saveRoutine();renderRoutineList
 function getRoutineForDay(dateKey){
   const d=fromDk(dateKey);
   const dow=d.getDay();
+  const isSuppressed=_hasSuppressingEvent(dateKey);
+  return routineBlocks.filter(b=>{
+    if(!b.days.includes(dow))return false;
+    if((b.skipDates||[]).includes(dateKey))return false;
+    // If suppressed by an event, exclude blocked (non-schedulable) routines
+    if(isSuppressed){
+      const rt=ROUTINE_TYPES[b.type]||ROUTINE_TYPES.custom;
+      const isSchedulable=b.schedulable!==undefined?b.schedulable:rt.schedulable;
+      if(!isSchedulable)return false;
+    }
+    return true;
+  });
+}
+function _hasSuppressingEvent(dateKey){
+  return tasks.some(t=>{
+    if(!t.scheduled||t.type!=='event'||!t.allday||!t.suppressRoutines)return false;
+    if(t.multiDay&&t.endDate){return dateKey>=t.date&&dateKey<=t.endDate;}
+    return t.date===dateKey;
+  });
+}
+function getAllRoutinesForDay(dateKey){
+  const d=fromDk(dateKey);
+  const dow=d.getDay();
   return routineBlocks.filter(b=>b.days.includes(dow));
+}
+function isRoutineSuppressed(dateKey){return _hasSuppressingEvent(dateKey);}
+function skipRoutineToday(routineIdx,dateKey){
+  const b=routineBlocks[routineIdx];if(!b)return;
+  if(!b.skipDates)b.skipDates=[];
+  if(!b.skipDates.includes(dateKey))b.skipDates.push(dateKey);
+  saveRoutine();renderAll();
+}
+function unskipRoutineToday(routineIdx,dateKey){
+  const b=routineBlocks[routineIdx];if(!b)return;
+  b.skipDates=(b.skipDates||[]).filter(d=>d!==dateKey);
+  saveRoutine();renderAll();
 }
 function routineContextStr(dateKey){
   const blocks=getRoutineForDay(dateKey);
@@ -2451,9 +2635,10 @@ function showFocusNotification(msg,type){
     else if(card)card.insertBefore(el,card.children[3]||null);
   }
   const colorMap={ok:'var(--accent)',warn:'var(--amber-warn)',error:'var(--red)'};
-  const bgMap={ok:'var(--accent-pale)',warn:'rgba(245,158,11,.1)',error:'var(--red-pale)'};
   el.style.borderLeftColor=colorMap[type]||colorMap.ok;
-  el.style.background=bgMap[type]||bgMap.ok;
+  // Use class-based backgrounds so dark mode CSS overrides work
+  el.classList.remove('fo-notify-ok','fo-notify-warn','fo-notify-error');
+  el.classList.add('fo-notify-'+(type||'ok'));
   el.innerHTML=`<span class="fo-notify-msg">${msg}</span><button class="fo-notify-x" onclick="dismissFocusNotification()">✕</button>`;
   el.classList.add('show');
   clearTimeout(_foNotifyTimer);
@@ -3497,7 +3682,7 @@ function inlineRename(el,id,isBd){
   const orig=el.textContent;
   const input=document.createElement('input');
   input.value=orig;
-  input.style.cssText='width:100%;padding:2px 6px;border:1.5px solid var(--accent);border-radius:5px;font-family:inherit;font-size:12px;font-weight:500;color:var(--text);background:var(--bg);outline:none;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)';
+  input.style.cssText='width:100%;padding:2px 6px;border:1.5px solid var(--accent);border-radius:5px;font-family:inherit;font-size:12px;font-weight:500;color:var(--text);background:var(--surface2);outline:none;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)';
   el.textContent='';
   el.appendChild(input);
   input.focus();input.select();
@@ -3720,6 +3905,21 @@ let dragBdId=null,dragTaskId=null,dragInstanceDate=null;
 function _setDragActive(on){
   const tl=document.getElementById('dayTimeline');if(tl)tl.classList.toggle('drag-active',on);
   const wg=document.getElementById('weekGrid');if(wg)wg.classList.toggle('drag-active',on);
+  if(on){
+    // Defer: let browser initiate the drag first, then disable non-dragged blocks
+    setTimeout(()=>{
+      document.querySelectorAll('.day-task-block,.wk-task-block').forEach(el=>{
+        if(!el.closest('.dragging-task')&&!el.classList.contains('dragging-task')){
+          el.style.pointerEvents='none';
+        }
+      });
+    },50);
+  } else {
+    // Restore all pointer-events
+    document.querySelectorAll('.day-task-block,.wk-task-block').forEach(el=>{
+      el.style.pointerEvents='all';
+    });
+  }
 }
 function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
 function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
@@ -4258,7 +4458,33 @@ function durToMin(lbl){
 let mMode=null,mDate=null,mTime=null,mId=null,mInstanceDate=null;
 let _editOrigSubtasks=[];  // snapshot taken at openEdit; restored on cancel
 let _modalCommitted=false; // set true by saveTask so closeModal knows not to restore
-function toggleRecurUI(){document.getElementById('recurOpts').style.display=document.getElementById('fRecurOn').checked?'flex':'none'}
+function toggleRecurUI(){
+  const on=document.getElementById('fRecurOn').checked;
+  document.getElementById('recurOpts').style.display=on?'flex':'none';
+  onRecurUnitChange();
+}
+function onRecurUnitChange(){
+  const on=document.getElementById('fRecurOn').checked;
+  const unit=document.getElementById('fRecurU').value;
+  const row=document.getElementById('recurDaysRow');
+  if(row)row.style.display=(on&&unit==='week')?'flex':'none';
+}
+function toggleRecurDay(btn,d){
+  btn.classList.toggle('on');
+  // Ensure at least one day is selected
+  const allBtns=document.querySelectorAll('#recurDaysBtns .recur-day-btn');
+  const anyOn=[...allBtns].some(b=>b.classList.contains('on'));
+  if(!anyOn)btn.classList.add('on');
+}
+function getRecurDays(){
+  const btns=document.querySelectorAll('#recurDaysBtns .recur-day-btn');
+  const days=[];btns.forEach((b,i)=>{if(b.classList.contains('on'))days.push(i);});
+  return days;
+}
+function setRecurDays(days){
+  const btns=document.querySelectorAll('#recurDaysBtns .recur-day-btn');
+  btns.forEach((b,i)=>b.classList.toggle('on',days.includes(i)));
+}
 // ══ ITEM TYPE (task vs event) ════════════════════
 let _itemType='task';
 let _modalSubtasks=[];
@@ -4282,6 +4508,11 @@ function setItemType(type){
 }
 
 let _modalAllday=false;
+let _modalMultiDay=false;
+let _modalEventColor='';
+let _modalSuppressRoutines=false;
+const EVENT_COLORS=['#8b5cf6','#3b82f6','#10b981','#f59e0b','#ef4444','#ec4899'];
+
 function setAlldayModal(val){
   _modalAllday=val;
   const tog=document.getElementById('fAlldayToggle');
@@ -4289,6 +4520,13 @@ function setAlldayModal(val){
   // Hide duration when all-day
   const durWrap=document.querySelector('.dur-spinner-row')?.closest('.fg');
   if(durWrap)durWrap.style.display=val?'none':'';
+  // Show/hide multi-day toggle
+  const mdWrap=document.getElementById('fMultiDayWrap');
+  if(mdWrap)mdWrap.style.display=val?'':'none';
+  // Show/hide suppress routines toggle
+  const supWrap=document.getElementById('fSuppressWrap');
+  if(supWrap)supWrap.style.display=val?'':'none';
+  if(!val){setMultiDayModal(false);setSuppressModal(false);}
   // Update modal subtitle — remove time when all-day
   const subEl=document.getElementById('mSub');
   if(subEl&&mDate){
@@ -4298,6 +4536,41 @@ function setAlldayModal(val){
   }
 }
 function toggleAlldayModal(){setAlldayModal(!_modalAllday);}
+
+function setMultiDayModal(val){
+  _modalMultiDay=val;
+  const tog=document.getElementById('fMultiDayToggle');
+  if(tog)tog.classList.toggle('on',val);
+  const datesRow=document.getElementById('fMultiDayDates');
+  const colorWrap=document.getElementById('fEventColorWrap');
+  if(datesRow)datesRow.style.display=val?'':'none';
+  if(colorWrap)colorWrap.style.display=val?'':'none';
+  if(val){
+    // Default start to current mDate, end to mDate+1
+    const startEl=document.getElementById('fMultiStart');
+    const endEl=document.getElementById('fMultiEnd');
+    if(startEl&&!startEl.value)startEl.value=mDate||dk(new Date());
+    if(endEl&&!endEl.value){
+      const d=fromDk(mDate||dk(new Date()));d.setDate(d.getDate()+1);
+      endEl.value=dk(d);
+    }
+    renderEventColorPicker();
+  }
+}
+function toggleMultiDayModal(){setMultiDayModal(!_modalMultiDay);}
+
+function renderEventColorPicker(){
+  const row=document.getElementById('fEventColorRow');if(!row)return;
+  row.innerHTML=EVENT_COLORS.map(c=>`<button class="event-color-swatch${_modalEventColor===c?' on':''}" style="background:${c}" onclick="pickEventColor('${c}')"></button>`).join('');
+}
+function pickEventColor(c){_modalEventColor=c;renderEventColorPicker();}
+
+function setSuppressModal(val){
+  _modalSuppressRoutines=val;
+  const tog=document.getElementById('fSuppressToggle');
+  if(tog)tog.classList.toggle('on',val);
+}
+function toggleSuppressModal(){setSuppressModal(!_modalSuppressRoutines);}
 
 // ══ MODAL DETAIL TABS ═══════════════════════════
 let _activeDetailTab='notes';
@@ -4629,6 +4902,7 @@ function onSpDragEnd(e){e.target.classList.remove('sp-dragging');document.queryS
 function openNew(dateKey,time){
   mMode='new';mDate=dateKey;mTime=time;mId=null;mInstanceDate=null;
   _itemType='task';_modalSubtasks=[];_modalAllday=false;
+  _modalMultiDay=false;_modalEventColor='';_modalSuppressRoutines=false;
   setItemType('task');
   document.getElementById('mTitle').textContent='New Task';
   const d=fromDk(dateKey);
@@ -4644,6 +4918,15 @@ function openNew(dateKey,time){
   document.getElementById('fRecurN').value=1;
   document.getElementById('fRecurU').value='day';
   document.getElementById('recurOpts').style.display='none';
+  document.getElementById('recurDaysRow').style.display='none';
+  setRecurDays([]);
+  // Reset multi-day fields
+  document.getElementById('fMultiStart').value='';
+  document.getElementById('fMultiEnd').value='';
+  document.getElementById('fMultiDayDates').style.display='none';
+  document.getElementById('fMultiDayWrap').style.display='none';
+  document.getElementById('fEventColorWrap').style.display='none';
+  const mdTog=document.getElementById('fMultiDayToggle');if(mdTog)mdTog.classList.remove('on');
   document.getElementById('btnDel').style.display='none';
   const stEl=document.getElementById('fStartTime');if(stEl)stEl.value=time;
   setDurSpinner(30);
@@ -4691,6 +4974,30 @@ function openEdit(id,instanceDate,e){
   document.getElementById('fRecurN').value=t.recurN||1;
   document.getElementById('fRecurU').value=t.recurU||'day';
   document.getElementById('recurOpts').style.display=t.recur?'flex':'none';
+  // Recur day-of-week buttons
+  if(t.recur&&t.recurU==='week'&&t.recurDays&&t.recurDays.length){
+    setRecurDays(t.recurDays);
+    document.getElementById('recurDaysRow').style.display='flex';
+  } else {
+    setRecurDays([]);
+    document.getElementById('recurDaysRow').style.display='none';
+  }
+  // Multi-day fields
+  _modalMultiDay=!!(t.multiDay);
+  _modalEventColor=t.eventColor||'';
+  if(_itemType==='event'&&_modalAllday){
+    setMultiDayModal(_modalMultiDay);
+    if(_modalMultiDay){
+      document.getElementById('fMultiStart').value=t.date||'';
+      document.getElementById('fMultiEnd').value=t.endDate||'';
+    }
+  } else {
+    setMultiDayModal(false);
+  }
+  // Suppress routines
+  _modalSuppressRoutines=!!(t.suppressRoutines);
+  if(_itemType==='event'&&_modalAllday){setSuppressModal(_modalSuppressRoutines);}
+  else{setSuppressModal(false);}
   document.getElementById('btnDel').style.display='block';
   const stEl2=document.getElementById('fStartTime');if(stEl2)stEl2.value=t.time||'09:00';
   setDurSpinner(t.duration||30);
@@ -4780,6 +5087,7 @@ function saveTask(){
   const name=document.getElementById('fName').value.trim();if(!name){document.getElementById('fName').focus();return}
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
   const recur=document.getElementById('fRecurOn').checked,recurN=parseInt(document.getElementById('fRecurN').value)||1,recurU=document.getElementById('fRecurU').value;
+  const recurDays=(recur&&recurU==='week')?getRecurDays():[];
   const duration=_selDur||30;
   const location=document.getElementById('fLocation').value.trim();
   const type=_itemType;
@@ -4788,8 +5096,29 @@ function saveTask(){
   const allday=_itemType==='event'&&_modalAllday;
   const startTimeVal=document.getElementById('fStartTime').value||mTime;
   const finalTime=allday?null:startTimeVal;
-  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,subtasks,doneOverrides:[],deletedOccurrences:[]});}
-  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,subtasks});}
+  // Multi-day event fields
+  let multiDay=false,endDate='',eventColor='';
+  if(allday&&_modalMultiDay){
+    const msVal=document.getElementById('fMultiStart').value;
+    const meVal=document.getElementById('fMultiEnd').value;
+    if(!msVal||!meVal){showToast('Set start and end dates');return;}
+    if(meVal<msVal){showToast('End date must be on or after start date');return;}
+    multiDay=true;
+    mDate=msVal; // override date to multi-day start
+    endDate=meVal;
+    eventColor=_modalEventColor||'';
+  }
+  const suppressRoutines=allday&&_modalSuppressRoutines;
+  // Check blocked routine before saving
+  if(finalTime&&type==='task'){
+    const dateKey=mMode==='new'?mDate:(tasks.find(t=>t.id===mId)?.date||mDate);
+    const rBlock=isBlockedByRoutine(dateKey,finalTime);
+    if(rBlock.blocked){
+      if(!confirm(`${rBlock.routineName} blocks ${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)}.\n\nSchedule here anyway?`))return;
+    }
+  }
+  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
+  else{const t=tasks.find(t=>t.id===mId);if(t)Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});if(t&&multiDay)t.date=mDate;}
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){
@@ -4842,11 +5171,158 @@ function showUndoToast(msg,undoFn){
 }
 
 
+// ══ HOLIDAY SCHEDULER ═══════════════════════════
+const US_HOLIDAYS={
+  2026:[
+    {name:"New Year's Day",date:'2026-01-01'},
+    {name:'Martin Luther King Jr. Day',date:'2026-01-19'},
+    {name:"Presidents' Day",date:'2026-02-16'},
+    {name:'Memorial Day',date:'2026-05-25'},
+    {name:'Independence Day',date:'2026-07-04'},
+    {name:'Labor Day',date:'2026-09-07'},
+    {name:'Columbus Day',date:'2026-10-12'},
+    {name:"Veterans Day",date:'2026-11-11'},
+    {name:'Thanksgiving Day',date:'2026-11-26'},
+    {name:'Day After Thanksgiving',date:'2026-11-27'},
+    {name:'Christmas Day',date:'2026-12-25'},
+  ],
+  2027:[
+    {name:"New Year's Day",date:'2027-01-01'},
+    {name:'Martin Luther King Jr. Day',date:'2027-01-18'},
+    {name:"Presidents' Day",date:'2027-02-15'},
+    {name:'Memorial Day',date:'2027-05-31'},
+    {name:'Independence Day',date:'2027-07-04'},
+    {name:'Labor Day',date:'2027-09-06'},
+    {name:'Columbus Day',date:'2027-10-11'},
+    {name:"Veterans Day",date:'2027-11-11'},
+    {name:'Thanksgiving Day',date:'2027-11-25'},
+    {name:'Day After Thanksgiving',date:'2027-11-26'},
+    {name:'Christmas Day',date:'2027-12-25'},
+  ]
+};
+
+let _enabledHolidays=[];
+try{_enabledHolidays=JSON.parse(localStorage.getItem('clarity_holidays')||'[]')}catch{_enabledHolidays=[]}
+function saveHolidays(){try{localStorage.setItem('clarity_holidays',JSON.stringify(_enabledHolidays))}catch(e){console.error(e)}}
+
+function ensureHolidayCategory(){
+  if(!categories.find(c=>c.id==='holiday')){
+    categories.push({id:'holiday',name:'Holiday',color:'#ef4444'});
+    save();
+  }
+}
+
+function isHolidayEnabled(name,date){
+  return _enabledHolidays.some(h=>h.name===name&&h.date===date);
+}
+
+function toggleHoliday(name,date){
+  if(isHolidayEnabled(name,date)){
+    // Remove holiday event
+    _enabledHolidays=_enabledHolidays.filter(h=>!(h.name===name&&h.date===date));
+    tasks=tasks.filter(t=>!(t._holidayId===name&&t.date===date));
+  } else {
+    // Add holiday event
+    ensureHolidayCategory();
+    _enabledHolidays.push({name,date});
+    tasks.push({
+      id:genId(),name:'\u{1F1FA}\u{1F1F8} '+name,type:'event',date,time:null,
+      allday:true,suppressRoutines:true,_holidayId:name,
+      category:'holiday',priority:'none',notes:'',location:'',
+      duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
+      subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
+      multiDay:false,endDate:'',eventColor:'',recurDays:[]
+    });
+  }
+  saveHolidays();save();renderHolidaysList();renderAll();
+}
+
+function selectAllHolidays(year){
+  const list=US_HOLIDAYS[year]||[];
+  let changed=false;
+  list.forEach(h=>{
+    if(!isHolidayEnabled(h.name,h.date)){
+      ensureHolidayCategory();
+      _enabledHolidays.push({name:h.name,date:h.date});
+      tasks.push({
+        id:genId(),name:'\u{1F1FA}\u{1F1F8} '+h.name,type:'event',date:h.date,time:null,
+        allday:true,suppressRoutines:true,_holidayId:h.name,
+        category:'holiday',priority:'none',notes:'',location:'',
+        duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
+        subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
+        multiDay:false,endDate:'',eventColor:'',recurDays:[]
+      });
+      changed=true;
+    }
+  });
+  if(changed){saveHolidays();save();renderHolidaysList();renderAll();}
+}
+function clearAllHolidays(year){
+  const list=US_HOLIDAYS[year]||[];
+  let changed=false;
+  list.forEach(h=>{
+    if(isHolidayEnabled(h.name,h.date)){
+      _enabledHolidays=_enabledHolidays.filter(x=>!(x.name===h.name&&x.date===h.date));
+      tasks=tasks.filter(t=>!(t._holidayId===h.name&&t.date===h.date));
+      changed=true;
+    }
+  });
+  if(changed){saveHolidays();save();renderHolidaysList();renderAll();}
+}
+
+function renderHolidaysList(){
+  const el=document.getElementById('holidaysList');if(!el)return;
+  const now=new Date();
+  const curYear=now.getFullYear();
+  const years=[curYear,curYear+1];
+  let html='';
+  years.forEach(year=>{
+    const list=US_HOLIDAYS[year];if(!list)return;
+    html+=`<div class="holiday-year-section">`;
+    html+=`<div class="holiday-year-hdr"><span class="holiday-year-title">${year} US Federal Holidays</span>
+      <div class="holiday-year-actions">
+        <button class="holiday-action-btn" onclick="selectAllHolidays(${year})">Select All</button>
+        <button class="holiday-action-btn" onclick="clearAllHolidays(${year})">Clear All</button>
+      </div></div>`;
+    list.forEach(h=>{
+      const d=fromDk(h.date);
+      const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      const monthName=MONTHS_S[d.getMonth()];
+      const on=isHolidayEnabled(h.name,h.date);
+      html+=`<label class="holiday-item${on?' on':''}">
+        <input type="checkbox" class="holiday-cb" ${on?'checked':''} onchange="toggleHoliday('${h.name.replace(/'/g,"\\'")}','${h.date}')">
+        <div class="holiday-info">
+          <span class="holiday-name">${h.name}</span>
+          <span class="holiday-date">${dayName}, ${monthName} ${d.getDate()}</span>
+        </div>
+      </label>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`<div style="text-align:center;padding:16px 0"><button class="routine-add-btn" onclick="openNewHolidayEvent()">+ Add custom day off</button></div>`;
+  el.innerHTML=html;
+}
+
+function openNewHolidayEvent(){
+  ensureHolidayCategory();
+  openNew(dk(new Date()),'09:00');
+  // Pre-set as event, all-day, suppress routines
+  setItemType('event');
+  _modalAllday=true;
+  setAlldayModal(true);
+  _modalSuppressRoutines=true;
+  setSuppressModal(true);
+  buildAllCatSelects('holiday');
+  document.getElementById('fCat').value='holiday';
+  document.getElementById('mTitle').textContent='New Day Off';
+}
+
 // ══ EXPORT / IMPORT ═════════════════════════════
 function exportData(){
   const data={
     tasks,brainDump,categories,
     routineBlocks,monthNotes,monthPlans,
+    holidays:_enabledHolidays,
     username:localStorage.getItem('clarity_username')||'',
     journal:JSON.parse(localStorage.getItem('clarity_journal')||'{}'),
     theme:currentTheme,dark:isDark,military:useMilitary,
@@ -4874,6 +5350,7 @@ function importData(e){
       if(data.dark!==undefined)applyDark(data.dark);
       if(data.military!==undefined)setTimeFormat(data.military);
       if(data.routineBlocks){routineBlocks=data.routineBlocks;saveRoutine();renderRoutineList();}
+      if(data.holidays){_enabledHolidays=data.holidays;saveHolidays();}
       if(data.monthNotes){monthNotes=data.monthNotes;saveMonthNotesData();}
       if(data.monthPlans){monthPlans=data.monthPlans;saveMonthPlans();}
       if(data.weekStartDay!==undefined)setWeekStart(data.weekStartDay);
