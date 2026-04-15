@@ -3962,22 +3962,15 @@ let dragBdId=null,dragTaskId=null,dragInstanceDate=null;
 function _setDragActive(on){
   const tl=document.getElementById('dayTimeline');if(tl)tl.classList.toggle('drag-active',on);
   const wg=document.getElementById('weekGrid');if(wg)wg.classList.toggle('drag-active',on);
-  if(on){
-    // Defer: let browser initiate the drag first, then disable non-dragged blocks
-    setTimeout(()=>{
-      document.querySelectorAll('.day-task-block,.wk-task-block').forEach(el=>{
-        if(!el.closest('.dragging-task')&&!el.classList.contains('dragging-task')){
-          el.style.pointerEvents='none';
-        }
-      });
-    },50);
-  } else {
-    // Restore all pointer-events
-    document.querySelectorAll('.day-task-block,.wk-task-block').forEach(el=>{
-      el.style.pointerEvents='all';
-    });
-  }
+  // Pure CSS handles pointer-events via .drag-active — no inline style manipulation needed
 }
+// Safety net: if any drag ends without proper cleanup, reset everything
+document.addEventListener('dragend',function(){
+  document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));
+  const tl=document.getElementById('dayTimeline');if(tl)tl.classList.remove('drag-active');
+  const wg=document.getElementById('weekGrid');if(wg)wg.classList.remove('drag-active');
+  dragTaskId=null;dragInstanceDate=null;dragBdId=null;
+});
 function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
 function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
 function onTaskDragStart(e,id,idate){

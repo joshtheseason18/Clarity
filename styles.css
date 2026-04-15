@@ -1086,7 +1086,15 @@ header{
   border-bottom:1px dashed var(--border);opacity:.6;
   transition:min-height .15s;
 }
-/* During drag: handled by JS in _setDragActive — no CSS needed */
+/* During active drag: dim non-dragged blocks and disable their pointer-events */
+.drag-active .day-task-block:not(.dragging-task),
+.drag-active .wk-task-block:not(.dragging-task){
+  pointer-events:none;opacity:.5;
+}
+.drag-active .day-task-block.dragging-task,
+.drag-active .wk-task-block.dragging-task{
+  opacity:.3;
+}
 /* Blocked routine slots — subtle hatching */
 .day-slot.routine-blocked .day-slot-interior{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.05) 5px,rgba(239,68,68,.05) 10px);cursor:not-allowed}
 .wk-slot.routine-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(239,68,68,.05) 4px,rgba(239,68,68,.05) 8px);cursor:not-allowed}
