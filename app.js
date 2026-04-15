@@ -132,6 +132,7 @@ async function getAuthToken(){
 // Proxied API call — uses Edge Function when authenticated, direct when in artifact
 async function callClaudeAPI(messages,maxTokens=1000){
   const token=await getAuthToken();
+  let data;
   if(token){
     // Authenticated — use Edge Function proxy
     const res=await fetch(EDGE_FN_URL,{
@@ -142,7 +143,7 @@ async function callClaudeAPI(messages,maxTokens=1000){
       },
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,messages})
     });
-    return await res.json();
+    data=await res.json();
   } else {
     // Guest/artifact mode — try direct (works in claude.ai artifacts)
     const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -150,8 +151,18 @@ async function callClaudeAPI(messages,maxTokens=1000){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,messages})
     });
-    return await res.json();
+    data=await res.json();
   }
+  // Validate response has expected structure
+  if(data.error){
+    console.error('Claude API error:',data.error);
+    throw new Error(typeof data.error==='string'?data.error:data.error.message||'API returned an error');
+  }
+  if(!data.content||!Array.isArray(data.content)){
+    console.error('Unexpected API response:',data);
+    throw new Error('Unexpected response from AI — check console for details');
+  }
+  return data;
 }
 
 // Listen for auth state changes (handles redirect back from Google)
