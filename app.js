@@ -1475,7 +1475,7 @@ function renderWeek(){
       const wkSubPill=subs.length?`<span class="wk-sub-pill" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${t._instanceDate||k}')">☰ ${subs.length}</span>`:'';
       if(isEvent){
         return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
-          draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
+          ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc};border-top-color:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
           <div class="drag-grip"><span class="grip-dots"></span></div>
@@ -1484,7 +1484,7 @@ function renderWeek(){
         </div>`;
       }
       return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
-        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
+        ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
         <div class="drag-grip"><span class="grip-dots"></span></div>
@@ -1604,7 +1604,7 @@ function buildDayTaskBlock(t, key, conflictIds){
   if(isEvent){
     return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
       <div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
-        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+        ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
         style="background:${cc};border-top-color:${cc}"
         onclick="openEdit('${t.id}','${idate}',event)">
         <div class="day-task-block-check">
@@ -1625,7 +1625,7 @@ function buildDayTaskBlock(t, key, conflictIds){
 
   return`<div class="day-task-slot-wrap" style="position:relative;min-height:${schedH}px">
     <div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
-      draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+      ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
       style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
       onclick="openEdit('${t.id}','${idate}',event)">
       <div class="day-task-block-check">
@@ -1869,7 +1869,7 @@ function renderDay(){
         const subPillInline=subs.length?(ci.total===1?`<span class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></span>`:(ci.total<=3?`<span class="sub-pill-row sub-pill-compact" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length}</span>`:'')):'';
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
-            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="drag-grip"><span class="grip-dots"></span></div>
@@ -1883,7 +1883,7 @@ function renderDay(){
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
           blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
-            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
+            ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
             <div class="drag-grip"><span class="grip-dots"></span></div>
@@ -3967,9 +3967,22 @@ function _setDragActive(on){
 // Safety net: if any drag ends without proper cleanup, reset everything
 document.addEventListener('dragend',function(){
   document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));
+  // Remove dynamic draggable from all blocks
+  document.querySelectorAll('.day-task-block[draggable],.wk-task-block[draggable]').forEach(el=>el.removeAttribute('draggable'));
   const tl=document.getElementById('dayTimeline');if(tl)tl.classList.remove('drag-active');
   const wg=document.getElementById('weekGrid');if(wg)wg.classList.remove('drag-active');
   dragTaskId=null;dragInstanceDate=null;dragBdId=null;
+});
+// Mousedown on task blocks: only enable draggable when pressing the grip
+document.addEventListener('mousedown',function(e){
+  const grip=e.target.closest('.drag-grip');
+  const block=e.target.closest('.wk-task-block,.day-task-block');
+  if(!block)return;
+  if(grip){
+    block.setAttribute('draggable','true');
+  } else {
+    block.removeAttribute('draggable');
+  }
 });
 function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
 function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
@@ -3979,7 +3992,11 @@ function onTaskDragStart(e,id,idate){
   setTimeout(()=>{const el=e.target.closest('.day-task-block,.wk-task-block,.m-chip,.cat-task-row,.cat-habit-row');if(el)el.classList.add('dragging-task');},0);
   e.stopPropagation();_setDragActive(true);
 }
-function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null;_setDragActive(false)}
+function onTaskDragEnd(){
+  document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));
+  document.querySelectorAll('.day-task-block[draggable],.wk-task-block[draggable]').forEach(el=>el.removeAttribute('draggable'));
+  dragTaskId=null;dragInstanceDate=null;_setDragActive(false);
+}
 function onDO(e){if(!dragBdId&&!dragTaskId)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
 function onDL(e){e.currentTarget.classList.remove('drag-over')}
 function snapFlash(el){if(!el)return;el.classList.remove('snap-flash');void el.offsetWidth;el.classList.add('snap-flash');setTimeout(()=>el.classList.remove('snap-flash'),600)}
