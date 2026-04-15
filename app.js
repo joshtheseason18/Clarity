@@ -3655,8 +3655,9 @@ function acceptAISchedule(){
       subtasks:subs,
       scheduled:true,
       done:false,
-      recur:!!(t.recur),recurN:t.recurN||1,recurU:t.recurU||'day',
-      doneOverrides:[],deletedOccurrences:[]
+      recur:!!(t.recur),recurN:t.recurN||1,recurU:t.recurU||'day',recurDays:[],
+      doneOverrides:[],deletedOccurrences:[],
+      multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
     });
   });
   // Remove accepted Brain Dump items
@@ -3818,7 +3819,7 @@ function addQuickEvent(){
   if(!parsed){showToast('Could not parse — try "Dinner Friday 7pm"');return;}
   const newId=genId();
   _lastQeId=newId;
-  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]});
+  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
   input.value='';save();renderAll();
   // Show confirmation card
   const d=fromDk(parsed.date);
@@ -4156,7 +4157,7 @@ function onDropDate(e,dateKey){
     if(slotFull(dateKey,defaultTime,null)){
       showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
-    tasks.push({...t,date:dateKey,time:defaultTime,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({...t,type:'task',date:dateKey,time:defaultTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(e.currentTarget),100);
   }else if(dragTaskId){
@@ -4182,7 +4183,7 @@ function onDropSlot(e,dateKey,time){
     if(slotFull(dateKey,time,null)){
       showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
-    tasks.push({...t,date:dateKey,time,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({...t,type:'task',date:dateKey,time,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
   }else if(dragTaskId){
@@ -5640,9 +5641,10 @@ function saveBDDetail(){
   if(dateVal){
     const time=timeVal||'09:00';
     tasks.push({
-      id:genId(),name,priority,category,notes,
-      date:dateVal,time,duration:30,scheduled:true,done:false,
-      recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]
+      id:genId(),name,type:'task',priority,category,notes,attachments:[],location:'',
+      date:dateVal,time,allday:false,duration:30,scheduled:true,done:false,
+      recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],
+      multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
     });
     brainDump=brainDump.filter(t=>t.id!==bdDetailId);
   } else {
@@ -5885,8 +5887,8 @@ window.onDropDate=function(e,dateKey){
     if(slotFull(dateKey,defaultTime,null)){
       showWarnToast('That slot already has 3 tasks — pick a different time');suggDragId=null;return;
     }
-    tasks.push({id:genId(),name:item.name,priority:item.priority,category:'none',notes:item.sub,
-      date:dateKey,time:defaultTime,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({id:genId(),name:item.name,type:'task',priority:item.priority,category:'none',notes:item.sub,attachments:[],location:'',
+      date:dateKey,time:defaultTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     suggDragId=null;save();renderAll();
     setTimeout(()=>snapFlash(e.currentTarget),100);
     return;
@@ -5915,8 +5917,8 @@ window.onDropSlot=function(e,dateKey,time){
     if(slotFull(dateKey,time,null)){
       showWarnToast('That slot already has 3 tasks — pick a different time');suggDragId=null;return;
     }
-    tasks.push({id:genId(),name:item.name,priority:item.priority,category:'none',notes:item.sub,
-      date:dateKey,time,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',doneOverrides:[],deletedOccurrences:[]});
+    tasks.push({id:genId(),name:item.name,type:'task',priority:item.priority,category:'none',notes:item.sub,attachments:[],location:'',
+      date:dateKey,time,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     suggDragId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
     return;
@@ -6036,10 +6038,10 @@ function confirmSuggAlready(){
     closeSuggAlready(); return;
   }
   tasks.push({
-    id:genId(), name:item.name, priority:item.priority, category:'none',
-    notes:item.sub, date:dateKey, time:resolvedTime,
-    scheduled:true, done:false, recur:false, recurN:1, recurU:'day',
-    doneOverrides:[], deletedOccurrences:[]
+    id:genId(), name:item.name, type:'task', priority:item.priority, category:'none',
+    notes:item.sub, attachments:[], location:'', date:dateKey, time:resolvedTime, allday:false, duration:30,
+    scheduled:true, done:false, recur:false, recurN:1, recurU:'day', recurDays:[], subtasks:[],
+    doneOverrides:[], deletedOccurrences:[], multiDay:false, endDate:'', eventColor:'', suppressRoutines:false
   });
   save(); renderAll(); closeSuggAlready();
   showToast('"' + item.name + '" added as a one-time task');
@@ -6214,13 +6216,41 @@ function saveQuickAdd(){
   const dateVal=document.getElementById('qaDate').value||dk(new Date());
   const timeVal=document.getElementById('qaTime').value||'09:00';
   const priority=document.getElementById('qaPri').value;
-  tasks.push({
-    id:genId(),name,type:_qaType,priority:_qaType==='event'?'none':priority,category:'none',notes:'',attachments:[],location:'',
-    date:dateVal,time:timeVal,duration:_qaDur,scheduled:true,done:false,
-    recur:false,recurN:1,recurU:'day',subtasks:[],doneOverrides:[],deletedOccurrences:[]
-  });
+  const type=_qaType;
+  // ── Guardrails ──
+  // 1. Blocked routine check
+  if(type==='task'){
+    const rBlock=isBlockedByRoutine(dateVal,timeVal);
+    if(rBlock.blocked){
+      if(!confirm(`${rBlock.routineName} blocks ${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)}.\n\nSchedule here anyway?`))return;
+    }
+  }
+  // 2. Slot full check
+  if(slotFull(dateVal,timeVal,null)){
+    if(!confirm(`This time slot already has ${MAX_TASKS_PER_SLOT} items.\n\nAdd anyway?`))return;
+  }
+  // 3. Duplicate check
+  if(duplicateInSlot(dateVal,timeVal,name,null)){
+    if(!confirm(`"${name}" is already in this time slot.\n\nAdd a duplicate?`))return;
+  }
+  // 4. Duration overflow into blocked routine
+  const routineOverflow=checkRoutineOverflow(dateVal,timeVal,_qaDur);
+  if(routineOverflow.blocked){
+    showToast(`Note: extends into ${routineOverflow.routineName} at ${fmtT(routineOverflow.routineStart)}`);
+  }
+  const newTask={
+    id:genId(),name,type,priority:type==='event'?'none':priority,category:'none',notes:'',attachments:[],location:'',
+    date:dateVal,time:timeVal,allday:false,duration:_qaDur,scheduled:true,done:false,
+    recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],
+    multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
+  };
+  tasks.push(newTask);
   save();renderAll();closeQuickAdd();
-  showToast('"'+name+'" added');
+  // Undo toast so user can easily revert a quick add
+  showUndoToast('"'+name+'" added',()=>{
+    tasks=tasks.filter(t=>t.id!==newTask.id);
+    save();renderAll();
+  });
 }
 
 // ── N key opens quick-add ──────────────────────────────────────────────────
@@ -6446,18 +6476,26 @@ function saveIdea() {
     tasks.push({
       id: genId(),
       name:     _ideaItem.name,
+      type:     'task',
       priority: _ideaPri,
       category: 'none',
       notes:    notes || _ideaItem.sub,
+      attachments: [],
+      location: '',
       date:     dateVal,
       time:     timeVal,
+      allday:   false,
+      duration: 30,
       scheduled: true,
       done:      false,
       recur,
       recurN,
       recurU,
+      recurDays: [],
+      subtasks: [],
       doneOverrides:      [],
-      deletedOccurrences: []
+      deletedOccurrences: [],
+      multiDay: false, endDate: '', eventColor: '', suppressRoutines: false
     });
     showToast('Scheduled "' + _ideaItem.name + '"' + (recur ? ' · repeating' : ''));
   } else {
