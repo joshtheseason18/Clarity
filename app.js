@@ -1475,17 +1475,19 @@ function renderWeek(){
       const wkSubPill=subs.length?`<span class="wk-sub-pill" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${t._instanceDate||k}')">☰ ${subs.length}</span>`:'';
       if(isEvent){
         return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
+          draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc};border-top-color:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
-          <div class="drag-grip" draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"><span class="grip-dots"></span></div>
+          <div class="drag-grip"><span class="grip-dots"></span></div>
           <span class="wk-task-block-name">${esc(t.name)}</span>
           ${ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
         </div>`;
       }
       return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
+        draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
-        <div class="drag-grip" draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"><span class="grip-dots"></span></div>
+        <div class="drag-grip"><span class="grip-dots"></span></div>
         <div style="display:flex;align-items:center;gap:2px;min-width:0">
           ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
           <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${ci.total<=2&&t.recur?'<span class="recur-icon">↻</span>':''}
@@ -1867,9 +1869,10 @@ function renderDay(){
         const subPillInline=subs.length?(ci.total===1?`<span class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></span>`:(ci.total<=3?`<span class="sub-pill-row sub-pill-compact" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length}</span>`:'')):'';
         if(isEvent){
           blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
-            <div class="drag-grip" draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"><span class="grip-dots"></span></div>
+            <div class="drag-grip"><span class="grip-dots"></span></div>
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
               <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
@@ -1880,9 +1883,10 @@ function renderDay(){
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
           blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
+            draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
-            <div class="drag-grip" draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"><span class="grip-dots"></span></div>
+            <div class="drag-grip"><span class="grip-dots"></span></div>
             <div class="day-task-block-check">
               <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
@@ -3979,12 +3983,7 @@ function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragAc
 function onTaskDragStart(e,id,idate){
   dragTaskId=id;dragInstanceDate=idate;dragBdId=null;
   e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','task:'+id);
-  // Set drag image to the full block, not just the grip
-  const block=e.target.closest('.wk-task-block,.day-task-block,.m-chip,.cat-task-row,.cat-habit-row');
-  if(block&&e.dataTransfer.setDragImage){
-    try{e.dataTransfer.setDragImage(block,block.offsetWidth/2,10);}catch(_){}
-  }
-  setTimeout(()=>{if(block)block.classList.add('dragging-task');},0);
+  setTimeout(()=>{const el=e.target.closest('.day-task-block,.wk-task-block,.m-chip,.cat-task-row,.cat-habit-row');if(el)el.classList.add('dragging-task');},0);
   e.stopPropagation();_setDragActive(true);
 }
 function onTaskDragEnd(){document.querySelectorAll('.dragging-task').forEach(el=>el.classList.remove('dragging-task'));dragTaskId=null;dragInstanceDate=null;_setDragActive(false)}
@@ -4304,12 +4303,14 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
       const m=task.getAttribute('ondragstart')?.match(/'([^']+)','([^']*)'/);
       if(m)return{el:task,type:'task',id:m[1],idate:m[2]};
     }
-    // Week/Day view: drag grip only
+    // Week/Day view: only start drag from the grip bar
     const grip=el.closest('.drag-grip');
     if(grip){
       const block=grip.closest('.wk-task-block,.day-task-block');
-      const m=grip.getAttribute('ondragstart')?.match(/'([^']+)','([^']*)'/);
-      if(block&&m)return{el:block,type:'task',id:m[1],idate:m[2]};
+      if(block){
+        const m=block.getAttribute('ondragstart')?.match(/'([^']+)','([^']*)'/);
+        if(m)return{el:block,type:'task',id:m[1],idate:m[2]};
+      }
     }
     const sugg=el.closest('.sugg-card[draggable]');
     if(sugg){
