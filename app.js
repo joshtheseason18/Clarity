@@ -141,7 +141,7 @@ async function callClaudeAPI(messages,maxTokens=1000){
         'Content-Type':'application/json',
         'Authorization':'Bearer '+token
       },
-      body:JSON.stringify({model:'claude-sonnet-4-6-20260217',max_tokens:maxTokens,messages})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,messages})
     });
     data=await res.json();
   } else {
@@ -149,7 +149,7 @@ async function callClaudeAPI(messages,maxTokens=1000){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6-20260217',max_tokens:maxTokens,messages})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,messages})
     });
     data=await res.json();
   }
