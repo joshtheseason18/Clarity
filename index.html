@@ -539,8 +539,8 @@
       </div>
       <!-- Start / End time row -->
       <div class="frow" id="fTimeRow">
-        <div class="fg"><label class="flbl">Start time</label><input class="fi" type="time" id="fStartTime" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></div>
-        <div class="fg"><label class="flbl">End time</label><input class="fi" type="time" id="fEndTime" onchange="onEndTimeChange()" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">Start time</label><input class="fi" type="time" id="fStartTime" step="900" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">End time</label><input class="fi" type="time" id="fEndTime" step="900" onchange="onEndTimeChange()" style="font-size:12px;padding:6px 9px"></div>
       </div>
       <div class="frow" id="fPriRow">
         <div class="fg"><label class="flbl">Priority</label>
@@ -649,7 +649,7 @@
       <label class="flbl">Schedule it now</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input class="fi" type="date" id="bdDetailDate" style="flex:1;font-size:12px;padding:6px 9px">
-        <input class="fi" type="time" id="bdDetailTime" style="flex:1;font-size:12px;padding:6px 9px">
+        <input class="fi" type="time" id="bdDetailTime" step="900" style="flex:1;font-size:12px;padding:6px 9px">
         <span style="font-size:11px;color:var(--text3);white-space:nowrap">optional</span>
       </div>
     </div>
@@ -688,7 +688,7 @@
       <label class="idea-section-label">When do you want to start?</label>
       <div class="idea-date-row">
         <input class="fi" type="date" id="ideaDate" style="font-size:12px;padding:7px 10px">
-        <input class="fi" type="time" id="ideaTime" style="font-size:12px;padding:7px 10px">
+        <input class="fi" type="time" id="ideaTime" step="900" style="font-size:12px;padding:7px 10px">
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Leave blank to save without scheduling</div>
     </div>
@@ -919,7 +919,7 @@
       </div>
       <div class="fg">
         <label class="flbl">Day starts at</label>
-        <input class="fi" type="time" id="aiStartTime" value="08:00" style="font-size:12px">
+        <input class="fi" type="time" id="aiStartTime" step="900" value="08:00" style="font-size:12px">
       </div>
     </div>
     <div class="fg" id="aiPreviewWrap" style="display:none">
@@ -969,11 +969,11 @@
     <div class="frow">
       <div class="fg">
         <label class="flbl">Start time</label>
-        <input class="fi" type="time" id="routineStart" value="09:00" style="font-size:13px">
+        <input class="fi" type="time" id="routineStart" step="900" value="09:00" style="font-size:13px">
       </div>
       <div class="fg">
         <label class="flbl">End time</label>
-        <input class="fi" type="time" id="routineEnd" value="17:00" style="font-size:13px">
+        <input class="fi" type="time" id="routineEnd" step="900" value="17:00" style="font-size:13px">
       </div>
     </div>
     <div class="fg">
@@ -1012,7 +1012,7 @@
   <input class="qa-input" id="qaName" placeholder="Task name…" autocomplete="off">
   <div class="qa-row">
     <input class="qa-fi" type="date" id="qaDate">
-    <input class="qa-fi" type="time" id="qaTime">
+    <input class="qa-fi" type="time" id="qaTime" step="900">
     <select class="qa-fi" id="qaPri">
       <option value="none">— Priority</option>
       <option value="high"><span style="color:#ef4444">●</span> High</option>

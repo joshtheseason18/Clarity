@@ -323,11 +323,11 @@ const TOUR_STEPS=[
   },
   {
     target:'#qeInput',
-    arrow:'top',
+    arrow:'right',
     title:'Quick Events — Try it!',
     body:'Type <strong>"Lunch Friday 12pm"</strong> below and press Enter.',
     interactive:true,
-    pre:function(){if(sidebarOpen)toggleSidebar();switchView('schedule');switchScheduleTab('events');},
+    pre:function(){if(!sidebarOpen)toggleSidebar();switchSide('braindump');switchView('day');},
     setup:function(){
       const input=document.getElementById('qeInput');
       if(input){input.focus();input.placeholder='Try: Lunch Friday 12pm';}
@@ -969,6 +969,46 @@ function addBulletBehavior(ta){
 }
 function dk(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function pad(n){return String(n).padStart(2,'0')}
+
+// Snap a time string to the nearest 15-minute mark
+function snapTo15(timeStr){
+  if(!timeStr)return timeStr;
+  const[h,m]=timeStr.split(':').map(Number);
+  const snapped=Math.round(m/15)*15;
+  const totalMins=h*60+(snapped>=60?60:snapped);
+  return pad(Math.floor(totalMins/60)%24)+':'+pad(totalMins%60);
+}
+
+// Find the next available time within a 30-min slot when tasks already exist there
+function nextAvailableTime(dateKey, slotTime){
+  const allTasks=expandedTasks(fromDk(dateKey),fromDk(dateKey));
+  const slotTasks=allTasks.filter(t=>{
+    const td=(t._instanceDate||t.date);
+    if(td!==dateKey||!t.time||!t.scheduled||t.allday)return false;
+    const[sh,sm]=slotTime.split(':').map(Number);
+    const[th,tm]=t.time.split(':').map(Number);
+    const slotStart=sh*60+sm;
+    const slotEnd=slotStart+30;
+    const tStart=th*60+tm;
+    // Task overlaps this slot if it starts within the 30-min window
+    return tStart>=slotStart&&tStart<slotEnd;
+  });
+  if(!slotTasks.length)return slotTime;
+  // Find the latest end time among existing tasks in this slot
+  const[sh,sm]=slotTime.split(':').map(Number);
+  const slotStartMins=sh*60+sm;
+  let latestEnd=slotStartMins;
+  slotTasks.forEach(t=>{
+    const[th,tm]=t.time.split(':').map(Number);
+    const endM=th*60+tm+(t.duration||30);
+    if(endM>latestEnd)latestEnd=endM;
+  });
+  // Round up to nearest 15 minutes
+  latestEnd=Math.ceil(latestEnd/15)*15;
+  // Don't go past the next full slot boundary
+  if(latestEnd>=slotStartMins+30)return slotTime;
+  return pad(Math.floor(latestEnd/60)%24)+':'+pad(latestEnd%60);
+}
 function fromDk(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
 function isToday(d){return dk(d)===dk(new Date())}
 let useMilitary=localStorage.getItem('clarity_military')==='true';
@@ -2018,7 +2058,7 @@ function renderWeek(){
   if(alldayGrid)alldayGrid.style.gridTemplateColumns=gridCols;
 }
 function onWkDay(k){selDate=fromDk(k);switchView('day')}
-function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,t)}
+function onWkSlot(k,t,e){if(e.target.closest('.wk-task-block,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,nextAvailableTime(k,t))}
 
 // ══ DAY ═════════════════════════════════════
 
@@ -2465,7 +2505,7 @@ function renderDay(){
   // Update journal if expanded
   if(_dayJournalOpen)openJournalForDate(dk(selDate));
 }
-function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,t)}
+function onDaySlot(k,t,e){if(e.target.closest('.day-task-block,.day-task-slot-wrap,.now-line,.task-check'))return;const rb=isBlockedByRoutine(k,t);if(rb.blocked){showWarnToast(`${rb.routineName} blocks ${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}`);return;}openNew(k,nextAvailableTime(k,t))}
 
 // ══ CATEGORIES ════════════════════════════════
 function renderCatChips(){
@@ -4328,7 +4368,7 @@ async function generateAISchedule(){
   const prefMorning=document.getElementById('aiPrefMorning').classList.contains('on');
   const prefAfternoon=document.getElementById('aiPrefAfternoon').classList.contains('on');
   let prefStr='';
-  if(includeBreaks)prefStr+='\n- Include 10-15 minute breaks between focused work blocks';
+  if(includeBreaks)prefStr+='\n- Leave 10-15 minute gaps between focused work blocks (do NOT create separate break tasks — just space out the schedule)';
   if(prefMorning)prefStr+='\n- Front-load important/difficult tasks in the morning';
   if(prefAfternoon)prefStr+='\n- Schedule important/difficult tasks in the afternoon';
 
@@ -4374,7 +4414,8 @@ Rules:
 - If it's a birthday or anniversary, set allday:true with recur/recurN:1/recurU:"year"
 - If user says recurring on specific weekdays (e.g. "every Mon/Wed/Fri"), set recurDays:[1,3,5] (0=Sun,6=Sat) and recurU:"week"
 - If the user lists sub-items after a task (e.g. "study: geography, calculus" or "meeting prep — slides, handouts"), create a subtasks array with proportional durations
-- For tasks over 60 minutes, break into subtasks with focused blocks and breaks
+- For tasks over 60 minutes, break into subtasks with focused blocks (DO NOT create separate "Break" tasks)
+- DO NOT create separate "Break" tasks — leave natural gaps between tasks instead. The empty time IS the break.
 - Order by logical flow of the day
 
 Respond with ONLY a JSON array, no markdown, no backticks:
@@ -4748,14 +4789,23 @@ document.addEventListener('dragend',function(){
   const wg=document.getElementById('weekGrid');if(wg)wg.classList.remove('drag-active');
   dragTaskId=null;dragInstanceDate=null;dragBdId=null;_dragFromGrip=false;
 });
-// Track whether mousedown started in the drag zone (top ~25px of block)
+// Track whether mousedown started in the drag zone
 let _dragFromGrip=false;
+let _dragMouseTarget=null;
 document.addEventListener('mousedown',function(e){
+  _dragMouseTarget=e.target;
+  // Check if click was on the drag grip element (most reliable)
+  const grip=e.target.closest('.drag-grip');
+  if(grip){
+    _dragFromGrip=true;
+    return;
+  }
+  // Fallback: check if click was in top 30px of a task block
   const block=e.target.closest('.wk-task-block,.day-task-block');
   if(block){
     const rect=block.getBoundingClientRect();
     const clickY=e.clientY-rect.top;
-    _dragFromGrip=clickY<=25;
+    _dragFromGrip=clickY<=30;
   } else {
     _dragFromGrip=false;
   }
@@ -4765,7 +4815,14 @@ function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragAc
 function onTaskDragStart(e,id,idate){
   // Only allow drag from the grip bar on day/week blocks
   const block=e.target.closest('.day-task-block,.wk-task-block');
-  if(block&&!_dragFromGrip){e.preventDefault();return;}
+  if(block){
+    // Double-check: if mousedown target was on a grip, allow it
+    if(!_dragFromGrip&&_dragMouseTarget){
+      const grip=_dragMouseTarget.closest('.drag-grip');
+      if(grip)_dragFromGrip=true;
+    }
+    if(!_dragFromGrip){e.preventDefault();return;}
+  }
   dragTaskId=id;dragInstanceDate=idate;dragBdId=null;
   e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','task:'+id);
   setTimeout(()=>{const el=e.target.closest('.day-task-block,.wk-task-block,.m-chip,.cat-task-row,.cat-habit-row');if(el)el.classList.add('dragging-task');},0);
@@ -5014,26 +5071,27 @@ function onDropDate(e,dateKey){
 
 function onDropSlot(e,dateKey,time){
   const dropEl=e.currentTarget;dropEl.classList.remove('drag-over');
+  const smartTime=nextAvailableTime(dateKey,time);
   if(dragBdId){
     const t=brainDump.find(t=>t.id===dragBdId);if(!t)return;
     // Check blocked routine
-    const rBlock=isBlockedByRoutine(dateKey,time);
+    const rBlock=isBlockedByRoutine(dateKey,smartTime);
     if(rBlock.blocked){
       showWarnToast(`Can't drop here — blocked by ${rBlock.routineName} (${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)})`);
       dragBdId=null;return;
     }
-    if(duplicateInSlot(dateKey,time,t.name,null)){
+    if(duplicateInSlot(dateKey,smartTime,t.name,null)){
       showWarnToast(`"${esc(t.name)}" is already in that slot`);dragBdId=null;return;
     }
-    if(slotFull(dateKey,time,null)){
+    if(slotFull(dateKey,smartTime,null)){
       showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
-    tasks.push({...t,type:'task',date:dateKey,time,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
+    tasks.push({...t,type:'task',date:dateKey,time:smartTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
     if(window._tourOnDrop)window._tourOnDrop();
   }else if(dragTaskId){
-    rescheduleTask(dragTaskId,dragInstanceDate,dateKey,time,dropEl);
+    rescheduleTask(dragTaskId,dragInstanceDate,dateKey,smartTime,dropEl);
     dragTaskId=null;dragInstanceDate=null;
   }
 }
@@ -5285,6 +5343,7 @@ function syncEndTimeFromDur(){
 function onStartTimeChange(){
   const startEl=document.getElementById('fStartTime');
   if(!startEl||!startEl.value)return;
+  startEl.value=snapTo15(startEl.value);
   mTime=startEl.value;
   syncEndTimeFromDur();
 }
@@ -5292,10 +5351,12 @@ function onEndTimeChange(){
   const startEl=document.getElementById('fStartTime');
   const endEl=document.getElementById('fEndTime');
   if(!startEl||!endEl||!startEl.value||!endEl.value)return;
+  endEl.value=snapTo15(endEl.value);
   const[sh,sm]=startEl.value.split(':').map(Number);
   const[eh,em]=endEl.value.split(':').map(Number);
   let diff=(eh*60+em)-(sh*60+sm);
   if(diff<=0)diff+=1440; // overnight
+  diff=Math.round(diff/15)*15; // snap duration to 15-min
   diff=Math.min(720,Math.max(15,diff));
   _selDur=diff;
   setDurSpinner(_selDur);
@@ -5972,14 +6033,14 @@ function saveTask(){
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
   const recur=document.getElementById('fRecurOn').checked,recurN=parseInt(document.getElementById('fRecurN').value)||1,recurU=document.getElementById('fRecurU').value;
   const recurDays=(recur&&recurU==='week')?getRecurDays():[];
-  const duration=_selDur||30;
+  const duration=Math.round((_selDur||30)/15)*15||15; // snap duration to 15-min
   const location=document.getElementById('fLocation').value.trim();
   const type=_itemType;
   const subtasks=_modalSubtasks;
   const attachments=_modalAttachments;
   const allday=_itemType==='event'&&_modalAllday;
   const startTimeVal=document.getElementById('fStartTime').value||mTime;
-  const finalTime=allday?null:startTimeVal;
+  const finalTime=allday?null:(startTimeVal?snapTo15(startTimeVal):startTimeVal);
   // Multi-day event fields
   let multiDay=false,endDate='',eventColor='';
   if(allday&&_modalMultiDay){
@@ -5999,6 +6060,10 @@ function saveTask(){
     const rBlock=isBlockedByRoutine(dateKey,finalTime);
     if(rBlock.blocked){
       if(!confirm(`${rBlock.routineName} blocks ${fmtT(rBlock.routineStart)} – ${fmtT(rBlock.routineEnd)}.\n\nSchedule here anyway?`))return;
+    }
+    // Check slot capacity for new tasks
+    if(mMode==='new'&&slotFull(dateKey,finalTime,null)){
+      showToast('That time slot already has 3 tasks — try a different time');return;
     }
   }
   if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
