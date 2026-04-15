@@ -126,25 +126,72 @@ const TOUR_STEPS=[
   {
     target:'.sidebar-toggle-btn',
     arrow:'top',
-    title:'🧠 Dump everything',
-    body:'Tap here to open the sidebar. Write down whatever\'s on your mind — tasks, ideas, reminders. Don\'t organize, just dump.',
-    pre:function(){if(sidebarOpen)toggleSidebar();} // ensure closed so they see the button
+    title:'Brain Dump',
+    body:'Open the sidebar and write down whatever\'s on your mind — tasks, ideas, reminders. Don\'t organize, just dump.',
+    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
+  },
+  {
+    target:'#qeInput',
+    arrow:'top',
+    title:'Quick Events — Try it!',
+    body:'Type <strong>"Lunch Friday 12pm"</strong> below and press Enter.',
+    interactive:true,
+    pre:function(){if(sidebarOpen)toggleSidebar();switchView('schedule');switchScheduleTab('events');},
+    setup:function(){
+      const input=document.getElementById('qeInput');
+      if(input){input.focus();input.placeholder='Try: Lunch Friday 12pm';}
+      _tourWatcher=function(){setTimeout(()=>{tourInteractiveSuccess();},300);};
+      window._tourOnQuickEvent=_tourWatcher;
+    },
+    cleanup:function(){window._tourOnQuickEvent=null;}
   },
   {
     target:'.sidebar',
     arrow:'right',
-    title:'✋ Drag to schedule',
-    body:'Grab any card and drag it onto a time slot in Day or Week view. Or just leave it here — organize whenever you\'re ready.',
-    pre:function(){if(!sidebarOpen)toggleSidebar();switchSide('braindump');}
+    title:'Drag to Schedule — Try it!',
+    body:'Grab any card from the sidebar and <strong>drag it onto a time slot</strong> in the calendar.',
+    interactive:true,
+    pre:function(){
+      if(!sidebarOpen)toggleSidebar();switchSide('braindump');switchView('day');
+      // Ensure there's at least one brain dump item
+      if(!brainDump.length){brainDump.push({id:genId(),name:'Sample task',category:'none',priority:'none',notes:'',subtasks:[]});save();renderBD();}
+    },
+    setup:function(){
+      _tourWatcher=function(){setTimeout(()=>{tourInteractiveSuccess();},300);};
+      window._tourOnDrop=_tourWatcher;
+    },
+    cleanup:function(){window._tourOnDrop=null;}
+  },
+  {
+    target:'#schedTabRoutine',
+    arrow:'top',
+    title:'Routines',
+    body:'Build your day\'s skeleton. <strong>Windows</strong> are open for tasks — AI fills them. <strong>Blocks</strong> are fully reserved. Skip any routine for a single day with one tap.',
+    pre:function(){if(sidebarOpen)toggleSidebar();switchView('schedule');switchScheduleTab('routine');}
+  },
+  {
+    target:'#schedTabHolidays',
+    arrow:'top',
+    title:'Holidays & Days Off',
+    body:'Toggle US federal holidays with one click. Each one auto-creates an all-day event and pauses your routines so the day stays open.',
+    pre:function(){switchScheduleTab('holidays');}
+  },
+  {
+    target:'.day-hdr',
+    arrow:'bottom',
+    title:'Multi-day & Recurrence',
+    body:'Create events spanning multiple days (vacations, trips). Repeat tasks on specific weekdays — Mon/Wed/Fri for gym. Find these toggles when editing any event.',
+    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
   },
   {
     target:'[onclick="openAISchedule()"]',
     arrow:'top',
-    title:'Let Luclaro plan your day',
-    body:'Describe what you need to do and Luclaro\'s AI builds a schedule for you. Tweak anything, then accept.',
-    pre:function(){if(sidebarOpen)toggleSidebar();}
+    title:'AI Schedule',
+    body:'Describe your day and AI plans it around your <strong>routines, holidays, and existing events</strong>. It places tasks into windows and avoids blocked time.',
+    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
   }
 ];
+let _tourWatcher=null;
 
 function startGuidedTour(){
   if(localStorage.getItem('clarity_onboarded'))return;
@@ -170,7 +217,7 @@ function showTourStep(){
     const target=document.querySelector(step.target);
     if(!target){_tourStep++;showTourStep();return;}
 
-    // Backdrop — clicking it skips the tour (critical for mobile)
+    // Backdrop
     const backdrop=document.createElement('div');
     backdrop.className='tour-backdrop';
     backdrop.id='tourBackdrop';
@@ -192,33 +239,32 @@ function showTourStep(){
       `<span class="tour-step-dot${i===_tourStep?' active':''}"></span>`
     ).join('');
 
+    const isInteractive=step.interactive;
+    const btnText=_tourStep<TOUR_STEPS.length-1?(isInteractive?'or Skip →':'Next →'):'Got it!';
+
     card.innerHTML=`
       <div class="tour-title">${step.title}</div>
       <div class="tour-body">${step.body}</div>
       <div class="tour-actions">
         <button class="tour-skip" onclick="finishTour()">Skip tour</button>
-        <button class="tour-btn" onclick="nextTourStep()">${_tourStep<TOUR_STEPS.length-1?'Next →':'Got it 🚀'}</button>
+        <button class="tour-btn" onclick="nextTourStep()">${btnText}</button>
       </div>
       <div class="tour-step-dots">${dots}</div>
       ${window.innerWidth<=640?'<div class="tour-tap-hint">Tap outside to skip</div>':''}`;
     document.body.appendChild(card);
 
-    // Position card relative to target (use RAF to ensure card is rendered)
+    // Position card
     const rect=target.getBoundingClientRect();
     const isMobile=window.innerWidth<=640;
     requestAnimationFrame(()=>{
       const cardH=card.offsetHeight;
       const cardW=Math.min(300,window.innerWidth-32);
       if(isMobile){
-        // On mobile: always center horizontally, position below or above target
         card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
         card.style.right='auto';
         const spaceBelow=window.innerHeight-rect.bottom;
-        if(spaceBelow>=cardH+20){
-          card.style.top=(rect.bottom+12)+'px';
-        } else {
-          card.style.top=Math.max(8,rect.top-cardH-12)+'px';
-        }
+        if(spaceBelow>=cardH+20){card.style.top=(rect.bottom+12)+'px';}
+        else{card.style.top=Math.max(8,rect.top-cardH-12)+'px';}
       } else if(step.arrow==='top'){
         card.style.top=(rect.bottom+12)+'px';
         card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
@@ -226,10 +272,8 @@ function showTourStep(){
         card.style.top=Math.max(8,(rect.top-cardH-12))+'px';
         card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
       } else if(step.arrow==='right'){
-        // Guard against card going off the left edge of the screen
         const rightVal=window.innerWidth-rect.left+12;
         if(rightVal+cardW>window.innerWidth-16){
-          // Would overflow — center it instead
           card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
           card.style.right='auto';
           card.style.top=Math.max(8,rect.top)+'px';
@@ -239,7 +283,25 @@ function showTourStep(){
         }
       }
     });
+
+    // Setup interactive listener
+    if(step.setup)step.setup();
   },400);
+}
+
+function tourInteractiveSuccess(){
+  // Show celebration flash on tour card
+  const card=document.getElementById('tourCard');
+  if(card){
+    const flash=document.createElement('div');
+    flash.className='tour-success-flash';
+    flash.textContent='✓ Nice!';
+    card.appendChild(flash);
+  }
+  // Clean up interactive listener and auto-advance
+  const step=TOUR_STEPS[_tourStep];
+  if(step&&step.cleanup)step.cleanup();
+  setTimeout(()=>{_tourStep++;showTourStep();},800);
 }
 
 function nextTourStep(){
@@ -254,6 +316,11 @@ function clearTourUI(){
     el.classList.remove('tip-highlight');
     if(el._tourStyled){el.style.zIndex='';delete el._tourStyled;}
   });
+  // Clean up interactive listeners
+  if(_tourStep<TOUR_STEPS.length){
+    const step=TOUR_STEPS[_tourStep];
+    if(step&&step.cleanup)step.cleanup();
+  }
 }
 
 function finishTour(){
@@ -262,10 +329,76 @@ function finishTour(){
   renderGreeting();
   if(sidebarOpen)toggleSidebar();
 }
+function replayTour(){
+  localStorage.removeItem('clarity_onboarded');
+  _tourStep=0;
+  switchView('day');
+  setTimeout(showTourStep,400);
+}
 
 function showOnboarding(){
   startGuidedTour();
 }
+
+// ══ HELP CENTER ════════════════════════════════
+const HELP_TOPICS=[
+  {cat:'Getting Started',items:[
+    {q:'What is Brain Dump?',a:'Brain Dump is your inbox for thoughts. Open the sidebar and write down anything — tasks, ideas, reminders. Don\'t organize, just dump. When you\'re ready, drag items onto the calendar to schedule them.<div class="help-tip"><strong>Shortcut:</strong> Press <span class="help-key">N</span> to open Quick Add from anywhere.</div>'},
+    {q:'How do I schedule a task?',a:'Three ways:<br><br><strong>1. Drag from Brain Dump</strong> — open the sidebar, grab a card, drop it onto any time slot.<br><br><strong>2. Click a time slot</strong> — click any empty slot in Day or Week view to create a new task.<br><br><strong>3. AI Schedule</strong> — tap the sparkle button, describe your day, and AI builds the schedule.'},
+    {q:'How do I move a task?',a:'Grab from the <strong>top edge</strong> of any task block — the top ~25 pixels are the drag zone. You\'ll see a subtle grip line and the area highlights on hover. Click and hold there, then drag to a new time slot.<br><br>Clicking <strong>below</strong> the top edge opens the edit modal instead.<div class="help-tip"><strong>Tip:</strong> The colored border + grip line = drag zone. Everything below = tap to edit.</div>'}
+  ]},
+  {cat:'Quick Events',items:[
+    {q:'How does Quick Event parsing work?',a:'Type naturally in the Quick Event bar (Schedule tab). Luclaro extracts the name, date, time, duration, and location automatically.<br><br><strong>Examples:</strong><br><code>Dinner Friday 7pm</code> → Dinner, this Friday, 7:00 PM<br><code>Meeting 4/20 2pm for 2 hours</code> → 2h duration<br><code>Dentist tomorrow 10am at Dr. Lee</code> → with location<br><code>Mom\'s birthday 5/15</code> → all-day, repeats yearly<div class="help-tip"><strong>Missing info?</strong> If date or time isn\'t detected, the event goes to Brain Dump so you can add details later.</div>'},
+    {q:'How do birthdays work?',a:'Type any event with <strong>"birthday"</strong>, <strong>"bday"</strong>, or <strong>"anniversary"</strong> in the name. Luclaro automatically sets it as an all-day event that recurs every year.<br><br><code>Mom\'s birthday 5/15</code> → All Day, May 15, ↻ yearly<br><br>You can also create them manually: new event → toggle All Day → set Repeat to every 1 year.'}
+  ]},
+  {cat:'Routines',items:[
+    {q:'What are routines?',a:'Routines are <strong>time containers</strong>, not tasks. They define the structure of your day — when you work, exercise, sleep, commute. You never "check off" a routine. They show as background bands on the calendar.<br><br>Go to <strong>Schedule → My Routine</strong> to set them up.'},
+    {q:'Window vs Block — what\'s the difference?',a:'<strong>Window</strong> = time is reserved but <strong>open for tasks</strong>. AI actively places matching tasks here. You can manually schedule tasks inside windows too.<br><br><strong>Block</strong> = <strong>fully reserved</strong>. Nothing gets scheduled here — not manually, not by AI.<div class="help-tip"><strong>Key insight:</strong> Windows are containers. Put your "Chest & Triceps" recurring task inside your Gym window. The routine says <em>when</em>, the task says <em>what</em>.</div>'},
+    {q:'Can I skip a routine for one day?',a:'Yes! In Day view, you\'ll see routine chips at the top of the timeline. Each chip has a <strong>Skip</strong> button. Tap it to skip that routine for just that day. Tap <strong>Undo</strong> to restore it.'}
+  ]},
+  {cat:'Events',items:[
+    {q:'How do multi-day events work?',a:'When creating or editing an event, toggle <strong>Multi-day event</strong>. Pick a start and end date. The event appears as a colored bar across all days in your calendar.<br><br>Toggle <strong>Pause routines</strong> to keep the days completely open — perfect for vacations and trips.'},
+    {q:'How does recurrence work?',a:'In any task or event\'s edit modal, toggle <strong>Repeat</strong>. Set the frequency (daily, weekly, monthly) and interval.<br><br>For <strong>weekly recurrence</strong>, pick specific days: Mon/Wed/Fri for gym, Tue/Thu for class. Day-of-week buttons appear when you choose "week".<br><br><strong>Yearly</strong> works great for birthdays and anniversaries.'}
+  ]},
+  {cat:'Holidays',items:[
+    {q:'How do I add holidays?',a:'Go to <strong>Schedule → Holidays</strong>. Toggle any US federal holiday and it creates an all-day event that automatically pauses your routines.<br><br>Use <strong>Select All</strong> for all holidays, or <strong>+ Add custom day off</strong> for personal days.'}
+  ]},
+  {cat:'AI Schedule',items:[
+    {q:'What does AI know about my day?',a:'When you generate a schedule, AI sees:<br><br><strong>✓ Routine windows</strong> — places matching tasks inside them<br><strong>✕ Blocked time</strong> — avoids completely<br><strong>✓ Existing tasks & events</strong> — won\'t double-book<br><strong>✓ Holidays</strong> — knows if routines are paused<br><strong>✓ Multi-day events</strong> — sees vacations spanning the day<br><br>AI also handles durations, priorities, subtask breakdowns, and day-of-week recurrence.'},
+    {q:'Can AI generate subtasks?',a:'Yes! When editing a task, go to the <strong>Subtasks</strong> tab and tap <strong>Generate with AI</strong>. It breaks the task into focused subtasks with realistic durations.'}
+  ]},
+  {cat:'Focus Mode',items:[
+    {q:'How does Focus Mode work?',a:'Click <strong>▶ Focus</strong> on any task to start a timed session. Choose your mode:<br><br><strong>Sprint</strong> — 25-minute focused blocks<br><strong>Task duration</strong> — uses the task\'s set duration<br><strong>Custom</strong> — set your own time with the slider<br><br>You can minimize to a floating pill timer while you work.'}
+  ]},
+  {cat:'Keyboard Shortcuts',items:[
+    {q:'What shortcuts are available?',a:'<span class="help-key">N</span> — Open Quick Add<br><span class="help-key">Esc</span> — Close any modal or overlay<br><span class="help-key">Ctrl</span>+<span class="help-key">Enter</span> — Save task in modal<br><span class="help-key">←</span> <span class="help-key">→</span> — Navigate dates<br><span class="help-key">/</span> — Open search'}
+  ]}
+];
+function openHelp(){
+  document.getElementById('helpOverlay').classList.add('open');
+  document.getElementById('helpSearch').value='';
+  renderHelpContent();
+}
+function closeHelp(){document.getElementById('helpOverlay').classList.remove('open')}
+function renderHelpContent(filter){
+  const body=document.getElementById('helpBody');
+  let html='';
+  HELP_TOPICS.forEach(cat=>{
+    const items=filter?cat.items.filter(i=>i.q.toLowerCase().includes(filter)||i.a.toLowerCase().includes(filter)):cat.items;
+    if(!items.length)return;
+    html+=`<div class="help-cat"><div class="help-cat-title">${cat.cat}</div>`;
+    items.forEach((item,i)=>{
+      html+=`<div class="help-item" onclick="this.classList.toggle('open')">
+        <div class="help-q">${item.q}<span class="help-q-icon">›</span></div>
+        <div class="help-a">${item.a}</div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  if(!html)html='<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px">No results found</div>';
+  body.innerHTML=html;
+}
+function filterHelp(q){renderHelpContent(q.toLowerCase().trim()||null)}
 
 // ══ DAY GREETING ════════════════════════════════
 function renderGreeting(){
@@ -288,7 +421,7 @@ const JOURNAL_PROMPTS=[
   '⭐ What was the highlight of your day?',
   '😌 How are you really feeling right now?',
   '🎯 Did you make progress on what matters most?',
-  '💡 What\'s one idea you had today?',
+  'What\'s one idea you had today?',
   '🤝 Who made your day better?',
   '🌅 What are you looking forward to tomorrow?',
 ];
@@ -824,18 +957,17 @@ function switchView(v){
 }
 function switchSide(tab){
   activeSide=tab;
-  document.querySelectorAll('.side-tab').forEach((b,i)=>b.classList.toggle('active',['braindump','priority','focus','suggestions'][i]===tab));
+  document.querySelectorAll('.side-tab').forEach((b,i)=>b.classList.toggle('active',['braindump','priority','focus','habits','suggestions'][i]===tab));
   document.querySelectorAll('.side-panel').forEach(p=>p.classList.remove('active'));
   const panel=document.getElementById('panel-'+tab);
   if(panel)panel.classList.add('active');
   if(tab==='priority')renderPri();
+  if(tab==='habits')renderHabits();
   if(tab==='suggestions')renderSuggestions();
   if(tab==='focus'){
     switchSideFocus();
-    // Hide mini-timer when focus tab is visible
     hideFocusMiniTimer();
   } else {
-    // Show mini-timer when leaving focus tab (if timer running and overlay closed)
     if(_focusRunning&&!_focusOverlayOpen)showFocusMiniTimer();
   }
 }
@@ -845,9 +977,150 @@ function toggleSidebar(){
   const bd=document.getElementById('sidebarBackdrop');
   if(bd)bd.classList.toggle('open',sidebarOpen);
   // Render sidebar content when opening
-  if(sidebarOpen){renderBD();if(activeSide==='priority')renderPri();if(activeSide==='focus'){switchSideFocus();hideFocusMiniTimer();}}
+  if(sidebarOpen){renderBD();if(activeSide==='priority')renderPri();if(activeSide==='habits')renderHabits();if(activeSide==='focus'){switchSideFocus();hideFocusMiniTimer();}}
   // Show mini-timer when collapsing sidebar if timer running
   if(!sidebarOpen&&_focusRunning&&!_focusOverlayOpen)showFocusMiniTimer();
+}
+
+// ══ HABIT STREAKS ═══════════════════════════════
+function getRecurringHabits(){
+  return tasks.filter(t=>t.recur&&t.scheduled&&!t.done&&(t.type||'task')==='task');
+}
+function getExpectedDates(t,startDate,endDate){
+  // Generate all expected occurrence dates for a recurring task within a range
+  const dates=[];
+  const start=fromDk(t.date);
+  const end=endDate;
+  const deleted=new Set(t.deletedOccurrences||[]);
+  if(t.recurDays&&t.recurDays.length&&t.recurU==='week'){
+    // Day-of-week recurrence
+    let d=new Date(Math.max(start,startDate));d.setHours(0,0,0,0);
+    while(d<=end){
+      if(t.recurDays.includes(d.getDay())&&dk(d)>=t.date&&!deleted.has(dk(d))){
+        dates.push(dk(d));
+      }
+      d=addDays(d,1);
+    }
+  } else {
+    // Standard interval recurrence
+    let d=new Date(start);d.setHours(0,0,0,0);
+    while(d<=end){
+      if(d>=startDate&&!deleted.has(dk(d))){
+        dates.push(dk(d));
+      }
+      // Advance by interval
+      if(t.recurU==='day')d=addDays(d,t.recurN||1);
+      else if(t.recurU==='week')d=addDays(d,7*(t.recurN||1));
+      else if(t.recurU==='month'){d.setMonth(d.getMonth()+(t.recurN||1));}
+      else d=addDays(d,1);
+    }
+  }
+  return dates;
+}
+function getHabitStats(t){
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayKey=dk(today);
+  const doneSet=new Set(t.doneOverrides||[]);
+  // Look back 90 days for stats
+  const lookback=addDays(today,-90);
+  const taskStart=fromDk(t.date);
+  const rangeStart=taskStart>lookback?taskStart:lookback;
+  const expected=getExpectedDates(t,rangeStart,today);
+  // Filter to past and today only
+  const pastExpected=expected.filter(d=>d<=todayKey);
+  const completed=pastExpected.filter(d=>doneSet.has(d));
+  const rate=pastExpected.length?Math.round(completed.length/pastExpected.length*100):0;
+  // Current streak: count backwards from most recent expected date
+  let streak=0;
+  for(let i=pastExpected.length-1;i>=0;i--){
+    if(doneSet.has(pastExpected[i]))streak++;
+    else break;
+  }
+  // Best streak
+  let best=0,cur=0;
+  pastExpected.forEach(d=>{
+    if(doneSet.has(d)){cur++;if(cur>best)best=cur;}
+    else cur=0;
+  });
+  // Last 16 weeks for heatmap
+  const hmStart=addDays(today,-112);
+  const hmExpected=getExpectedDates(t,hmStart,today);
+  const heatmap=hmExpected.map(d=>({date:d,done:doneSet.has(d)}));
+  return{streak,best,rate,completed:completed.length,total:pastExpected.length,heatmap};
+}
+let _habitExpanded=null;
+function renderHabits(){
+  const panel=document.getElementById('habitsPanel');if(!panel)return;
+  const habits=getRecurringHabits();
+  if(!habits.length){
+    panel.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--text3)">
+      <div style="font-size:24px;margin-bottom:8px;color:var(--accent)"><svg width="24" height="24" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l2.5 2.5 5.5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 1a7 7 0 110 14A7 7 0 018 1z" stroke="currentColor" stroke-width="1.3"/></svg></div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">No habits yet</div>
+      <div style="font-size:11px;margin-top:4px">Create a recurring task to start tracking streaks</div>
+    </div>`;
+    return;
+  }
+  let html='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Recurring tasks tracked as habits</div>';
+  habits.forEach(t=>{
+    const stats=getHabitStats(t);
+    const cc=catColor(t.category);
+    const isOpen=_habitExpanded===t.id;
+    const recurLabel=t.recurDays&&t.recurDays.length
+      ?t.recurDays.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join('/')
+      :t.recurU==='day'?'Daily':t.recurU==='week'?'Weekly':'Monthly';
+    html+=`<div class="habit-card${isOpen?' open':''}" onclick="toggleHabitCard('${t.id}')">
+      <div class="habit-card-hdr">
+        <div class="habit-card-dot" style="background:${cc}"></div>
+        <div class="habit-card-info">
+          <div class="habit-card-name">${esc(t.name)}</div>
+          <div class="habit-card-meta">${recurLabel} · Best: ${stats.best} days</div>
+          <div class="habit-bar"><div class="habit-bar-fill" style="width:${stats.rate}%"></div></div>
+        </div>
+        <div class="habit-streak">${stats.streak>0?'<span style="color:#f59e0b">●</span>':''} ${stats.streak}</div>
+      </div>`;
+    if(isOpen){
+      html+=`<div class="habit-detail">
+        <div class="habit-stat-row">
+          <div class="habit-stat"><span class="habit-stat-val">${stats.rate}%</span><span class="habit-stat-lbl">Rate</span></div>
+          <div class="habit-stat"><span class="habit-stat-val">${stats.streak}</span><span class="habit-stat-lbl">Current</span></div>
+          <div class="habit-stat"><span class="habit-stat-val">${stats.best}</span><span class="habit-stat-lbl">Best</span></div>
+          <div class="habit-stat"><span class="habit-stat-val">${stats.completed}/${stats.total}</span><span class="habit-stat-lbl">Done</span></div>
+        </div>
+        <div class="habit-heatmap">${renderHabitHeatmap(stats.heatmap)}</div>
+      </div>`;
+    }
+    html+=`</div>`;
+  });
+  panel.innerHTML=html;
+}
+function toggleHabitCard(id){
+  _habitExpanded=_habitExpanded===id?null:id;
+  renderHabits();
+}
+function renderHabitHeatmap(data){
+  if(!data.length)return'<div style="font-size:10px;color:var(--text3);text-align:center;padding:8px">Not enough data yet</div>';
+  // Group by week
+  const weeks={};
+  data.forEach(d=>{
+    const date=fromDk(d.date);
+    const weekStart=addDays(date,-(date.getDay()));
+    const wk=dk(weekStart);
+    if(!weeks[wk])weeks[wk]=[];
+    weeks[wk].push(d);
+  });
+  const weekKeys=Object.keys(weeks).sort();
+  let html='<div class="hm-grid">';
+  weekKeys.forEach(wk=>{
+    weeks[wk].forEach(d=>{
+      const cls=d.done?'hm-done':'hm-miss';
+      const date=fromDk(d.date);
+      const label=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()]+' '+(date.getMonth()+1)+'/'+date.getDate();
+      html+=`<div class="hm-cell ${cls}" title="${label}: ${d.done?'✓':'✗'}"></div>`;
+    });
+  });
+  html+='</div>';
+  html+=`<div class="hm-legend"><span>✗ missed</span><span>✓ completed</span></div>`;
+  return html;
 }
 
 // ══ NAVIGATION ═══════════════════════════════
@@ -891,6 +1164,37 @@ function renderAll(){
   if(curView==='day'||curView==='week'){
     setTimeout(()=>{renderNowLine();},0);
   }
+  renderProgressiveHint();
+}
+
+// ══ PROGRESSIVE HINTS ═════════════════════════
+const HINTS=[
+  {id:'routine',view:'day',check:()=>!getRoutineForDay(dk(selDate)).length&&!localStorage.getItem('clarity_routine'),
+   text:'Set up daily routines (work, gym, sleep) to structure your day and help AI schedule smarter.',action:'Schedule → My Routine',fn:()=>{switchView('schedule');switchScheduleTab('routine');}},
+  {id:'habits',view:'day',check:()=>getRecurringHabits().length>0&&!localStorage.getItem('clarity_hint_habits_seen'),
+   text:'You have recurring tasks! Open the Habits tab to track your streaks.',action:'Open Habits',fn:()=>{if(!sidebarOpen)toggleSidebar();switchSide('habits');localStorage.setItem('clarity_hint_habits_seen','1');}},
+  {id:'quickevent',view:'schedule',check:()=>tasks.filter(t=>(t.type||'task')==='event').length===0,
+   text:'Try the Quick Event bar — type "Dinner Friday 7pm" to instantly create events.',action:null,fn:null},
+  {id:'analytics',view:'day',check:()=>tasks.filter(t=>t.done||(t.doneOverrides||[]).length).length>=5&&!localStorage.getItem('clarity_hint_analytics_seen'),
+   text:'You\'ve completed several tasks! Check your Analytics to see productivity patterns.',action:'View Analytics',fn:()=>{openAnalytics();localStorage.setItem('clarity_hint_analytics_seen','1');}}
+];
+function renderProgressiveHint(){
+  const el=document.getElementById('progressiveHint');if(!el)return;
+  if(!localStorage.getItem('clarity_onboarded')){el.innerHTML='';return;} // don't show during tour
+  const dismissed=JSON.parse(localStorage.getItem('clarity_hints_dismissed')||'[]');
+  const hint=HINTS.find(h=>(h.view===curView||h.view==='any')&&!dismissed.includes(h.id)&&h.check());
+  if(!hint){el.innerHTML='';return;}
+  el.innerHTML=`<div class="prog-hint">
+    <span class="prog-hint-text">${hint.text}</span>
+    ${hint.action?`<button class="prog-hint-btn" onclick="event.stopPropagation();HINTS.find(h=>h.id==='${hint.id}').fn()">${hint.action}</button>`:''}
+    <button class="prog-hint-close" onclick="dismissHint('${hint.id}')">✕</button>
+  </div>`;
+}
+function dismissHint(id){
+  const dismissed=JSON.parse(localStorage.getItem('clarity_hints_dismissed')||'[]');
+  if(!dismissed.includes(id))dismissed.push(id);
+  localStorage.setItem('clarity_hints_dismissed',JSON.stringify(dismissed));
+  renderProgressiveHint();
 }
 function updateLabel(){
   const el=document.getElementById('curLabel');
@@ -2042,14 +2346,14 @@ function renderCat(){
   // ── Habits section ──────────────────────────────────────
   if(habits.length){
     html+=`<div class="cat-section">
-      <div class="cat-sec-title">🔁 Recurring Habits <span style="font-weight:400;opacity:.6;margin-left:4px">${habits.length}</span></div>`;
+      <div class="cat-sec-title">↻ Recurring Habits <span style="font-weight:400;opacity:.6;margin-left:4px">${habits.length}</span></div>`;
     habits.forEach(t=>{html+=catHabitRow(t)});
     html+=`</div>`;
   }
 
   // ── To Do section ────────────────────────────────────────
   html+=`<div class="cat-section"><div class="cat-sec-title">To Do <span style="font-weight:400;opacity:.6;margin-left:4px">${pending.length}</span></div>`;
-  if(!pending.length)html+=`<div class="cat-empty">All clear! 🎉</div>`;
+  if(!pending.length)html+=`<div class="cat-empty">All clear!</div>`;
   pending.forEach(t=>{html+=catRow(t)});
   html+=`</div>`;
 
@@ -2089,7 +2393,7 @@ function catHabitRow(t){
   // Calculate streak
   const streak=calcStreak(t);
   const streakHtml=streak>1
-    ?`<span class="streak-badge${streak>=7?' fire':''}">🔥 ${streak} day streak</span>`
+    ?`<span class="streak-badge${streak>=7?' fire':''}">● ${streak} day streak</span>`
     :'';
 
   // Build the change note if this task was rescheduled via "all future occurrences"
@@ -2460,7 +2764,7 @@ let _focusDur=25,_focusRemaining=25*60,_focusTotal=25*60;
 let _focusRunning=false,_focusInterval=null;
 let _focusSessions=0;
 let _focusOriginalDur=30;
-let _focusMode='task'; // 'pomodoro','task','custom'
+let _focusMode='task'; // 'sprint' (25m),'task' (task duration),'custom' (slider)
 let _focusOverlayOpen=false;
 
 function switchSideFocus(){
@@ -2585,7 +2889,7 @@ function setFocusMode(mode){
   if(_focusRunning)return;
   _focusMode=mode;
   const t=tasks.find(t=>t.id===_focusTaskId);
-  if(mode==='pomodoro'){
+  if(mode==='sprint'){
     _focusDur=25;
   } else if(mode==='task'){
     _focusDur=t?(t.duration||30):30;
@@ -2601,7 +2905,7 @@ function updateFocusModeUI(){
   const btns=document.querySelectorAll('.fo-mode-btn');
   btns.forEach(b=>{
     const m=b.textContent.toLowerCase().trim();
-    const mKey=m==='pomodoro'?'pomodoro':m==='task'?'task':'custom';
+    const mKey=m==='sprint'?'sprint':m==='task'?'task':'custom';
     b.classList.toggle('on',mKey===_focusMode);
   });
   const customRow=document.getElementById('foCustomRow');
@@ -3105,7 +3409,7 @@ function openOverduePopup(overdueList){
   }
   document.getElementById('overduePopupContent').innerHTML=`
     <div class="od-hdr">
-      <div class="od-hdr-icon">⏰</div>
+      <div class="od-hdr-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><polyline points="8,4 8,8 11,10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="od-hdr-text">
         <div class="od-hdr-title">${overdueList.length} overdue task${overdueList.length!==1?'s':''}</div>
         <div class="od-hdr-sub">${subText}</div>
@@ -3439,72 +3743,160 @@ function saveWeekIntention(){
   showToast(val?'Weekly intention saved':'Intention cleared');
 }
 
-// ══ WEEKLY WRAP-UP ══════════════════════════════
+// ══ WEEKLY REVIEW (5-step guided ritual) ═══════
+let _reviewStep=0;
+let _reviewData={wentWell:'',toImprove:'',intention:'',carryOver:[]};
+let _reviewWeekStart=null,_reviewWeekEnd=null;
+let _reviewStats={};
+
 function openWrapup(){
   const today=new Date();today.setHours(0,0,0,0);
-  // Calculate week range based on weekStartDay setting
-  const dow=today.getDay();
-  const diff=(dow-weekStartDay+7)%7;
-  const weekEnd=today;
-  const weekStart=addDays(today,-diff);
+  const dow=(today.getDay()-weekStartDay+7)%7;
+  _reviewWeekEnd=today;
+  _reviewWeekStart=addDays(today,-dow);
   
   document.getElementById('wrapupDateRange').textContent=
-    MONTHS_S[weekStart.getMonth()]+' '+weekStart.getDate()+' – '+
-    MONTHS_S[weekEnd.getMonth()]+' '+weekEnd.getDate()+', '+weekEnd.getFullYear();
+    MONTHS_S[_reviewWeekStart.getMonth()]+' '+_reviewWeekStart.getDate()+' – '+
+    MONTHS_S[_reviewWeekEnd.getMonth()]+' '+_reviewWeekEnd.getDate()+', '+_reviewWeekEnd.getFullYear();
 
-  const weekTasks=expandedTasks(weekStart,weekEnd).filter(t=>(t.type||'task')==='task');
-  const completed=weekTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate));
-  const total=weekTasks.length;
-  const doneCount=completed.length;
+  // Compute stats
+  const weekTasks=expandedTasks(_reviewWeekStart,_reviewWeekEnd).filter(t=>(t.type||'task')==='task');
+  const isDoneT=t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate);
+  const completed=weekTasks.filter(isDoneT);
+  const incomplete=weekTasks.filter(t=>!isDoneT(t)&&t._instanceDate<dk(today));
 
   const habitTasks=weekTasks.filter(t=>t.recur);
-  const habitDone=habitTasks.filter(t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate));
+  const habitDone=habitTasks.filter(isDoneT);
   const habitRate=habitTasks.length?Math.round(habitDone.length/habitTasks.length*100):0;
 
-  const dayCounts={};
-  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  completed.forEach(t=>{
-    if(t._instanceDate){
-      const d=fromDk(t._instanceDate);
-      dayCounts[dayNames[d.getDay()]]=(dayCounts[dayNames[d.getDay()]]||0)+1;
-    }
-  });
-  let bestDay='—',bestCount=0;
-  Object.entries(dayCounts).forEach(([d,c])=>{if(c>bestCount){bestDay=d;bestCount=c;}});
+  const habits=getRecurringHabits();
+  const habitStats=habits.map(t=>{const s=getHabitStats(t);return{name:t.name,streak:s.streak,weekDone:habitTasks.filter(h=>h.id===t.id&&isDoneT(h)).length,weekTotal:habitTasks.filter(h=>h.id===t.id).length};});
 
-  // Bar chart — ordered by weekStartDay
-  const orderedDays=orderedDayLabels();
-  const maxDay=Math.max(1,...orderedDays.map(d=>dayCounts[d]||0));
-  const barsHtml=orderedDays.map(d=>{
-    const c=dayCounts[d]||0;
-    const pct=Math.round(c/maxDay*100);
-    return`<div class="wrapup-bar-row">
-      <span class="wrapup-bar-label">${d}</span>
-      <div class="wrapup-bar-track"><div class="wrapup-bar-fill" style="width:${pct}%"></div></div>
-      <span class="wrapup-bar-val">${c}</span>
-    </div>`;
-  }).join('');
+  _reviewStats={total:weekTasks.length,done:completed.length,incomplete,habitRate,habitStats};
+  _reviewData={wentWell:'',toImprove:'',intention:'',carryOver:incomplete.map(t=>({id:t.id,idate:t._instanceDate,name:t.name,keep:true}))};
 
-  // Motivational message
-  const msgs=[
-    doneCount===0?'Fresh start ahead — this week is yours.':
-    doneCount<5?'Building momentum. Every task counts.':
-    doneCount<15?'Solid week. You showed up consistently.':
-    'Incredible output. You crushed it this week.'
-  ];
+  // Load saved review if exists
+  const saved=localStorage.getItem('clarity_review_'+dk(_reviewWeekStart));
+  if(saved){try{const d=JSON.parse(saved);_reviewData.wentWell=d.wentWell||'';_reviewData.toImprove=d.toImprove||'';_reviewData.intention=d.intention||'';}catch(e){}}
 
-  document.getElementById('wrapupContent').innerHTML=`
-    <div class="wrapup-stat-grid">
-      <div class="wrapup-stat"><div class="wrapup-stat-num">${doneCount}</div><div class="wrapup-stat-label">Tasks Done</div></div>
-      <div class="wrapup-stat"><div class="wrapup-stat-num">${total-doneCount}</div><div class="wrapup-stat-label">Remaining</div></div>
-      <div class="wrapup-stat"><div class="wrapup-stat-num">${habitRate}%</div><div class="wrapup-stat-label">Habit Hit Rate</div></div>
-      <div class="wrapup-stat"><div class="wrapup-stat-num">${bestDay}</div><div class="wrapup-stat-label">Most Productive</div></div>
-    </div>
-    <div style="font-size:11px;font-weight:600;color:var(--text2);margin-top:4px">Daily breakdown</div>
-    ${barsHtml}
-    <div class="wrapup-msg">${msgs[0]}</div>`;
-
+  _reviewStep=0;
   document.getElementById('wrapupOverlay').classList.add('open');
+  renderReviewStep();
+}
+
+function renderReviewStep(){
+  const content=document.getElementById('wrapupContent');
+  const footer=document.getElementById('wrapupFooter');
+  const dots=document.getElementById('wrapupDots');
+  const titles=['What went well','Carry over','What could improve','● Habit check','🎯 Next week'];
+  
+  // Dots
+  dots.innerHTML=Array.from({length:5},(_,i)=>`<span class="wr-dot${i===_reviewStep?' on':''}"></span>`).join('');
+
+  // Footer nav
+  const isFirst=_reviewStep===0,isLast=_reviewStep===4;
+  footer.innerHTML=`
+    ${!isFirst?'<button class="modal-btn-sec" onclick="prevReviewStep()">← Back</button>':'<button class="modal-btn-sec" onclick="closeWrapup()">Close</button>'}
+    <button class="modal-btn-pri" onclick="${isLast?'saveReview()':'nextReviewStep()'}">
+      ${isLast?'Save Review ✓':'Next →'}
+    </button>`;
+
+  // Step content
+  const s=_reviewStats;
+  let html='';
+  if(_reviewStep===0){
+    // What went well
+    const rate=s.total?Math.round(s.done/s.total*100):0;
+    html=`<div class="wr-step-title">${titles[0]}</div>
+      <div class="wr-auto-stat">You completed <strong>${s.done} of ${s.total}</strong> tasks this week (${rate}%).</div>
+      <textarea class="fi wr-textarea" id="wrWentWell" placeholder="What else went well this week?" rows="3">${esc(_reviewData.wentWell)}</textarea>`;
+  } else if(_reviewStep===1){
+    // Carry over
+    html=`<div class="wr-step-title">${titles[1]}</div>
+      <div class="wr-auto-stat">${_reviewData.carryOver.length} task${_reviewData.carryOver.length!==1?'s':''} didn't get done. Tap to keep or dismiss:</div>
+      <div class="wr-carry-list">`;
+    if(!_reviewData.carryOver.length){
+      html+=`<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">All tasks completed! Nothing to carry over.</div>`;
+    }
+    _reviewData.carryOver.forEach((t,i)=>{
+      html+=`<div class="wr-carry-item${t.keep?'':' dimmed'}" onclick="toggleCarryOver(${i})">
+        <span class="wr-carry-check">${t.keep?'✓':'✕'}</span>
+        <span class="wr-carry-name">${esc(t.name)}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  } else if(_reviewStep===2){
+    // What could improve
+    html=`<div class="wr-step-title">${titles[2]}</div>
+      <div class="wr-auto-stat">What would you do differently next week?</div>
+      <textarea class="fi wr-textarea" id="wrToImprove" placeholder="Reflect on what you'd change…" rows="3">${esc(_reviewData.toImprove)}</textarea>`;
+  } else if(_reviewStep===3){
+    // Habit check
+    html=`<div class="wr-step-title">${titles[3]}</div>
+      <div class="wr-auto-stat">Habit consistency: ${s.habitRate}% this week</div>
+      <div class="wr-habit-list">`;
+    if(!s.habitStats.length){
+      html+=`<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">No recurring habits tracked yet.</div>`;
+    }
+    s.habitStats.forEach(h=>{
+      const pct=h.weekTotal?Math.round(h.weekDone/h.weekTotal*100):0;
+      html+=`<div class="wr-habit-row">
+        <span class="wr-habit-name">${esc(h.name)}</span>
+        <span class="wr-habit-score">${h.weekDone}/${h.weekTotal}</span>
+        <span class="wr-habit-pct">${pct}%</span>
+        ${h.streak>0?`<span class="wr-habit-streak">● ${h.streak}</span>`:''}
+      </div>`;
+    });
+    html+=`</div>`;
+  } else if(_reviewStep===4){
+    // Next week intention
+    html=`<div class="wr-step-title">${titles[4]}</div>
+      <div class="wr-auto-stat">What's the one thing you want to accomplish next week?</div>
+      <textarea class="fi wr-textarea" id="wrIntention" placeholder="My intention for next week…" rows="3">${esc(_reviewData.intention)}</textarea>`;
+  }
+  content.innerHTML=html;
+}
+
+function nextReviewStep(){
+  saveReviewStepData();
+  _reviewStep=Math.min(4,_reviewStep+1);
+  renderReviewStep();
+}
+function prevReviewStep(){
+  saveReviewStepData();
+  _reviewStep=Math.max(0,_reviewStep-1);
+  renderReviewStep();
+}
+function saveReviewStepData(){
+  if(_reviewStep===0){const el=document.getElementById('wrWentWell');if(el)_reviewData.wentWell=el.value;}
+  if(_reviewStep===2){const el=document.getElementById('wrToImprove');if(el)_reviewData.toImprove=el.value;}
+  if(_reviewStep===4){const el=document.getElementById('wrIntention');if(el)_reviewData.intention=el.value;}
+}
+function toggleCarryOver(i){
+  _reviewData.carryOver[i].keep=!_reviewData.carryOver[i].keep;
+  renderReviewStep();
+}
+function saveReview(){
+  saveReviewStepData();
+  // Save review text
+  const key='clarity_review_'+dk(_reviewWeekStart);
+  localStorage.setItem(key,JSON.stringify({wentWell:_reviewData.wentWell,toImprove:_reviewData.toImprove,intention:_reviewData.intention,date:dk(new Date())}));
+  // Save intention for next week
+  const nextWeekStart=addDays(_reviewWeekStart,7);
+  if(_reviewData.intention)localStorage.setItem('clarity_intention_'+dk(nextWeekStart),_reviewData.intention);
+  // Carry over incomplete tasks
+  const toCarry=_reviewData.carryOver.filter(c=>c.keep);
+  if(toCarry.length){
+    const nextMonday=addDays(_reviewWeekStart,7);
+    const nextMondayKey=dk(nextMonday);
+    toCarry.forEach(c=>{
+      const t=tasks.find(t=>t.id===c.id);
+      if(t&&!t.recur){t.date=nextMondayKey;}
+    });
+    save();renderAll();
+  }
+  closeWrapup();
+  showToast(`Review saved · ${toCarry.length} task${toCarry.length!==1?'s':''} carried over`);
 }
 function closeWrapup(){document.getElementById('wrapupOverlay').classList.remove('open')}
 function toggleWrapupAuto(){
@@ -3512,6 +3904,148 @@ function toggleWrapupAuto(){
   localStorage.setItem('clarity_wrapup_auto',cur?'false':'true');
   const toggle=document.getElementById('wrapupAutoToggle');
   if(toggle)toggle.classList.toggle('on',!cur);
+}
+
+// ══ ANALYTICS DASHBOARD ════════════════════════
+function openAnalytics(){
+  document.getElementById('analyticsOverlay').classList.add('open');
+  renderAnalytics();
+}
+function closeAnalytics(){document.getElementById('analyticsOverlay').classList.remove('open')}
+
+function renderAnalytics(){
+  const body=document.getElementById('analyticsBody');if(!body)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayKey=dk(today);
+
+  // This week range
+  const dow=(today.getDay()-weekStartDay+7)%7;
+  const weekStart=addDays(today,-dow);
+  const weekEnd=addDays(weekStart,6);
+  const lastWeekStart=addDays(weekStart,-7);
+  const lastWeekEnd=addDays(weekStart,-1);
+
+  // Get tasks for this week and last week
+  const thisWeekTasks=expandedTasks(weekStart,weekEnd).filter(t=>(t.type||'task')==='task');
+  const lastWeekTasks=expandedTasks(lastWeekStart,lastWeekEnd).filter(t=>(t.type||'task')==='task');
+
+  const isDone=t=>t.done||(t.doneOverrides||[]).includes(t._instanceDate);
+  const twCompleted=thisWeekTasks.filter(isDone);
+  const lwCompleted=lastWeekTasks.filter(isDone);
+  const twRate=thisWeekTasks.length?Math.round(twCompleted.length/thisWeekTasks.length*100):0;
+  const lwRate=lastWeekTasks.length?Math.round(lwCompleted.length/lastWeekTasks.length*100):0;
+  const rateDiff=twRate-lwRate;
+  const countDiff=twCompleted.length-lwCompleted.length;
+
+  // Focus time this week (from done tasks' durations)
+  const focusMins=twCompleted.reduce((sum,t)=>sum+(t.duration||30),0);
+  const focusHrs=(focusMins/60).toFixed(1);
+
+  // Best habit streak
+  const habits=getRecurringHabits();
+  let bestStreak=0;
+  habits.forEach(t=>{const s=getHabitStats(t);if(s.streak>bestStreak)bestStreak=s.streak;});
+
+  // Tasks per day this week
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const daysInWeek=[];
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i);
+    const dayKey=dk(d);
+    const dayTasks=thisWeekTasks.filter(t=>t._instanceDate===dayKey);
+    const done=dayTasks.filter(isDone).length;
+    daysInWeek.push({day:dayNames[d.getDay()],done,total:dayTasks.length});
+  }
+  const maxDone=Math.max(1,...daysInWeek.map(d=>d.done));
+
+  // Time by category
+  const catTime={};
+  twCompleted.forEach(t=>{
+    const cat=catById(t.category);
+    const name=cat?cat.name:'Other';
+    catTime[name]=(catTime[name]||0)+(t.duration||30);
+  });
+  const catEntries=Object.entries(catTime).sort((a,b)=>b[1]-a[1]);
+  const totalCatTime=catEntries.reduce((s,e)=>s+e[1],0)||1;
+  const CAT_COLORS=['#3b82f6','#22c55e','#f43f5e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+
+  // Peak hours
+  const hourBuckets=new Array(12).fill(0);
+  twCompleted.forEach(t=>{
+    if(t.time){const h=parseInt(t.time.split(':')[0]);const idx=Math.max(0,Math.min(11,h-6));hourBuckets[idx]++;}
+  });
+  const maxHour=Math.max(1,...hourBuckets);
+  const peakIdx=hourBuckets.indexOf(maxHour);
+  const peakLabel=(peakIdx+6)+(peakIdx+6<12?'–'+(peakIdx+7)+' AM':'–'+(peakIdx+7>12?peakIdx-5:peakIdx+7)+' PM');
+
+  // Render
+  let html='';
+  // Top stats
+  html+=`<div class="ana-stats">
+    <div class="ana-stat">
+      <div class="ana-stat-val" style="color:#22c55e">${twRate}%</div>
+      <div class="ana-stat-lbl">Completion</div>
+      <div class="ana-stat-change ${rateDiff>=0?'ana-up':'ana-down'}">${rateDiff>=0?'↑':'↓'} ${Math.abs(rateDiff)}% vs last wk</div>
+    </div>
+    <div class="ana-stat">
+      <div class="ana-stat-val" style="color:#3b82f6">${twCompleted.length}</div>
+      <div class="ana-stat-lbl">Completed</div>
+      <div class="ana-stat-change ${countDiff>=0?'ana-up':'ana-down'}">${countDiff>=0?'↑':'↓'} ${Math.abs(countDiff)} tasks</div>
+    </div>
+    <div class="ana-stat">
+      <div class="ana-stat-val" style="color:#f59e0b">${focusHrs}h</div>
+      <div class="ana-stat-lbl">Focus time</div>
+    </div>
+    <div class="ana-stat">
+      <div class="ana-stat-val" style="color:#f43f5e">${bestStreak>0?'● ':''}${bestStreak}</div>
+      <div class="ana-stat-lbl">Best streak</div>
+    </div>
+  </div>`;
+
+  // Bar chart — tasks per day
+  html+=`<div class="ana-section">
+    <div class="ana-sec-title">Tasks completed this week</div>
+    <div class="ana-bars">`;
+  daysInWeek.forEach(d=>{
+    const pct=d.done/maxDone*100;
+    const isToday=dayNames[today.getDay()]===d.day;
+    html+=`<div class="ana-bar-col">
+      <div class="ana-bar-val">${d.done}</div>
+      <div class="ana-bar" style="height:${Math.max(2,pct)}%;background:var(--accent);opacity:${isToday?1:.5+d.done/maxDone*.5}"></div>
+      <div class="ana-bar-lbl${isToday?' ana-today':''}">${d.day}</div>
+    </div>`;
+  });
+  html+=`</div></div>`;
+
+  // Category breakdown
+  if(catEntries.length){
+    html+=`<div class="ana-section"><div class="ana-sec-title">Time by category</div><div class="ana-cats">`;
+    catEntries.forEach((e,i)=>{
+      const pct=Math.round(e[1]/totalCatTime*100);
+      const color=CAT_COLORS[i%CAT_COLORS.length];
+      html+=`<div class="ana-cat-row">
+        <div class="ana-cat-dot" style="background:${color}"></div>
+        <div class="ana-cat-name">${esc(e[0])}</div>
+        <div class="ana-cat-bar"><div class="ana-cat-fill" style="width:${pct}%;background:${color}"></div></div>
+        <div class="ana-cat-pct">${pct}%</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  // Peak hours
+  html+=`<div class="ana-section"><div class="ana-sec-title">Peak productivity hours</div>
+    <div class="ana-peak">`;
+  const hrLabels=['6a','7','8','9','10','11','12p','1','2','3','4','5'];
+  hourBuckets.forEach((v,i)=>{
+    const intensity=v/maxHour;
+    html+=`<div class="ana-peak-cell" style="background:rgba(var(--accent-rgb),${intensity*.7+.05})">${hrLabels[i]}</div>`;
+  });
+  html+=`</div>`;
+  if(maxHour>0)html+=`<div style="text-align:center;font-size:10px;color:var(--accent);font-weight:700;margin-top:6px">🎯 Most productive: ${peakLabel}</div>`;
+  html+=`</div>`;
+
+  body.innerHTML=html;
 }
 
 // ══ AI SCHEDULE ═════════════════════════════════
@@ -3606,16 +4140,25 @@ async function generateAISchedule(){
   if(prefMorning)prefStr+='\n- Front-load important/difficult tasks in the morning';
   if(prefAfternoon)prefStr+='\n- Schedule important/difficult tasks in the afternoon';
 
-  // Get existing tasks for that day
-  const existing=tasksOn(dateVal).filter(t=>t.time).map(t=>
+  // Get existing tasks for that day (timed + all-day + multi-day)
+  const dayTasks=tasksOn(dateVal);
+  const existingTimed=dayTasks.filter(t=>t.time).map(t=>
     `${fmtT(t.time)} - ${esc(t.name)} (${durLabel(t.duration||30)})`
   );
-  const existingStr=existing.length
-    ?`\n\nAlready scheduled:\n${existing.join('\n')}`
+  const existingAllday=dayTasks.filter(t=>t.allday||t._isMultiDay).map(t=>
+    `All Day: ${esc(t.name)}${t._isMultiDay?' (day '+t._multiDayNum+' of '+t._multiDayTotal+')':''}`
+  );
+  const allExisting=[...existingAllday,...existingTimed];
+  const existingStr=allExisting.length
+    ?`\n\nAlready scheduled:\n${allExisting.join('\n')}`
     :'';
 
   // Get routine blocks for this day
   const routineStr=routineContextStr(dateVal);
+
+  // Holiday / suppressed routines awareness
+  const isSuppressed=isRoutineSuppressed(dateVal);
+  const holidayStr=isSuppressed?'\n\nNote: Routines are paused for this day (holiday or day off). The entire day is open for flexible scheduling.':'';
 
   // Show spinner
   document.getElementById('aiGenLabel').style.display='none';
@@ -3623,7 +4166,7 @@ async function generateAISchedule(){
   document.getElementById('aiError').style.display='none';
   document.getElementById('aiPreviewWrap').style.display='none';
 
-  const prompt=`You are Luclaro, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}
+  const prompt=`You are Luclaro, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}${holidayStr}
 
 The user wants to schedule:
 "${input}"
@@ -3637,12 +4180,13 @@ Rules:
 - If the user specifies a duration, use it exactly
 - If something is clearly an event (birthday, meeting, appointment, class, church, party), set type:"event"
 - If it's a birthday or anniversary, set allday:true with recur/recurN:1/recurU:"year"
+- If user says recurring on specific weekdays (e.g. "every Mon/Wed/Fri"), set recurDays:[1,3,5] (0=Sun,6=Sat) and recurU:"week"
 - If the user lists sub-items after a task (e.g. "study: geography, calculus" or "meeting prep — slides, handouts"), create a subtasks array with proportional durations
 - For tasks over 60 minutes, break into subtasks with focused blocks and breaks
 - Order by logical flow of the day
 
 Respond with ONLY a JSON array, no markdown, no backticks:
-[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","allday":false,"recur":false,"recurN":1,"recurU":"day","subtasks":[]}]
+[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","allday":false,"recur":false,"recurN":1,"recurU":"day","recurDays":[],"subtasks":[]}]
 Subtask format: {"name":"Review notes","duration":25}`;
 
   try{
@@ -3664,13 +4208,17 @@ Subtask format: {"name":"Review notes","duration":25}`;
     const preview=document.getElementById('aiPreview');
     preview.innerHTML=_aiTasks.map((t,i)=>{
       const isEvent=(t.type||'task')==='event';
+      const isAllday=!!(t.allday);
       const subs=t.subtasks||[];
+      const recurDays=t.recurDays||[];
+      const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const recurLabel=t.recur?(recurDays.length?' · ↻ '+recurDays.map(d=>DAY_NAMES[d]).join('/'):(t.recurU==='year'?' · ↻ yearly':t.recurU==='month'?' · ↻ monthly':t.recurU==='week'?' · ↻ weekly':' · ↻ daily')):'';
       let subsHtml=subs.length?`<div style="margin-left:26px;margin-top:3px">${subs.map(s=>`<div style="font-size:10px;color:var(--text3);padding-left:10px;border-left:2px solid var(--border)">↳ ${esc(s.name)}${s.duration?' · '+durLabel(s.duration):''}</div>`).join('')}</div>`:'';
       return`<div class="ai-preview-task" style="${isEvent?'border-left:3px solid var(--accent);background:var(--accent-pale)':''}">
         <span style="font-size:11px;font-weight:700;color:var(--text3);min-width:18px">${i+1}.</span>
-        <span class="ai-preview-time">${fmtT(t.time)}</span>
-        <span class="ai-preview-name">${esc(t.name)}${isEvent?' <span style="font-size:9px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">EVENT</span>':''}</span>
-        <span class="ai-preview-dur">${durLabel(t.duration||30)}</span>
+        <span class="ai-preview-time">${isAllday?'All Day':t.time?fmtT(t.time):''}</span>
+        <span class="ai-preview-name">${esc(t.name)}${isEvent?' <span style="font-size:9px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">EVENT</span>':''}${recurLabel?'<span style="font-size:9px;color:var(--text3)">'+recurLabel+'</span>':''}</span>
+        ${isAllday?'':` <span class="ai-preview-dur">${durLabel(t.duration||30)}</span>`}
       </div>${subsHtml}`;
     }).join('');
     document.getElementById('aiPreviewWrap').style.display='';
@@ -3711,7 +4259,7 @@ function acceptAISchedule(){
       subtasks:subs,
       scheduled:true,
       done:false,
-      recur:!!(t.recur),recurN:t.recurN||1,recurU:t.recurU||'day',recurDays:[],
+      recur:!!(t.recur),recurN:t.recurN||1,recurU:t.recurU||'day',recurDays:t.recurDays||[],
       doneOverrides:[],deletedOccurrences:[],
       multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
     });
@@ -3811,7 +4359,8 @@ document.getElementById('bdInput').addEventListener('keydown',e=>{
 // ══ QUICK EVENT ADD ════════════════════════════
 function parseQuickEvent(raw){
   let text=raw.trim();if(!text)return null;
-  let time=null,date=null,location=null,allday=false;
+  let time=null,date=null,location=null,allday=false,duration=null;
+  let recur=false,recurN=1,recurU='day';
 
   // 1. Extract time FIRST (before "at" parsing to avoid "at 2pm" confusion)
   const timeRe=/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)\b/;
@@ -3826,7 +4375,24 @@ function parseQuickEvent(raw){
   // 2. Check "all day"
   if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
 
-  // 3. Extract numeric dates: 5/11, 05/11, 5/11/2026, 5-11, 5-11-2026
+  // 2b. Auto-detect birthdays & anniversaries → all-day + yearly recurrence
+  if(/\b(birthday|bday|b-day|anniversary)\b/i.test(text)){
+    allday=true;recur=true;recurN=1;recurU='year';
+  }
+
+  // 3. Extract duration: "for 2 hours", "1.5hr", "30 min", "90 minutes"
+  const durRe=/\b(?:for\s+)?(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|m)\b/i;
+  const durM=text.match(durRe);
+  if(durM){
+    const val=parseFloat(durM[1]);
+    const unit=durM[2].toLowerCase();
+    if(unit.startsWith('h')){duration=Math.round(val*60);}
+    else{duration=Math.round(val);}
+    if(duration<5)duration=null; // sanity check
+    text=text.replace(durM[0],'').replace(/\bfor\b\s*/i,'').trim();
+  }
+
+  // 4. Extract numeric dates: 5/11, 05/11, 5/11/2026, 5-11, 5-11-2026
   const numDateRe=/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/;
   const nd=text.match(numDateRe);
   if(nd){
@@ -3841,7 +4407,7 @@ function parseQuickEvent(raw){
     }
   }
 
-  // 4. Extract named dates: today, tomorrow, day names, month names
+  // 5. Extract named dates: today, tomorrow, day names, month names
   const today=new Date();today.setHours(0,0,0,0);
   if(!date){
     const dayNames=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
@@ -3854,18 +4420,14 @@ function parseQuickEvent(raw){
     if(!date){for(let mi=0;mi<12;mi++){const re=new RegExp('\\b('+monthNames[mi]+'|'+monthNamesS[mi]+')\\s+(\\d{1,2})\\b','i');const mm=text.match(re);if(mm){const dayNum=parseInt(mm[2]);const yr2=mi<today.getMonth()||(mi===today.getMonth()&&dayNum<today.getDate())?today.getFullYear()+1:today.getFullYear();date=`${yr2}-${pad(mi+1)}-${pad(dayNum)}`;text=text.replace(mm[0],'').trim();break;}}}
   }
 
-  // 5. Extract "at <location>" — only if content after "at" contains a letter (not a date/number)
+  // 6. Extract "at <location>" — only if content after "at" contains a letter (not a date/number)
   const atMatch=text.match(/\s+at\s+((?=.*[a-zA-Z]).+)$/i);
   if(atMatch){location=atMatch[1].trim();text=text.slice(0,atMatch.index).trim();}
 
-  // 6. Defaults
-  if(!date)date=dk(today);
-  if(!time&&!allday)time='09:00';
-
   // 7. Clean up name — strip trailing prepositions, extra whitespace
-  const name=text.replace(/\s+(at|on|in)$/i,'').replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
+  const name=text.replace(/\s+(at|on|in|for)$/i,'').replace(/\s+/g,' ').replace(/^[\-,·]\s*/,'').replace(/\s*[\-,·]$/,'').trim();
   if(!name)return null;
-  return{name,date,time:allday?null:time,allday,location};
+  return{name,date:date||null,time:allday?null:(time||null),allday,location,duration,recur,recurN,recurU};
 }
 let _lastQeId=null;
 function addQuickEvent(){
@@ -3873,21 +4435,49 @@ function addQuickEvent(){
   const raw=input.value.trim();if(!raw)return;
   const parsed=parseQuickEvent(raw);
   if(!parsed){showToast('Could not parse — try "Dinner Friday 7pm"');return;}
+  input.value='';
+
+  const hasDate=!!parsed.date;
+  const hasTime=!!parsed.time||parsed.allday;
+  const isComplete=hasDate&&hasTime;
+  const dur=parsed.duration||60;
+
+  // ── Incomplete → save to Brain Dump for later ──
+  if(!isComplete){
+    const bdItem={
+      id:genId(),name:parsed.name,type:'event',category:'none',priority:'none',
+      notes:'',subtasks:[],
+      _pendingDate:parsed.date||'',_pendingTime:parsed.time||'',
+      _pendingLocation:parsed.location||'',_pendingAllday:parsed.allday,_pendingDuration:dur,
+      _pendingRecur:!!parsed.recur,_pendingRecurN:parsed.recurN||1,_pendingRecurU:parsed.recurU||'day'
+    };
+    brainDump.push(bdItem);
+    save();renderAll();
+    const missing=[];
+    if(!hasDate)missing.push('date');
+    if(!hasTime)missing.push('time');
+    showToast('"'+parsed.name+'" saved to Brain Dump — needs '+missing.join(' & '));
+    return;
+  }
+
+  // ── Complete → schedule with draft flag ──
   const newId=genId();
   _lastQeId=newId;
-  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:60,scheduled:true,done:false,location:parsed.location||'',recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
-  input.value='';save();renderAll();
+  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:dur,scheduled:true,done:false,location:parsed.location||'',recur:!!parsed.recur,recurN:parsed.recurN||1,recurU:parsed.recurU||'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,_draft:true});
+  save();renderAll();
   // Show confirmation card
   const d=fromDk(parsed.date);
   const dateStr=DLONG[d.getDay()]+', '+MONTHS_S[d.getMonth()]+' '+d.getDate();
   const timeStr=parsed.allday?'All Day':fmtT(parsed.time);
   const locStr=parsed.location?` · ${esc(parsed.location)}`:'';
+  const durStr=!parsed.allday&&dur!==60?' · '+durLabel(dur):'';
+  const recurStr=parsed.recur?(parsed.recurU==='year'?' · ↻ yearly':parsed.recurU==='month'?' · ↻ monthly':' · ↻ recurring'):'';
   const el=document.getElementById('qeConfirm');
   if(el){
     el.innerHTML=`<div class="qe-confirm-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l3 3 5-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="qe-confirm-body">
         <div class="qe-confirm-title">${esc(parsed.name)}</div>
-        <div class="qe-confirm-detail">${dateStr} · ${timeStr}${locStr}</div>
+        <div class="qe-confirm-detail">${dateStr} · ${timeStr}${durStr}${recurStr}${locStr}</div>
         <div class="qe-confirm-actions">
           <button class="qe-confirm-btn qe-edit" onclick="openQeEdit()">Edit details</button>
           <button class="qe-confirm-btn qe-done" onclick="dismissQeConfirm()">Done</button>
@@ -3895,10 +4485,14 @@ function addQuickEvent(){
       </div>`;
     el.style.display='flex';
   }
+  // Tour interactive trigger
+  if(window._tourOnQuickEvent)window._tourOnQuickEvent();
 }
 function dismissQeConfirm(){
   const el=document.getElementById('qeConfirm');
   if(el){el.style.display='none';el.innerHTML='';}
+  // User accepted — clear draft flag
+  if(_lastQeId){const t=tasks.find(t=>t.id===_lastQeId);if(t)delete t._draft;save();}
 }
 function openQeEdit(){
   dismissQeConfirm();
@@ -3971,10 +4565,17 @@ document.addEventListener('dragend',function(){
   const wg=document.getElementById('weekGrid');if(wg)wg.classList.remove('drag-active');
   dragTaskId=null;dragInstanceDate=null;dragBdId=null;_dragFromGrip=false;
 });
-// Track whether mousedown started on a drag grip
+// Track whether mousedown started in the drag zone (top ~25px of block)
 let _dragFromGrip=false;
 document.addEventListener('mousedown',function(e){
-  _dragFromGrip=!!e.target.closest('.drag-grip');
+  const block=e.target.closest('.wk-task-block,.day-task-block');
+  if(block){
+    const rect=block.getBoundingClientRect();
+    const clickY=e.clientY-rect.top;
+    _dragFromGrip=clickY<=25;
+  } else {
+    _dragFromGrip=false;
+  }
 });
 function onBDS(e,id){dragBdId=id;dragTaskId=null;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','bd:'+id);setTimeout(()=>e.target.classList.add('dragging'),0);_setDragActive(true)}
 function onBDE(e){e.target.classList.remove('dragging');dragBdId=null;_setDragActive(false)}
@@ -4220,6 +4821,7 @@ function onDropDate(e,dateKey){
     tasks.push({...t,type:'task',date:dateKey,time:defaultTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(e.currentTarget),100);
+    if(window._tourOnDrop)window._tourOnDrop();
   }else if(dragTaskId){
     rescheduleTask(dragTaskId,dragInstanceDate,dateKey,null);
     dragTaskId=null;dragInstanceDate=null;
@@ -4246,6 +4848,7 @@ function onDropSlot(e,dateKey,time){
     tasks.push({...t,type:'task',date:dateKey,time,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
+    if(window._tourOnDrop)window._tourOnDrop();
   }else if(dragTaskId){
     rescheduleTask(dragTaskId,dragInstanceDate,dateKey,time,dropEl);
     dragTaskId=null;dragInstanceDate=null;
@@ -4298,7 +4901,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
   let _tStartX=0,_tStartY=0,_tMoved=false;
   const MOVE_THRESH=12;
 
-  function findDraggable(el){
+  function findDraggable(el,touchY){
     // Don't start drag on checkboxes or resize handles
     if(el.closest('.task-check'))return null;
     const bd=el.closest('.bd-card[draggable]');if(bd)return{el:bd,type:'bd',id:bd.getAttribute('ondragstart')?.match(/'([^']+)'/)?.[1]};
@@ -4307,11 +4910,12 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
       const m=task.getAttribute('ondragstart')?.match(/'([^']+)','([^']*)'/);
       if(m)return{el:task,type:'task',id:m[1],idate:m[2]};
     }
-    // Week/Day view: only start drag from the grip bar
-    const grip=el.closest('.drag-grip');
-    if(grip){
-      const block=grip.closest('.wk-task-block,.day-task-block');
-      if(block){
+    // Week/Day view: only start drag from the top zone of the block
+    const block=el.closest('.wk-task-block,.day-task-block');
+    if(block&&touchY!==undefined){
+      const rect=block.getBoundingClientRect();
+      const relY=touchY-rect.top;
+      if(relY<=30){
         const m=block.getAttribute('ondragstart')?.match(/'([^']+)','([^']*)'/);
         if(m)return{el:block,type:'task',id:m[1],idate:m[2]};
       }
@@ -4325,7 +4929,7 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
   }
 
   document.addEventListener('touchstart',function(e){
-    const info=findDraggable(e.target);if(!info)return;
+    const info=findDraggable(e.target,e.touches[0].clientY);if(!info)return;
     _tDragEl=info.el;_tType=info.type;_tId=info.id;_tIDate=info.idate;
     _tSugg=info.type==='sugg'?{ci:info.ci,ii:info.ii}:null;
     _tStartX=e.touches[0].clientX;_tStartY=e.touches[0].clientY;_tMoved=false;
@@ -5524,6 +6128,7 @@ function onSearch(){
   const matches=all.filter(t=>
     t.name.toLowerCase().includes(q)||
     (t.notes&&t.notes.toLowerCase().includes(q))||
+    (t.location&&t.location.toLowerCase().includes(q))||
     (t.category&&t.category!=='none'&&(catById(t.category)?.name||'').toLowerCase().includes(q))
   ).slice(0,12);
   if(!matches.length){res.innerHTML='<div class="search-empty">No results</div>';return;}
@@ -5812,7 +6417,7 @@ function getSuggPalette(){
 
 const SUGGESTIONS=[
   {
-    category:'🧘 Mindfulness & Wellness',
+    category:'Mindfulness & Wellness',
     color:'#10b981',
     items:[
       {name:'Morning meditation',sub:'10–15 min to start the day calm',priority:'high'},
@@ -5824,7 +6429,7 @@ const SUGGESTIONS=[
     ]
   },
   {
-    category:'💪 Health & Fitness',
+    category:'Health & Fitness',
     color:'#f43f5e',
     items:[
       {name:'Morning workout',sub:'Gym, run, or home workout',priority:'high'},
@@ -5836,7 +6441,7 @@ const SUGGESTIONS=[
     ]
   },
   {
-    category:'📚 Learning & Growth',
+    category:'Learning & Growth',
     color:'#6366f1',
     items:[
       {name:'Read for 30 minutes',sub:'Books, articles, or research',priority:'medium'},
@@ -5857,7 +6462,7 @@ const SUGGESTIONS=[
     ]
   },
   {
-    category:'💼 Work & Productivity',
+    category:'Work & Productivity',
     color:'#3b82f6',
     items:[
       {name:'Deep work block',sub:'2 hrs of focused, distraction-free work',priority:'high'},
