@@ -15,55 +15,65 @@ function initSupabase(){
 initSupabase();
 
 async function checkAuthState(){
-  if(!_supabase){showSplashAuth('guest');return;}
+  if(!_supabase){showSplashState('signin');return;}
   try{
     const{data:{session}}=await _supabase.auth.getSession();
     if(session&&session.user){
       _authUser=session.user;
       _isGuest=false;
-      // Set username from Google profile if not already set
       const meta=session.user.user_metadata||{};
       const currentName=localStorage.getItem('clarity_username');
       if(!currentName&&meta.full_name){
         localStorage.setItem('clarity_username',meta.full_name.split(' ')[0]);
       }
-      showSplashAuth('authenticated');
+      // If user has a name already, go straight to app
+      if(localStorage.getItem('clarity_username')){
+        showSplashState('entering');
+        setTimeout(()=>enterApp(),600);
+      } else {
+        showSplashState('name');
+      }
     } else {
-      showSplashAuth('unauthenticated');
+      showSplashState('signin');
     }
   }catch(e){
     console.error('Auth check failed:',e);
-    showSplashAuth('unauthenticated');
+    showSplashState('signin');
   }
 }
 
-function showSplashAuth(state){
+function showSplashState(state){
   const authWrap=document.getElementById('splashAuthWrap');
-  const authReady=document.getElementById('splashAuthReady');
   const authLoading=document.getElementById('splashAuthLoading');
+  const nameStep=document.getElementById('splashNameStep');
   if(!authWrap)return;
   authWrap.style.display='none';
-  authReady.style.display='none';
   authLoading.style.display='none';
-  if(state==='authenticated'){
-    authReady.style.display='';
+  nameStep.style.display='none';
+  if(state==='signin'){
+    authWrap.style.display='';
   } else if(state==='loading'){
     authLoading.style.display='';
-  } else if(state==='guest'){
-    // Supabase not loaded — show guest-only
-    authWrap.style.display='';
-    const gBtn=document.getElementById('googleSignInBtn');
-    if(gBtn)gBtn.style.display='none';
-    const divider=authWrap.querySelector('.splash-auth-divider');
-    if(divider)divider.style.display='none';
-  } else {
-    authWrap.style.display='';
+  } else if(state==='name'){
+    nameStep.style.display='';
+    const nameInput=document.getElementById('splashName');
+    if(nameInput)setTimeout(()=>nameInput.focus(),400);
+  } else if(state==='entering'){
+    // briefly show nothing before app loads
   }
+}
+
+function finishNameStep(){
+  const nameInput=document.getElementById('splashName');
+  const name=(nameInput?nameInput.value.trim():'');
+  if(!name){nameInput.focus();return;}
+  localStorage.setItem('clarity_username',name);
+  enterApp();
 }
 
 async function signInWithGoogle(){
   if(!_supabase){showToast('Authentication unavailable');return;}
-  showSplashAuth('loading');
+  showSplashState('loading');
   try{
     const{error}=await _supabase.auth.signInWithOAuth({
       provider:'google',
@@ -75,38 +85,28 @@ async function signInWithGoogle(){
   }catch(e){
     console.error('Google sign-in error:',e);
     showToast('Sign-in failed — try again');
-    showSplashAuth('unauthenticated');
+    showSplashState('signin');
   }
 }
 
-function enterAsGuest(){
-  _isGuest=true;
-  _authUser=null;
-  enterApp();
-}
-
 async function signOutUser(){
-  if(_supabase&&!_isGuest){
+  if(_supabase){
     try{await _supabase.auth.signOut();}catch(e){console.error(e);}
   }
   _authUser=null;
   _isGuest=false;
   closeDrawer();
-  // Show splash again
   const splash=document.getElementById('splash');
   splash.style.display='';
   splash.classList.remove('hiding');
-  showSplashAuth('unauthenticated');
-  initSplashName();
+  showSplashState('signin');
 }
 
 function updateAccountUI(){
   const accSection=document.getElementById('accountSection');
-  const guestSection=document.getElementById('guestSection');
-  if(!accSection||!guestSection)return;
-  if(_authUser&&!_isGuest){
+  if(!accSection)return;
+  if(_authUser){
     accSection.style.display='';
-    guestSection.style.display='none';
     const meta=_authUser.user_metadata||{};
     const name=meta.full_name||_authUser.email||'User';
     const email=_authUser.email||'';
@@ -116,7 +116,6 @@ function updateAccountUI(){
     document.getElementById('accountEmail').textContent=email;
   } else {
     accSection.style.display='none';
-    guestSection.style.display='';
   }
 }
 
@@ -176,11 +175,15 @@ if(_supabase){
       if(!currentName&&meta.full_name){
         localStorage.setItem('clarity_username',meta.full_name.split(' ')[0]);
       }
-      // If on splash, show authenticated state
+      // If on splash, proceed to name step or enter app
       const splash=document.getElementById('splash');
       if(splash&&splash.style.display!=='none'){
-        showSplashAuth('authenticated');
-        initSplashName();
+        if(localStorage.getItem('clarity_username')){
+          showSplashState('entering');
+          setTimeout(()=>enterApp(),600);
+        } else {
+          showSplashState('name');
+        }
       }
     }
   });
@@ -286,30 +289,6 @@ const SPLASH_TAGLINES=[
   "Light the path forward.",
   "Ordered steps, bright day.",
 ];
-function initSplashName(){
-  const name=localStorage.getItem('clarity_username');
-  const onboarded=localStorage.getItem('clarity_onboarded');
-  // Rotate tagline daily — always show regardless of user state
-  const dayIndex=Math.floor(Date.now()/86400000)%SPLASH_TAGLINES.length;
-  const sublineEl=document.getElementById('splashSubline');
-  if(sublineEl){
-    sublineEl.textContent=SPLASH_TAGLINES[dayIndex];
-    sublineEl.style.opacity='1';
-    sublineEl.style.display=''; // ensure not hidden
-  }
-  if(onboarded&&name){
-    const h=new Date().getHours();
-    let greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-    document.getElementById('splashGreeting').textContent=greet+', '+name+'.';
-    document.getElementById('splashGreeting').style.display='';
-    document.getElementById('splashTagline').style.display='none';
-  } else if(onboarded&&!name){
-    // returning user without name — keep tagline, show subline
-  } else {
-    document.getElementById('splashNameWrap').style.display='';
-  }
-}
-initSplashName();
 
 // ══ GUIDED TOUR (contextual, tip-highlight style) ═══
 let _tourStep=0;
@@ -521,10 +500,7 @@ function finishTour(){
   if(sidebarOpen)toggleSidebar();
 }
 function replayTour(){
-  localStorage.removeItem('clarity_onboarded');
-  _tourStep=0;
-  switchView('day');
-  setTimeout(showTourStep,400);
+  showToast('Interactive tour coming soon!');
 }
 
 function showOnboarding(){
@@ -1110,6 +1086,7 @@ function expandedTasks(start,end){
         if(hasRecurDays){
           // Day-of-week recurrence: iterate by week intervals, emit on matching days
           const baseDow=base.getDay();
+          const recurEndDate=t.recurEnd?fromDk(t.recurEnd):null;
           // Find the Monday (or start) of the base week
           const baseWeekStart=new Date(base);baseWeekStart.setDate(baseWeekStart.getDate()-baseDow);
           let iStart=0;
@@ -1122,6 +1099,7 @@ function expandedTasks(start,end){
               const dayDate=new Date(weekStart);dayDate.setDate(dayDate.getDate()+dow);
               if(dayDate<=base)continue; // skip before/on base date (base date already handled above)
               if(dayDate>e)continue;
+              if(recurEndDate&&dayDate>recurEndDate)continue; // past recurrence end date
               if(dayDate>=s){
                 const ndk=dk(dayDate);
                 const del2=(t.deletedOccurrences||[]).includes(ndk);
@@ -1137,6 +1115,7 @@ function expandedTasks(start,end){
           }
         } else {
         // Standard recurrence (day/week/month without recurDays)
+        const recurEndDate2=t.recurEnd?fromDk(t.recurEnd):null;
         let iStart=1;
         const daysBetween=Math.floor((s-base)/(86400000));
         if(daysBetween>0){
@@ -1149,6 +1128,7 @@ function expandedTasks(start,end){
           else if(t.recurU==='week')next.setDate(next.getDate()+t.recurN*7*i);
           else next.setMonth(next.getMonth()+t.recurN*i);
           if(next>e)break;
+          if(recurEndDate2&&next>recurEndDate2)break; // past recurrence end date
           if(next>=s){
             const ndk=dk(next);
             const del2=(t.deletedOccurrences||[]).includes(ndk);
@@ -3203,7 +3183,7 @@ function updateFocusMetaTime(){
   let timeStr='';
   if(t.time){
     const[h,m]=t.time.split(':').map(Number);
-    const endMins=h*60+m+_focusDur;
+    const endMins=h*60+m+(t.duration||30); // use actual task duration, not focus timer
     timeStr=fmtT(t.time)+' – '+fmtT(pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60));
   }
   const metaEl=document.getElementById('foTaskMeta');
@@ -3360,23 +3340,26 @@ function restoreFocusTimer(){
 }
 function addFocusTime(){
   const t=tasks.find(t=>t.id===_focusTaskId);
+  // Calculate the actual new task duration (original + 15, snapped to 15-min)
+  const currentTaskDur=t?(t.duration||30):30;
+  const newTaskDur=Math.round((currentTaskDur+15)/15)*15;
   if(t&&t.time&&t.date){
-    const newDur=_focusDur+15;
-    const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newDur);
+    const overflow=checkDurationOverflow(t.id,_focusDate||t.date,t.time,newTaskDur);
     if(overflow.blocked){
       showFocusNotification(`Can't extend — ${overflow.count} tasks already at ${fmtT(overflow.slotTime)}`,'error');
       return;
     }
-    const routineCheck=checkRoutineOverflow(_focusDate||t.date,t.time,newDur);
+    const routineCheck=checkRoutineOverflow(_focusDate||t.date,t.time,newTaskDur);
     if(routineCheck.blocked){
       showFocusNotification(`Extending runs into ${routineCheck.routineName} (${fmtT(routineCheck.routineStart)})`,'warn');
     }
   }
+  // Extend focus timer by 15 min
   _focusRemaining+=15*60;
   _focusTotal+=15*60;
   _focusDur+=15;
-  if(t)t.duration=_focusDur;
-  save();
+  // Extend the actual task duration by 15 min (not setting it to _focusDur)
+  if(t){t.duration=newTaskDur;save();}
   if(_focusRunning){
     localStorage.setItem('clarity_focus_active',JSON.stringify({
       taskId:_focusTaskId,date:_focusDate,
@@ -3386,7 +3369,7 @@ function addFocusTime(){
   }
   updateFocusDisplay();
   updateFocusMetaTime();
-  showFocusNotification(`+15 min · Task now ${durLabel(_focusDur)}`,'ok');
+  showFocusNotification(`+15 min · Task now ${durLabel(newTaskDur)}`,'ok');
 }
 function resetFocusTimer(){
   clearInterval(_focusInterval);
@@ -3903,7 +3886,8 @@ const _origEnterApp=enterApp;
 window.enterApp=function(){
   _origEnterApp();
   setTimeout(checkOverdueTasks,1500);
-  showOnboarding();
+  // Onboarding disabled — will be replaced by sandbox demo
+  localStorage.setItem('clarity_onboarded','true');
   // renderGreeting is already called inside renderAll→renderDay; no need to call again
 };
 
@@ -4409,6 +4393,8 @@ Rules:
 - Don't overlap with existing tasks${prefStr}
 - Put time-specific requests at the exact time asked ("at noon", "at 2pm")
 - Estimate realistic durations: quick tasks ~15m, medium ~30-45m, deep work ~60-120m
+- All durations MUST be in 15-minute increments (15, 30, 45, 60, 75, 90, etc.)
+- All start times MUST be on 15-minute marks (e.g. 08:00, 08:15, 08:30, 08:45)
 - If the user specifies a duration, use it exactly
 - If something is clearly an event (birthday, meeting, appointment, class, church, party), set type:"event"
 - If it's a birthday or anniversary, set allday:true with recur/recurN:1/recurU:"year"
@@ -4465,16 +4451,18 @@ Subtask format: {"name":"Review notes","duration":25}`;
 function acceptAISchedule(){
   const dateVal=document.getElementById('aiDate').value;
   _aiTasks.forEach(t=>{
-    const subs=(t.subtasks||[]).map(s=>({id:genId(),name:s.name,duration:s.duration||0,done:false}));
+    const subs=(t.subtasks||[]).map(s=>({id:genId(),name:s.name,duration:Math.round((s.duration||15)/15)*15||15,done:false}));
     const isAllday=!!(t.allday);
+    const dur=Math.round((t.duration||30)/15)*15||15;
+    const time=isAllday?null:(t.time?snapTo15(t.time):null);
     tasks.push({
       id:genId(),
       name:t.name,
       type:t.type||'task',
       date:dateVal,
-      time:isAllday?null:t.time,
+      time:time,
       allday:isAllday,
-      duration:t.duration||30,
+      duration:dur,
       priority:t.priority||'none',
       category:t.category||'none',
       location:t.location||'',
@@ -4687,7 +4675,9 @@ function addQuickEvent(){
   // ── Complete → schedule with draft flag ──
   const newId=genId();
   _lastQeId=newId;
-  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:parsed.time,allday:parsed.allday,duration:dur,scheduled:true,done:false,location:parsed.location||'',recur:!!parsed.recur,recurN:parsed.recurN||1,recurU:parsed.recurU||'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,_draft:true});
+  const qeTime=parsed.allday?null:(parsed.time?snapTo15(parsed.time):null);
+  const qeDur=Math.round((dur)/15)*15||15;
+  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:qeTime,allday:parsed.allday,duration:qeDur,scheduled:true,done:false,location:parsed.location||'',recur:!!parsed.recur,recurN:parsed.recurN||1,recurU:parsed.recurU||'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,_draft:true});
   save();renderAll();
   // Show confirmation card
   const d=fromDk(parsed.date);
@@ -5332,18 +5322,32 @@ function onDurSpinnerChange(){
 }
 
 // ── Start / End time field sync ──
+// Build 15-min increment time options for select dropdowns
+function buildTimeOptions(selectEl, selectedTime){
+  selectEl.innerHTML='';
+  for(let h=0;h<24;h++){
+    for(let m=0;m<60;m+=15){
+      const val=pad(h)+':'+pad(m);
+      const opt=document.createElement('option');
+      opt.value=val;
+      opt.textContent=fmtT(val);
+      if(val===selectedTime)opt.selected=true;
+      selectEl.appendChild(opt);
+    }
+  }
+}
 function syncEndTimeFromDur(){
   const startEl=document.getElementById('fStartTime');
   const endEl=document.getElementById('fEndTime');
   if(!startEl||!endEl||!startEl.value)return;
   const[sh,sm]=startEl.value.split(':').map(Number);
   const endMins=sh*60+sm+_selDur;
-  endEl.value=pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60);
+  const endVal=pad(Math.floor(endMins/60)%24)+':'+pad(endMins%60);
+  endEl.value=endVal;
 }
 function onStartTimeChange(){
   const startEl=document.getElementById('fStartTime');
   if(!startEl||!startEl.value)return;
-  startEl.value=snapTo15(startEl.value);
   mTime=startEl.value;
   syncEndTimeFromDur();
 }
@@ -5351,12 +5355,11 @@ function onEndTimeChange(){
   const startEl=document.getElementById('fStartTime');
   const endEl=document.getElementById('fEndTime');
   if(!startEl||!endEl||!startEl.value||!endEl.value)return;
-  endEl.value=snapTo15(endEl.value);
   const[sh,sm]=startEl.value.split(':').map(Number);
   const[eh,em]=endEl.value.split(':').map(Number);
   let diff=(eh*60+em)-(sh*60+sm);
   if(diff<=0)diff+=1440; // overnight
-  diff=Math.round(diff/15)*15; // snap duration to 15-min
+  diff=Math.round(diff/15)*15;
   diff=Math.min(720,Math.max(15,diff));
   _selDur=diff;
   setDurSpinner(_selDur);
@@ -5373,6 +5376,15 @@ let _modalCommitted=false; // set true by saveTask so closeModal knows not to re
 function toggleRecurUI(){
   const on=document.getElementById('fRecurOn').checked;
   document.getElementById('recurOpts').style.display=on?'flex':'none';
+  // Show/hide recurrence end date row
+  const endRow=document.getElementById('recurEndRow');
+  if(endRow)endRow.style.display=on?'flex':'none';
+  if(!on){
+    const endCb=document.getElementById('fRecurEnd');
+    if(endCb)endCb.checked=false;
+    const endDate=document.getElementById('fRecurEndDate');
+    if(endDate){endDate.value='';endDate.disabled=true;}
+  }
   onRecurUnitChange();
 }
 function onRecurUnitChange(){
@@ -5380,6 +5392,18 @@ function onRecurUnitChange(){
   const unit=document.getElementById('fRecurU').value;
   const row=document.getElementById('recurDaysRow');
   if(row)row.style.display=(on&&unit==='week')?'flex':'none';
+}
+function toggleRecurEnd(){
+  const cb=document.getElementById('fRecurEnd');
+  const dateEl=document.getElementById('fRecurEndDate');
+  if(!cb||!dateEl)return;
+  dateEl.disabled=!cb.checked;
+  if(cb.checked&&!dateEl.value){
+    // Default to 3 months from task date
+    const base=mDate?fromDk(mDate):new Date();
+    base.setMonth(base.getMonth()+3);
+    dateEl.value=dk(base);
+  }
 }
 function toggleRecurDay(btn,d){
   btn.classList.toggle('on');
@@ -5433,6 +5457,12 @@ function setAlldayModal(val){
   // Hide duration when all-day
   const durWrap=document.querySelector('.dur-spinner-row')?.closest('.fg');
   if(durWrap)durWrap.style.display=val?'none':'';
+  // Gray out time row when all-day
+  const timeRow=document.getElementById('fTimeRow');
+  if(timeRow){
+    timeRow.style.opacity=val?'.35':'';
+    timeRow.style.pointerEvents=val?'none':'';
+  }
   // Show/hide suppress routines toggle (visible when all-day OR multi-day)
   const supWrap=document.getElementById('fSuppressWrap');
   if(supWrap)supWrap.style.display=(val||_modalMultiDay)?'':'none';
@@ -5852,6 +5882,9 @@ function openNew(dateKey,time){
   document.getElementById('fRecurU').value='day';
   document.getElementById('recurOpts').style.display='none';
   document.getElementById('recurDaysRow').style.display='none';
+  const recurEndRow=document.getElementById('recurEndRow');if(recurEndRow)recurEndRow.style.display='none';
+  const recurEndCb=document.getElementById('fRecurEnd');if(recurEndCb)recurEndCb.checked=false;
+  const recurEndDate=document.getElementById('fRecurEndDate');if(recurEndDate){recurEndDate.value='';recurEndDate.disabled=true;}
   setRecurDays([]);
   // Reset multi-day fields
   document.getElementById('fMultiStart').value='';
@@ -5863,8 +5896,13 @@ function openNew(dateKey,time){
   const supTog=document.getElementById('fSuppressToggle');if(supTog)supTog.classList.remove('on');
   const mdSub=document.getElementById('fMultiDaySub');if(mdSub){mdSub.textContent='Spans multiple days like a vacation or conference';mdSub.style.color='var(--text3)';}
   document.getElementById('btnDel').style.display='none';
-  const stEl=document.getElementById('fStartTime');if(stEl)stEl.value=time;
+  // Build time dropdowns
+  const stEl=document.getElementById('fStartTime');if(stEl)buildTimeOptions(stEl,time);
+  const etEl=document.getElementById('fEndTime');if(etEl)buildTimeOptions(etEl,null);
   setDurSpinner(30);
+  // Ensure time row is not grayed out
+  const timeRow=document.getElementById('fTimeRow');
+  if(timeRow){timeRow.style.opacity='';timeRow.style.pointerEvents='';}
   renderModalSubtasks();
   renderModalAttachments();
   switchDetailTab('notes');
@@ -5917,6 +5955,22 @@ function openEdit(id,instanceDate,e){
     setRecurDays([]);
     document.getElementById('recurDaysRow').style.display='none';
   }
+  // Recurrence end date
+  const recurEndRow=document.getElementById('recurEndRow');
+  if(recurEndRow)recurEndRow.style.display=t.recur?'flex':'none';
+  const recurEndCb=document.getElementById('fRecurEnd');
+  const recurEndDate=document.getElementById('fRecurEndDate');
+  if(recurEndCb&&recurEndDate){
+    if(t.recurEnd){
+      recurEndCb.checked=true;
+      recurEndDate.disabled=false;
+      recurEndDate.value=t.recurEnd;
+    } else {
+      recurEndCb.checked=false;
+      recurEndDate.disabled=true;
+      recurEndDate.value='';
+    }
+  }
   // Multi-day fields
   _modalMultiDay=!!(t.multiDay);
   _modalEventColor=t.eventColor||'';
@@ -5935,7 +5989,12 @@ function openEdit(id,instanceDate,e){
   if(_itemType==='event'&&(_modalAllday||_modalMultiDay)){setSuppressModal(_modalSuppressRoutines);}
   else{setSuppressModal(false);}
   document.getElementById('btnDel').style.display='block';
-  const stEl2=document.getElementById('fStartTime');if(stEl2)stEl2.value=t.time||'09:00';
+  // Build time dropdowns
+  const stEl2=document.getElementById('fStartTime');if(stEl2)buildTimeOptions(stEl2,t.time||'09:00');
+  const etEl2=document.getElementById('fEndTime');if(etEl2)buildTimeOptions(etEl2,null);
+  // Ensure time row reflects allday state
+  const timeRow=document.getElementById('fTimeRow');
+  if(timeRow){timeRow.style.opacity=_modalAllday?'.35':'';timeRow.style.pointerEvents=_modalAllday?'none':'';}
   setDurSpinner(t.duration||30);
   renderModalSubtasks();
   renderModalAttachments();
@@ -6033,6 +6092,9 @@ function saveTask(){
   const priority=document.getElementById('fPri').value,category=document.getElementById('fCat').value,notes=document.getElementById('fNotes').value.trim();
   const recur=document.getElementById('fRecurOn').checked,recurN=parseInt(document.getElementById('fRecurN').value)||1,recurU=document.getElementById('fRecurU').value;
   const recurDays=(recur&&recurU==='week')?getRecurDays():[];
+  const recurEndCb=document.getElementById('fRecurEnd');
+  const recurEndDateEl=document.getElementById('fRecurEndDate');
+  const recurEnd=(recur&&recurEndCb&&recurEndCb.checked&&recurEndDateEl&&recurEndDateEl.value)?recurEndDateEl.value:'';
   const duration=Math.round((_selDur||30)/15)*15||15; // snap duration to 15-min
   const location=document.getElementById('fLocation').value.trim();
   const type=_itemType;
@@ -6066,8 +6128,8 @@ function saveTask(){
       showToast('That time slot already has 3 tasks — try a different time');return;
     }
   }
-  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
-  else{const t=tasks.find(t=>t.id===mId);if(t){Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});delete t._draft;}if(t&&multiDay)t.date=mDate;}
+  if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,recurEnd,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
+  else{const t=tasks.find(t=>t.id===mId);if(t){Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,recurEnd,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});delete t._draft;}if(t&&multiDay)t.date=mDate;}
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){

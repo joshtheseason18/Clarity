@@ -20,33 +20,30 @@
 <div id="splash">
   <div class="splash-logo-wrap" style="animation:splashLogoIn .6s cubic-bezier(.34,1.56,.64,1) .3s both">
     <div class="splash-logo-dot"></div>
-    <div class="splash-logo-text">Luclaro</div>
+    <div class="splash-logo-text">LuClaro</div>
   </div>
-  <div class="splash-tagline" id="splashTagline">Your day, illuminated</div>
-  <div class="splash-name-wrap" id="splashNameWrap" style="display:none">
-    <input class="splash-name-input" id="splashName" placeholder="What's your name?" maxlength="30" autocomplete="given-name">
-  </div>
-  <div class="splash-greeting" id="splashGreeting" style="display:none"></div>
-  <div class="splash-subline" id="splashSubline"></div>
+  <div class="splash-tagline" id="splashTagline">Illuminate your day. One task at a time.</div>
 
-  <!-- Auth buttons -->
-  <div id="splashAuthWrap" style="margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:12px;animation:splashFadeUp .6s ease .8s both">
+  <!-- Google sign-in (shown when not authenticated) -->
+  <div id="splashAuthWrap" style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px;animation:splashFadeUp .6s ease .8s both">
     <button class="splash-google-btn" id="googleSignInBtn" onclick="signInWithGoogle()">
       <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
       Sign in with Google
     </button>
-    <div class="splash-auth-divider"><span>or</span></div>
-    <button class="splash-enter-btn" onclick="enterAsGuest()">Continue as Guest →</button>
-  </div>
-
-  <!-- Shown when already authenticated -->
-  <div id="splashAuthReady" style="display:none;margin-top:24px;animation:splashFadeUp .6s ease .8s both">
-    <button class="splash-enter-btn" onclick="enterApp()">Open Luclaro →</button>
   </div>
 
   <!-- Loading state -->
-  <div id="splashAuthLoading" style="display:none;margin-top:24px;animation:splashFadeUp .6s ease .8s both">
+  <div id="splashAuthLoading" style="display:none;margin-top:28px;animation:splashFadeUp .6s ease .8s both">
     <div style="font-size:13px;color:var(--text3)">Signing in...</div>
+  </div>
+
+  <!-- Name prompt (shown after Google auth) -->
+  <div id="splashNameStep" style="display:none;margin-top:24px;animation:splashFadeUp .4s ease both">
+    <div style="font-size:15px;color:var(--text2);margin-bottom:12px">What should we call you?</div>
+    <div class="splash-name-wrap" style="display:flex;margin-top:0">
+      <input class="splash-name-input" id="splashName" placeholder="Your first name" maxlength="30" autocomplete="given-name" onkeydown="if(event.key==='Enter')finishNameStep()">
+    </div>
+    <button class="splash-enter-btn" onclick="finishNameStep()" style="margin-top:16px">Let's go →</button>
   </div>
 
   <div class="splash-verse" style="font-size:14px;color:var(--text3);font-style:italic;margin-top:28px;animation:splashFadeUp .5s ease 1.6s both;max-width:320px;line-height:1.7;text-align:center">"Your word is a lamp to my feet<br>and a light to my path."<br><span style="font-style:normal;font-weight:600;font-size:12px;letter-spacing:.3px">— Psalm 119:105</span></div>
@@ -169,14 +166,6 @@
         Sign Out
       </button>
     </div>
-    <div id="guestSection" style="display:none;padding:12px 16px;margin-bottom:4px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">You're using Luclaro as a guest. Sign in to secure your data.</div>
-      <button class="drawer-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px" onclick="closeDrawer();signInWithGoogle()">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M14 8.27c0-.5-.04-.98-.13-1.44H8v2.73h3.8a3.24 3.24 0 01-1.41 2.13v1.77h2.29c1.33-1.23 2.1-3.04 2.1-5.19z" fill="#4285F4"/><path d="M8 15c1.91 0 3.5-.63 4.67-1.7l-2.29-1.78c-.63.42-1.43.68-2.38.68-1.83 0-3.39-1.24-3.95-2.9H1.68v1.82A7 7 0 008 15z" fill="#34A853"/><path d="M4.05 9.3a4.2 4.2 0 010-2.6V4.88H1.68A7 7 0 001 8c0 1.14.27 2.21.68 3.12l2.37-1.82z" fill="#FBBC05"/><path d="M8 3.46c1.04 0 1.97.36 2.7 1.05l2.02-2.02C11.5 1.34 9.9.64 8 .64a7 7 0 00-6.32 4.24l2.37 1.82C4.6 4.7 6.17 3.46 8 3.46z" fill="#EA4335"/></svg>
-        Sign in with Google
-      </button>
-    </div>
-
     <!-- Help & Tour buttons -->
     <div style="padding:8px 16px 4px;display:flex;gap:8px">
       <button class="drawer-btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px" onclick="closeDrawer();openHelp()"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:-2px"><path d="M3 2h7a3 3 0 013 3v6a3 3 0 01-3 3H3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="6" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="6" y1="8" x2="9" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Help</button>
@@ -539,8 +528,8 @@
       </div>
       <!-- Start / End time row -->
       <div class="frow" id="fTimeRow">
-        <div class="fg"><label class="flbl">Start time</label><input class="fi" type="time" id="fStartTime" step="900" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></div>
-        <div class="fg"><label class="flbl">End time</label><input class="fi" type="time" id="fEndTime" step="900" onchange="onEndTimeChange()" style="font-size:12px;padding:6px 9px"></div>
+        <div class="fg"><label class="flbl">Start time</label><select class="fi" id="fStartTime" onchange="onStartTimeChange()" style="font-size:12px;padding:6px 9px"></select></div>
+        <div class="fg"><label class="flbl">End time</label><select class="fi" id="fEndTime" onchange="onEndTimeChange()" style="font-size:12px;padding:6px 9px"></select></div>
       </div>
       <div class="frow" id="fPriRow">
         <div class="fg"><label class="flbl">Priority</label>
@@ -580,6 +569,12 @@
             <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,5)">F</button>
             <button type="button" class="recur-day-btn" onclick="toggleRecurDay(this,6)">S</button>
           </div>
+        </div>
+        <div class="recur-end-row" id="recurEndRow" style="display:none">
+          <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px">
+            <input type="checkbox" class="rcb" id="fRecurEnd" onchange="toggleRecurEnd()"> Ends on
+          </label>
+          <input class="fi" type="date" id="fRecurEndDate" style="font-size:12px;padding:4px 7px;flex:1;max-width:160px" disabled>
         </div>
       </div>
       <!-- Detail Tabs -->
