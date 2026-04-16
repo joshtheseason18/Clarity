@@ -500,7 +500,13 @@ function finishTour(){
   if(sidebarOpen)toggleSidebar();
 }
 function replayTour(){
-  showToast('Interactive tour coming soon!');
+  if(typeof startSandboxDemo==='function'){
+    closeDrawer();
+    closeHelp();
+    setTimeout(()=>startSandboxDemo(),300);
+  } else {
+    showToast('Tour unavailable — reload and try again');
+  }
 }
 
 function showOnboarding(){
@@ -3884,11 +3890,14 @@ function fmtDateShort(dk2){
 // Check on app open (after splash)
 const _origEnterApp=enterApp;
 window.enterApp=function(){
+  const isNew=!localStorage.getItem('clarity_onboarded');
   _origEnterApp();
   setTimeout(checkOverdueTasks,1500);
-  // Onboarding disabled — will be replaced by sandbox demo
   localStorage.setItem('clarity_onboarded','true');
-  // renderGreeting is already called inside renderAll→renderDay; no need to call again
+  // New users: launch sandbox demo
+  if(isNew&&typeof startSandboxDemo==='function'){
+    setTimeout(()=>startSandboxDemo(),800);
+  }
 };
 
 
