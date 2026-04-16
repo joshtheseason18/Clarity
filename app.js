@@ -1978,7 +1978,8 @@ function renderWeek(){
       const wkBannerH=wkDayRoutines.some(b=>b.start===t.time)?18:0;
       const topPx=(th*60+tm)/30*WK_SLOT_H+wkBannerH;
       const dur=t.duration||30;
-      const hPx=Math.max(14,dur/30*WK_SLOT_H-1-wkBannerH);
+      const isCompact=dur<=15;
+      const hPx=Math.max(isCompact?26:14,dur/30*WK_SLOT_H-1-wkBannerH);
       const isEvent=(t.type||'task')==='event';
       const cc=isEvent?eventColor(t.category):catColor(t.category);
       const isDone=t.done||(t.doneOverrides||[]).includes(t._instanceDate||k);
@@ -1991,30 +1992,31 @@ function renderWeek(){
         rightVal=ci.col===ci.total-1?'2px':`calc(${((ci.total-ci.col-1)*pct).toFixed(1)}% + 1px)`;
       }
       const narrowCls=ci.total>=3?' wk-task-narrow':'';
+      const compactCls=isCompact?' wk-task-compact':'';
       const subs=t.subtasks||[];
       const wkDurLabel=dur>30?`<span class="wk-task-block-dur">${durLabel(dur)}</span>`:'';
       const wkDurStep=dur>30?`<div class="wk-dur-stepper"><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',-15,event)">−</button><span class="wk-task-block-dur">${durLabel(dur)}</span><button class="wk-dur-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${t._instanceDate||k}',15,event)">+</button></div>`:'';
       const wkSubPill=subs.length?`<span class="wk-sub-pill" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${t._instanceDate||k}')">☰ ${subs.length}</span>`:'';
       if(isEvent){
-        return`<div class="wk-task-block event-block${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
+        return`<div class="wk-task-block event-block${narrowCls}${compactCls}" data-id="${t.id}" title="${esc(t.name)}"
           draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
           style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};background:${cc};border-top-color:${cc}"
           onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
-          <div class="drag-grip"><span class="grip-dots"></span></div>
+          ${isCompact?'':`<div class="drag-grip"><span class="grip-dots"></span></div>`}
           <span class="wk-task-block-name">${esc(t.name)}</span>
-          ${ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
+          ${!isCompact&&ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
         </div>`;
       }
-      return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}" data-id="${t.id}" title="${esc(t.name)}"
+      return`<div class="wk-task-block${isDone?' done-block':''}${narrowCls}${compactCls}" data-id="${t.id}" title="${esc(t.name)}"
         draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${t._instanceDate||k}')" ondragend="onTaskDragEnd(event)"
         style="top:${topPx}px;height:${hPx}px;left:${leftVal};right:${rightVal};border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)}"
         onclick="openEdit('${t.id}','${t._instanceDate||k}',event)">
-        <div class="drag-grip"><span class="grip-dots"></span></div>
+        ${isCompact?'':`<div class="drag-grip"><span class="grip-dots"></span></div>`}
         <div style="display:flex;align-items:center;gap:2px;min-width:0">
           ${ci.total<=2?`<div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${t._instanceDate||k}',event,this)"></div>`:''}
           <span class="wk-task-block-name task-lbl">${esc(t.name)}</span>${ci.total<=2&&t.recur?'<span class="recur-icon">↻</span>':''}
         </div>
-        ${ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
+        ${!isCompact&&ci.total<=2?`<div class="wk-task-meta-row">${wkSubPill}${wkDurStep}</div>`:''}
       </div>`;
     }).join('');
     const WK_SLOT_H_R=54;
@@ -2355,7 +2357,8 @@ function renderDay(){
         const bannerH=atBandStart?18:0;
         const topPx=slotEl.offsetTop+bannerH;
         const dur=t.duration||30;
-        const hPx=Math.max(36,dur/30*DAY_SLOT_H-bannerH);
+        const isCompact=dur<=15;
+        const hPx=Math.max(isCompact?30:36,dur/30*DAY_SLOT_H-bannerH);
 
         const ci=dayColMap.get(t.id)||{col:0,total:1};
         // Inset for tasks within routine containers
@@ -2390,31 +2393,31 @@ function renderDay(){
         const durStep=`<span class="dur-stepper"><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',-15,event)">−</button><span class="day-task-dur-pill">${durLabel(dur)}</span><button class="dur-step-btn" onclick="event.stopPropagation();adjustDuration('${t.id}','${idate}',15,event)">+</button></span>`;
         const subPillInline=subs.length?(ci.total===1?`<span class="sub-pill-row" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length} subtask${subs.length!==1?'s':''} <span class="sub-pill-done">(${subs.filter(s=>s.done).length} done)</span></span>`:(ci.total<=3?`<span class="sub-pill-row sub-pill-compact" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')"><span class="sub-pill-icon">☰</span> ${subs.length}</span>`:'')):'';
         if(isEvent){
-          blockHtml=`<div class="day-task-block event-block" data-id="${t.id}" title="${esc(t.name)}"
+          blockHtml=`<div class="day-task-block event-block${isCompact?' day-task-compact':''}" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="background:${cc};border-top-color:${cc};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
-            <div class="drag-grip"><span class="grip-dots"></span></div>
+            ${isCompact?'':`<div class="drag-grip"><span class="grip-dots"></span></div>`}
             <div class="day-task-block-check">
               <span class="day-task-block-name">${esc(t.name)}</span>
-              <button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
-              ${ci.total<=3?timeRB:''}
+              ${!isCompact?`<button class="day-add-sub-btn event-add-sub" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>`:''}
+              ${ci.total<=3&&!isCompact?timeRB:''}
             </div>
             ${dur>15?`<div class="day-task-meta-row">${durStep}${ci.total<=3&&t.location?` · <span class="event-location">${IC_PIN} ${esc(t.location)}</span>`:''}${ci.total<=3&&t.recur?' ↻':''}${subPillInline}</div>`:''}
           </div>`;
         } else {
           const focusPill2=ci.total<=2&&!isDone&&dur>15?`<button class="day-focus-pill" onclick="event.stopPropagation();startFocusForTask('${t.id}','${idate}')">▶ Focus</button>`:'';
-          blockHtml=`<div class="day-task-block${isDone?' done-block':''}" data-id="${t.id}" title="${esc(t.name)}"
+          blockHtml=`<div class="day-task-block${isDone?' done-block':''}${isCompact?' day-task-compact':''}" data-id="${t.id}" title="${esc(t.name)}"
             draggable="true" ondragstart="onTaskDragStart(event,'${t.id}','${idate}')" ondragend="onTaskDragEnd(event)"
             style="border-left-color:${cc};border-top-color:${cc};background:${taskBlockBg(t.category)};height:100%;margin:0;border-radius:0 6px 6px 0"
             onclick="openEdit('${t.id}','${idate}',event)">
-            <div class="drag-grip"><span class="grip-dots"></span></div>
+            ${isCompact?'':`<div class="drag-grip"><span class="grip-dots"></span></div>`}
             <div class="day-task-block-check">
-              <div class="task-check${isDone?' checked':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
+              <div class="task-check${isDone?' checked':''}" style="${isCompact?'width:14px;height:14px;min-width:14px':''}" onclick="toggleDone('${t.id}','${idate}',event,this)"></div>
               <span class="day-task-block-name task-lbl">${esc(t.name)}</span>
-              <button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>
+              ${!isCompact?`<button class="day-add-sub-btn" data-tip="Add subtask" onclick="event.stopPropagation();openSubtaskPopup('${t.id}','${idate}')">+</button>`:''}
               ${ci.total<=3&&t.recur?`<span class="recur-icon">↻</span>`:''}
-              ${ci.total<=3?timeRB:''}
+              ${ci.total<=3&&!isCompact?timeRB:''}
             </div>
             ${dur>15?`<div class="day-task-meta-row">
               ${durStep}

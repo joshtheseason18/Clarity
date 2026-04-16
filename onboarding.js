@@ -1,431 +1,269 @@
-// ══ LUCLARO SANDBOX DEMO ════════════════════════════
-// Self-contained onboarding overlay. Zero contact with real app data.
+// ══ LUCLARO SANDBOX DEMO v2 ════════════════════════
+// Full interactive sandbox. Zero contact with real app data.
 // Entry: startSandboxDemo()  |  Exit: _sbClose()
-// All DOM is created/destroyed dynamically. IDs/classes prefixed sb-.
+// All DOM created/destroyed dynamically. Prefixed sb-.
 
 (function(){
 'use strict';
 
-// ── State ───────────────────────────────────────────
-let _sbStep=0;
-let _sbActive=false;
-let _sbRoot=null; // overlay root element
-let _sbStyle=null; // injected <style>
+/* ────────────────────────────────────────────────
+   STATE
+──────────────────────────────────────────────────── */
+let _sbActive=false, _sbRoot=null, _sbStyle=null;
+let _sbPhase=0; // 0=welcome,1=braindump,2=schedule,3=routines,4=ai,5=done
+let _sbTasks=[];     // {id,name,time,dur,color} — on the timeline
+let _sbBrain=[];     // {id,name,pri} — brain dump cards
+let _sbRoutines=[];  // {id,label,start,end,blocked,active,color}
+let _sbSideTab='braindump';
+let _sbIdCounter=100;
 
-// Fake data for the demo
-const SB_TASKS=[
-  {id:'sb1',name:'Team standup',time:'09:00',dur:30,cat:'Work',color:'#3b82f6',done:false},
-  {id:'sb2',name:'Reply to emails',time:'09:30',dur:30,cat:'Work',color:'#3b82f6',done:false},
-  {id:'sb3',name:'Lunch break',time:'12:00',dur:60,cat:'Personal',color:'#10b981',done:false},
-];
+const SB_HOURS=[7,8,9,10,11,12,13,14,15,16,17,18,19];
+const PHASE_LABELS=['Welcome','Brain Dump','Schedule','Routines','AI Planner','Ready!'];
+const PHASE_COUNT=6;
 
-const SB_BRAINDUMP=[
-  {id:'bd1',name:'Research competitors',pri:'high'},
-  {id:'bd2',name:'Grocery shopping',pri:'medium'},
-  {id:'bd3',name:'Call dentist',pri:'low'},
-];
+/* ────────────────────────────────────────────────
+   INITIAL DATA
+──────────────────────────────────────────────────── */
+function _sbResetData(){
+  _sbIdCounter=100;
+  _sbTasks=[];
+  _sbBrain=[
+    {id:'bd1',name:'Weekly team meeting',pri:'high'},
+    {id:'bd2',name:'Buy groceries',pri:'low'},
+    {id:'bd3',name:'Draft project proposal',pri:'high'},
+    {id:'bd4',name:'Call dentist',pri:'low'},
+    {id:'bd5',name:'Review budget report',pri:'medium'},
+  ];
+  _sbRoutines=[
+    {id:'r1',label:'Work (Morning)',start:'09:00',end:'12:00',blocked:false,active:false,color:'#3b82f6'},
+    {id:'r2',label:'Lunch Break',start:'12:00',end:'13:00',blocked:true,active:false,color:'#f59e0b'},
+    {id:'r3',label:'Work (Afternoon)',start:'13:00',end:'17:00',blocked:false,active:false,color:'#3b82f6'},
+    {id:'r4',label:'Gym',start:'18:00',end:'19:00',blocked:true,active:false,color:'#ef4444'},
+  ];
+}
 
-const SB_ROUTINES=[
-  {label:'Work',start:'08:00',end:'12:00',blocked:false,color:'rgba(59,130,246,.08)'},
-  {label:'Lunch',start:'12:00',end:'13:00',blocked:true,color:'rgba(239,68,68,.06)'},
-  {label:'Work',start:'13:00',end:'17:00',blocked:false,color:'rgba(59,130,246,.08)'},
-];
+/* ────────────────────────────────────────────────
+   HELPERS
+──────────────────────────────────────────────────── */
+function _sbId(){return 'sb'+(++_sbIdCounter)}
+function _sbFmt12(t){
+  const[h,m]=t.split(':').map(Number);
+  return(h%12||12)+':'+(m<10?'0':'')+m+(h>=12?' PM':' AM');
+}
+function _sbDurLabel(m){if(m<60)return m+'m';const h=Math.floor(m/60),r=m%60;return r?h+'h '+r+'m':h+'h'}
+function _sbPriColor(p){return p==='high'?'#ef4444':p==='medium'?'#f59e0b':'#3b82f6'}
+function _sbHourToMin(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+function _sbEsc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function _sbSnap15(mins){return Math.max(15,Math.round(mins/15)*15)}
 
-const SB_AI_TASKS=[
-  {name:'Research competitors',time:'10:00',dur:45,color:'#8b5cf6'},
-  {name:'Draft proposal outline',time:'10:45',dur:30,color:'#8b5cf6'},
-  {name:'Review analytics',time:'13:00',dur:30,color:'#8b5cf6'},
-  {name:'Grocery shopping',time:'17:15',dur:45,color:'#8b5cf6'},
-];
+// Parse quick event text → {name, time(24h), dur, allday}
+function _sbParseQE(raw){
+  let text=raw.trim(); if(!text)return null;
+  let time=null, dur=null, allday=false;
 
-// Slots to render (8am–6pm)
-const SB_HOURS=[8,9,10,11,12,13,14,15,16,17];
-
-const SB_STEPS=[
-  {
-    id:'welcome',
-    title:'Welcome to LuClaro',
-    body:'A quick tour of how to plan your day — using a safe sandbox. Nothing here touches your real data.',
-    btn:'Let\'s go',
-    pos:'center'
-  },
-  {
-    id:'quickadd',
-    title:'Quick Add',
-    body:'Type a task below and press <strong>Enter</strong>. Try something like <em>"Study 3pm 45min"</em>.',
-    btn:'Skip',
-    pos:'above-input',
-    interactive:true
-  },
-  {
-    id:'drag',
-    title:'Drag to Schedule',
-    body:'Grab the highlighted card and <strong>drag it onto a time slot</strong> in the calendar.',
-    btn:'Skip',
-    pos:'above-sidebar',
-    interactive:true
-  },
-  {
-    id:'routines',
-    title:'Routines',
-    body:'Set up blocks for work, gym, meals, or sleep. <strong>Windows</strong> (blue) stay open for tasks. <strong>Blocks</strong> (red hatch) are reserved — tasks can\'t go there.',
-    btn:'Next',
-    pos:'above-timeline'
-  },
-  {
-    id:'ai',
-    title:'AI Schedule',
-    body:'Describe your priorities and AI places tasks into open windows — respecting routines, holidays, and existing events.',
-    btn:'Next',
-    pos:'above-timeline'
-  },
-  {
-    id:'done',
-    title:'You\'re all set!',
-    body:'That\'s the core of LuClaro. Brain dump → schedule → focus. You\'ve got this.',
-    btn:'Start planning',
-    pos:'center'
+  // Time: "3pm", "10:30am", "14:00"
+  const tmRe=/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
+  const tm=text.match(tmRe);
+  if(tm){
+    let h=parseInt(tm[1]),m=parseInt(tm[2]||'0');
+    if(tm[3].toLowerCase()==='pm'&&h<12)h+=12;
+    if(tm[3].toLowerCase()==='am'&&h===12)h=0;
+    time=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+    text=text.replace(tm[0],'').trim();
+  } else {
+    const tm2=text.match(/\b(\d{1,2}):(\d{2})\b/);
+    if(tm2){time=(parseInt(tm2[1])<10?'0':'')+parseInt(tm2[1])+':'+(parseInt(tm2[2])<10?'0':'')+parseInt(tm2[2]);text=text.replace(tm2[0],'').trim();}
   }
-];
 
+  // All day
+  if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
 
-// ── Inject CSS ──────────────────────────────────────
+  // Duration: "45min", "45mins", "1.5hr", "2 hours", "for 30 minutes"
+  const durRe=/\b(?:for\s+)?(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|m)\b/i;
+  const dm=text.match(durRe);
+  if(dm){
+    const val=parseFloat(dm[1]);
+    const unit=dm[2].toLowerCase();
+    dur=unit.startsWith('h')?Math.round(val*60):Math.round(val);
+    if(dur<5)dur=null;
+    text=text.replace(dm[0],'').replace(/\bfor\b\s*/i,'').trim();
+  }
+
+  // Clean name
+  const name=text.replace(/\s+(at|on|in|for)$/i,'').replace(/\s+/g,' ').trim();
+  if(!name)return null;
+  return{name, time:allday?null:time, dur:dur||30, allday};
+}
+
+/* ────────────────────────────────────────────────
+   CSS INJECTION
+──────────────────────────────────────────────────── */
 function _sbInjectCSS(){
   if(_sbStyle)return;
   _sbStyle=document.createElement('style');
   _sbStyle.id='sb-styles';
   _sbStyle.textContent=`
 /* ══ SANDBOX OVERLAY ══ */
-#sb-overlay{
-  position:fixed;inset:0;z-index:700;
-  background:var(--bg);
-  display:flex;flex-direction:column;
-  opacity:0;transition:opacity .4s ease;
-  overflow:hidden;
-}
-#sb-overlay.sb-visible{opacity:1}
+#sb-overlay{position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column;opacity:0;transition:opacity .4s ease;overflow:hidden}
+#sb-overlay.sb-vis{opacity:1}
 #sb-overlay *{box-sizing:border-box}
 
-/* Header */
-.sb-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 20px;border-bottom:1px solid var(--border);
-  background:var(--surface);flex-shrink:0;
-}
-.sb-header-title{
-  font-family:'DM Serif Display',serif;font-size:20px;color:var(--text);
-  display:flex;align-items:center;gap:10px;
-}
-.sb-header-dot{
-  width:10px;height:10px;border-radius:50%;background:var(--accent);
-  animation:sbDotPulse 1.4s ease-in-out infinite;
-}
-@keyframes sbDotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
-.sb-skip-btn{
-  background:none;border:1px solid var(--border);color:var(--text2);
-  font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;
-  border-radius:8px;cursor:pointer;transition:all .15s;
-}
-.sb-skip-btn:hover{border-color:var(--text3);color:var(--text)}
+/* ── Header ── */
+.sb-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;gap:12px}
+.sb-hdr-left{display:flex;align-items:center;gap:10px}
+.sb-hdr-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);animation:sbPulse 1.4s ease-in-out infinite}
+@keyframes sbPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+.sb-hdr-title{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text)}
+.sb-hdr-badge{font-size:10px;color:var(--accent);font-weight:600;background:rgba(var(--accent-rgb),.1);padding:2px 8px;border-radius:6px;letter-spacing:.3px}
+.sb-exit{background:none;border:1px solid var(--border);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:11px;padding:5px 12px;border-radius:7px;cursor:pointer;transition:all .15s}
+.sb-exit:hover{border-color:var(--text3);color:var(--text)}
 
-/* Progress bar */
-.sb-progress{
-  height:3px;background:var(--surface2);flex-shrink:0;
-}
-.sb-progress-fill{
-  height:100%;background:var(--accent);
-  transition:width .4s cubic-bezier(.4,0,.2,1);border-radius:0 2px 2px 0;
-}
+/* ── Phase progress ── */
+.sb-prog{height:3px;background:var(--surface2);flex-shrink:0}
+.sb-prog-fill{height:100%;background:var(--accent);transition:width .5s cubic-bezier(.4,0,.2,1);border-radius:0 2px 2px 0}
 
-/* Main body */
-.sb-body{
-  flex:1;display:flex;overflow:hidden;position:relative;
-}
+/* ── Body ── */
+.sb-body{flex:1;display:flex;overflow:hidden;position:relative}
 
-/* Sidebar */
-.sb-sidebar{
-  width:280px;border-right:1px solid var(--border);
-  background:var(--surface);display:flex;flex-direction:column;
-  flex-shrink:0;
-}
-.sb-side-hdr{
-  padding:14px 16px 10px;font-size:13px;font-weight:600;
-  color:var(--text);letter-spacing:.3px;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.sb-side-label{font-size:11px;color:var(--text3);font-weight:500}
+/* ── Sidebar ── */
+.sb-side{width:300px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;flex-shrink:0}
+.sb-side-tabs{display:flex;border-bottom:1px solid var(--border)}
+.sb-side-tab{flex:1;padding:10px 8px;font-size:11px;font-weight:600;text-align:center;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif}
+.sb-side-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.sb-side-tab:hover{color:var(--text2)}
+.sb-side-tab.sb-locked{opacity:.4;cursor:default}
+.sb-side-content{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 
-/* Quick add input */
-.sb-qe-wrap{
-  padding:0 12px 12px;
-}
-.sb-qe-input{
-  width:100%;padding:10px 12px;border:1.5px solid var(--border);
-  border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;
-  background:var(--surface2);color:var(--text);outline:none;
-  transition:border-color .15s,box-shadow .15s;
-}
-.sb-qe-input:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12);
-}
+/* ── Quick add ── */
+.sb-qe{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sb-qe-input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface2);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+.sb-qe-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)}
 .sb-qe-input::placeholder{color:var(--text3)}
 
-/* Brain dump cards */
-.sb-bd-list{
-  flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;
-}
-.sb-bd-card{
-  padding:10px 12px;border-radius:10px;background:var(--surface2);
-  border:1.5px solid var(--border);cursor:grab;
-  transition:all .2s;position:relative;
-}
-.sb-bd-card:active{cursor:grabbing}
-.sb-bd-card.sb-highlight{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15);
-  animation:sbPulse 1.5s ease-in-out infinite;
-}
-@keyframes sbPulse{0%,100%{box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15)}50%{box-shadow:0 0 0 6px rgba(var(--accent-rgb),.08)}}
-.sb-bd-name{font-size:13px;color:var(--text);font-weight:500}
-.sb-bd-pri{
-  display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;
-  vertical-align:1px;
-}
-.sb-bd-card.sb-dragging{opacity:.4;transform:scale(.96)}
-.sb-bd-card.sb-placed{
-  opacity:0;transform:translateX(-20px) scale(.95);
-  transition:all .3s ease;pointer-events:none;
-}
+/* ── Brain dump cards ── */
+.sb-bd{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:5px}
+.sb-bd-card{padding:9px 11px;border-radius:9px;background:var(--surface2);border:1.5px solid var(--border);transition:all .2s;display:flex;align-items:center;gap:8px;cursor:default}
+.sb-bd-card.sb-draggable{cursor:grab}
+.sb-bd-card.sb-draggable:active{cursor:grabbing}
+.sb-bd-card.sb-drag-src{opacity:.35;transform:scale(.96)}
+.sb-bd-card.sb-placed{opacity:0;height:0;padding:0;margin:0;border:none;overflow:hidden;transition:all .3s}
+.sb-bd-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-bd-name{font-size:13px;color:var(--text);font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-bd-empty{text-align:center;color:var(--text3);font-size:13px;padding:24px 12px;line-height:1.6}
 
-/* Timeline */
-.sb-timeline-wrap{
-  flex:1;overflow-y:auto;overflow-x:hidden;position:relative;
-}
-.sb-day-hdr{
-  padding:12px 20px 8px;background:var(--surface);
-  border-bottom:1px solid var(--border);
-  position:sticky;top:0;z-index:2;
-}
-.sb-day-title{
-  font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);
-}
-.sb-day-sub{font-size:12px;color:var(--text2);margin-top:2px}
+/* ── Routine toggles ── */
+.sb-rt-list{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px}
+.sb-rt-card{padding:12px;border-radius:10px;background:var(--surface2);border:1.5px solid var(--border);display:flex;align-items:center;gap:10px;transition:all .2s}
+.sb-rt-card.sb-rt-on{border-color:var(--accent);background:rgba(var(--accent-rgb),.06)}
+.sb-rt-info{flex:1;min-width:0}
+.sb-rt-name{font-size:13px;font-weight:600;color:var(--text)}
+.sb-rt-time{font-size:11px;color:var(--text2);margin-top:1px}
+.sb-rt-badge{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.sb-rt-badge.sb-window{color:#3b82f6;background:rgba(59,130,246,.1)}
+.sb-rt-badge.sb-block{color:#ef4444;background:rgba(239,68,68,.1)}
+.sb-rt-toggle{position:relative;width:40px;height:22px;border-radius:11px;background:var(--border);cursor:pointer;transition:background .2s;flex-shrink:0;border:none}
+.sb-rt-toggle.sb-on{background:var(--accent)}
+.sb-rt-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.sb-rt-toggle.sb-on::after{transform:translateX(18px)}
+.sb-rt-hint{padding:10px 14px;font-size:12px;color:var(--text2);line-height:1.6;border-top:1px solid var(--border);margin-top:auto;background:rgba(var(--accent-rgb),.04)}
+.sb-rt-hint strong{color:var(--text);font-weight:600}
 
-.sb-timeline{
-  display:grid;grid-template-columns:70px 1fr;
-  padding-bottom:40px;position:relative;
-}
-.sb-time-lbl{
-  padding:6px 12px 0 0;text-align:right;font-size:11px;
-  color:var(--text3);font-weight:500;letter-spacing:.3px;
-  border-right:1px solid var(--border);
-  height:64px;
-}
-.sb-slot{
-  height:64px;border-bottom:1px solid var(--border);
-  position:relative;cursor:pointer;
-  transition:background .15s;
-}
-.sb-slot:hover{background:var(--accent-pale)}
-.sb-slot.sb-drag-over{
-  background:var(--accent-pale)!important;
-  outline:1.5px dashed var(--accent);outline-offset:-1px;
-}
-.sb-slot.sb-routine-window{
-  background:var(--surface);
-}
-.sb-slot.sb-routine-blocked{
-  background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.05) 5px,rgba(239,68,68,.05) 10px);
-  cursor:not-allowed;
-}
-[data-dark="true"] .sb-slot.sb-routine-blocked{
-  background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.08) 5px,rgba(239,68,68,.08) 10px);
-}
+/* ── Timeline ── */
+.sb-tl-wrap{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;background:var(--bg)}
+.sb-tl-hdr{padding:10px 16px 6px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.sb-tl-title{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text)}
+.sb-tl-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.sb-tl-grid{display:grid;grid-template-columns:68px 1fr;position:relative;padding-bottom:40px}
+.sb-tl-lbl{padding:6px 10px 0 0;text-align:right;font-size:11px;color:var(--text3);font-weight:500;letter-spacing:.3px;border-right:1px solid var(--border);height:64px}
+.sb-tl-slot{height:64px;border-bottom:1px solid var(--border);position:relative;cursor:pointer;transition:background .15s}
+.sb-tl-slot:hover{background:var(--accent-pale)}
+.sb-tl-slot.sb-drop-over{background:var(--accent-pale)!important;outline:1.5px dashed var(--accent);outline-offset:-1px}
+.sb-tl-slot.sb-rt-window{background:transparent}
+.sb-tl-slot.sb-rt-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.05) 5px,rgba(239,68,68,.05) 10px);cursor:not-allowed}
+[data-dark="true"] .sb-tl-slot.sb-rt-blocked{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(239,68,68,.08) 5px,rgba(239,68,68,.08) 10px)}
+.sb-tl-rt-lbl{position:absolute;right:8px;top:2px;font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.5}
+.sb-tl-open{position:absolute;right:8px;bottom:4px;font-size:9px;font-weight:600;letter-spacing:.3px;opacity:.5}
 
-/* Routine band labels */
-.sb-routine-label{
-  position:absolute;right:8px;top:2px;font-size:9px;
-  color:var(--text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase;
-  opacity:.6;
-}
+/* ── Task blocks on timeline ── */
+.sb-task{position:absolute;left:72px;right:4px;border-radius:0 7px 7px 0;border-left:3px solid var(--accent);border-top:2px solid var(--accent);background:rgba(var(--accent-rgb),.13);padding:5px 10px;font-size:12px;font-weight:500;color:var(--text);z-index:3;pointer-events:none;display:flex;align-items:center;gap:6px;overflow:hidden;cursor:pointer}
+.sb-task-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-task-dur{font-size:10px;color:var(--text2);flex-shrink:0}
+.sb-task.sb-reveal{opacity:0;transform:translateY(6px) scale(.97)}
+.sb-task.sb-revealed{opacity:1;transform:translateY(0) scale(1);transition:all .45s cubic-bezier(.34,1.56,.64,1)}
 
-/* Task blocks on timeline */
-.sb-task-block{
-  position:absolute;left:4px;right:4px;
-  border-radius:9px;padding:6px 10px;
-  font-size:12px;font-weight:500;color:#fff;
-  box-shadow:0 2px 8px rgba(0,0,0,.1);
-  z-index:3;pointer-events:none;
-  display:flex;align-items:center;gap:6px;
-  overflow:hidden;
-}
-.sb-task-block-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-task-block-dur{font-size:10px;opacity:.75;flex-shrink:0}
-.sb-task-block.sb-ai-task{
-  opacity:0;transform:translateY(8px) scale(.97);
-}
-.sb-task-block.sb-ai-reveal{
-  opacity:1;transform:translateY(0) scale(1);
-  transition:all .45s cubic-bezier(.34,1.56,.64,1);
-}
+/* ── AI shimmer ── */
+.sb-shimmer{position:absolute;left:72px;right:4px;border-radius:7px;background:linear-gradient(90deg,var(--surface2) 25%,var(--accent-pale) 50%,var(--surface2) 75%);background-size:200% 100%;animation:sbShim 1.2s ease-in-out infinite;z-index:2}
+@keyframes sbShim{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-/* Drop ghost */
-.sb-drop-ghost{
-  position:absolute;left:4px;right:4px;
-  border-radius:9px;border:2px dashed var(--accent);
-  background:rgba(var(--accent-rgb),.08);
-  height:32px;z-index:2;pointer-events:none;
-  opacity:0;transition:opacity .15s;
-}
-.sb-drop-ghost.sb-visible{opacity:1}
+/* ── AI button ── */
+.sb-ai-wrap{padding:16px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;border-top:1px solid var(--border);margin-top:auto}
+.sb-ai-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:11px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;box-shadow:0 4px 20px rgba(var(--accent-rgb),.3);display:flex;align-items:center;justify-content:center;gap:8px}
+.sb-ai-btn:hover{background:var(--accent-dim);transform:translateY(-1px);box-shadow:0 6px 24px rgba(var(--accent-rgb),.35)}
+.sb-ai-btn:active{transform:translateY(0)}
+.sb-ai-btn:disabled{opacity:.5;cursor:default;transform:none;box-shadow:none}
+.sb-ai-desc{font-size:12px;color:var(--text3);text-align:center;line-height:1.5}
+.sb-spin{animation:sbSpin 1s linear infinite}
+@keyframes sbSpin{to{transform:rotate(360deg)}}
 
-/* Tooltip card */
-.sb-tooltip{
-  position:absolute;z-index:10;
-  width:300px;max-width:calc(100vw - 32px);
-  background:var(--surface);border:1.5px solid var(--accent);
-  border-radius:14px;padding:18px 20px 16px;
-  box-shadow:0 12px 40px rgba(0,0,0,.12);
-  opacity:0;transform:translateY(10px);
-  transition:all .35s cubic-bezier(.34,1.56,.64,1);
-}
-.sb-tooltip.sb-visible{opacity:1;transform:translateY(0)}
-.sb-tooltip-title{
-  font-family:'DM Serif Display',serif;font-size:17px;
-  color:var(--text);margin-bottom:6px;
-}
-.sb-tooltip-body{
-  font-size:13px;color:var(--text2);line-height:1.65;margin-bottom:14px;
-}
-.sb-tooltip-body em{color:var(--accent);font-style:normal;font-weight:600}
-.sb-tooltip-body strong{color:var(--text);font-weight:600}
-.sb-tooltip-actions{display:flex;align-items:center;gap:8px}
-.sb-tooltip-btn{
-  flex:1;padding:10px;background:var(--accent);color:#fff;
-  border:none;border-radius:10px;font-family:'DM Sans',sans-serif;
-  font-size:13px;font-weight:600;cursor:pointer;
-  transition:background .15s,transform .1s;
-}
-.sb-tooltip-btn:hover{background:var(--accent-dim);transform:translateY(-1px)}
-.sb-tooltip-btn:active{transform:translateY(0)}
-.sb-tooltip-skip{
-  background:none;border:none;color:var(--text3);font-size:11px;
-  font-family:'DM Sans',sans-serif;cursor:pointer;padding:6px 8px;
-}
-.sb-tooltip-skip:hover{color:var(--text2)}
+/* ── Guide card ── */
+.sb-guide{position:absolute;bottom:16px;right:16px;z-index:10;width:320px;max-width:calc(100% - 32px);background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:16px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.12);opacity:0;transform:translateY(12px);transition:all .4s cubic-bezier(.34,1.56,.64,1)}
+.sb-guide.sb-vis{opacity:1;transform:translateY(0)}
+.sb-guide-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--text);margin-bottom:4px}
+.sb-guide-body{font-size:12.5px;color:var(--text2);line-height:1.65;margin-bottom:12px}
+.sb-guide-body em{color:var(--accent);font-style:normal;font-weight:600}
+.sb-guide-body strong{color:var(--text);font-weight:600}
+.sb-guide-actions{display:flex;gap:8px;align-items:center}
+.sb-guide-btn{flex:1;padding:9px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.sb-guide-btn:hover{background:var(--accent-dim)}
+.sb-guide-dots{display:flex;gap:5px;justify-content:center;margin-top:10px}
+.sb-guide-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .25s}
+.sb-guide-dot.sb-on{background:var(--accent);transform:scale(1.3)}
 
-/* Step dots */
-.sb-dots{display:flex;gap:5px;justify-content:center;margin-top:12px}
-.sb-dot{
-  width:6px;height:6px;border-radius:50%;background:var(--border);
-  transition:all .25s;
-}
-.sb-dot.sb-active{background:var(--accent);transform:scale(1.3)}
+/* ── Center modal (welcome/done) ── */
+.sb-modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);z-index:12;opacity:0;transition:opacity .3s}
+.sb-modal.sb-vis{opacity:1}
+.sb-modal-inner{background:var(--surface);border-radius:20px;padding:36px 32px 28px;max-width:400px;width:calc(100% - 32px);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(20px) scale(.95);transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.sb-modal.sb-vis .sb-modal-inner{transform:translateY(0) scale(1)}
+.sb-modal-icon{width:52px;height:52px;border-radius:14px;background:var(--accent-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.sb-modal-icon svg{width:26px;height:26px;color:var(--accent)}
+.sb-modal-title{font-family:'DM Serif Display',serif;font-size:24px;color:var(--text);margin-bottom:8px}
+.sb-modal-body{font-size:14px;color:var(--text2);line-height:1.65;margin-bottom:20px}
+.sb-modal-btn{display:inline-block;padding:13px 34px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;box-shadow:0 4px 20px rgba(var(--accent-rgb),.3)}
+.sb-modal-btn:hover{background:var(--accent-dim);transform:translateY(-2px);box-shadow:0 8px 28px rgba(var(--accent-rgb),.35)}
 
-/* Success flash */
-.sb-success{
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(var(--accent-rgb),.1);border-radius:14px;
-  opacity:0;pointer-events:none;z-index:11;
-}
-.sb-success.sb-show{
-  opacity:1;animation:sbSuccessIn .5s ease;
-}
-@keyframes sbSuccessIn{
-  0%{opacity:0;transform:scale(.8)}
-  50%{opacity:1;transform:scale(1.05)}
-  100%{opacity:1;transform:scale(1)}
-}
-.sb-success-check{
-  width:48px;height:48px;border-radius:50%;background:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  color:#fff;font-size:24px;font-weight:700;
-  box-shadow:0 4px 20px rgba(var(--accent-rgb),.35);
-}
+/* ── Routine band overlays on timeline ── */
+.sb-rt-band{position:absolute;left:69px;right:0;pointer-events:none;z-index:1;border-left:3px solid transparent}
+.sb-rt-banner{position:absolute;left:69px;right:0;height:16px;z-index:2;color:#fff;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;padding-left:10px;pointer-events:none}
 
-/* Center overlay for welcome/done steps */
-.sb-center-card{
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.4);z-index:12;
-  opacity:0;transition:opacity .3s;
-}
-.sb-center-card.sb-visible{opacity:1}
-.sb-center-inner{
-  background:var(--surface);border-radius:20px;padding:36px 32px 28px;
-  max-width:380px;width:calc(100% - 32px);text-align:center;
-  box-shadow:0 20px 60px rgba(0,0,0,.2);
-  transform:translateY(20px) scale(.95);
-  transition:transform .45s cubic-bezier(.34,1.56,.64,1);
-}
-.sb-center-card.sb-visible .sb-center-inner{transform:translateY(0) scale(1)}
-.sb-center-icon{
-  width:56px;height:56px;border-radius:16px;
-  background:var(--accent-pale);display:flex;align-items:center;justify-content:center;
-  margin:0 auto 16px;
-}
-.sb-center-icon svg{width:28px;height:28px;color:var(--accent)}
-.sb-center-title{
-  font-family:'DM Serif Display',serif;font-size:24px;color:var(--text);
-  margin-bottom:8px;
-}
-.sb-center-body{
-  font-size:14px;color:var(--text2);line-height:1.65;margin-bottom:20px;
-}
-.sb-center-btn{
-  display:inline-block;padding:14px 36px;background:var(--accent);color:#fff;
-  border:none;border-radius:12px;font-family:'DM Sans',sans-serif;
-  font-size:15px;font-weight:600;cursor:pointer;
-  transition:all .15s;
-  box-shadow:0 4px 20px rgba(var(--accent-rgb),.3);
-}
-.sb-center-btn:hover{background:var(--accent-dim);transform:translateY(-2px);box-shadow:0 8px 28px rgba(var(--accent-rgb),.35)}
-.sb-center-btn:active{transform:translateY(0)}
+/* ── Toast ── */
+.sb-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:10px;font-size:12px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.1);opacity:0;transition:all .3s;z-index:15;white-space:nowrap}
+.sb-toast.sb-vis{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* AI shimmer animation */
-.sb-ai-shimmer{
-  position:absolute;left:4px;right:4px;
-  border-radius:9px;height:30px;
-  background:linear-gradient(90deg,var(--surface2) 25%,var(--accent-pale) 50%,var(--surface2) 75%);
-  background-size:200% 100%;
-  animation:sbShimmer 1.2s ease-in-out infinite;
-  z-index:2;
-}
-@keyframes sbShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-/* Mobile */
+/* ── Mobile ── */
 @media(max-width:640px){
-  .sb-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:180px}
+  .sb-side{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:200px}
   .sb-body{flex-direction:column}
-  .sb-tooltip{width:calc(100% - 24px);left:12px!important;right:12px!important}
-  .sb-side-hdr{padding:10px 14px 6px}
-  .sb-bd-list{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:0 12px 10px;gap:8px}
-  .sb-bd-card{min-width:140px;flex-shrink:0}
-  .sb-time-lbl{font-size:10px;padding:4px 8px 0 0}
-  .sb-slot{height:52px}
-  .sb-day-hdr{padding:10px 14px 6px}
-  .sb-day-title{font-size:16px}
+  .sb-guide{bottom:8px;right:8px;left:8px;width:auto}
+  .sb-tl-lbl{font-size:10px;padding:4px 6px 0 0;height:52px}
+  .sb-tl-slot{height:52px}
+  .sb-tl-grid{grid-template-columns:52px 1fr}
+  .sb-task{left:56px}
+  .sb-shimmer{left:56px}
+  .sb-rt-band{left:53px}
+  .sb-rt-banner{left:53px;font-size:8px}
+  .sb-hdr{padding:8px 12px}
+  .sb-hdr-title{font-size:16px}
+  .sb-modal-inner{padding:28px 20px 22px}
+  .sb-modal-title{font-size:20px}
 }
 `;
   document.head.appendChild(_sbStyle);
 }
 
-// ── Helpers ─────────────────────────────────────────
-function _sbFmt(t){
-  const[h,m]=t.split(':').map(Number);
-  const ap=h>=12?'PM':'AM';
-  const h12=h%12||12;
-  return h12+':'+(m<10?'0':'')+m+' '+ap;
-}
-function _sbSlotIdx(t){
-  const[h]=t.split(':').map(Number);
-  return SB_HOURS.indexOf(h);
-}
-function _sbPriColor(p){
-  return p==='high'?'#ef4444':p==='medium'?'#f59e0b':'#3b82f6';
-}
 
-// ── Build DOM ───────────────────────────────────────
+/* ────────────────────────────────────────────────
+   BUILD & RENDER
+──────────────────────────────────────────────────── */
 function _sbBuild(){
   _sbRoot=document.createElement('div');
   _sbRoot.id='sb-overlay';
@@ -435,460 +273,426 @@ function _sbBuild(){
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const dayTitle=days[today.getDay()]+', '+months[today.getMonth()]+' '+today.getDate();
 
-  // Header
-  const hdr=`
-  <div class="sb-header">
-    <div class="sb-header-title"><div class="sb-header-dot"></div>LuClaro Demo</div>
-    <button class="sb-skip-btn" onclick="_sbClose()">Exit tour</button>
-  </div>
-  <div class="sb-progress"><div class="sb-progress-fill" id="sbProgress" style="width:0%"></div></div>`;
-
-  // Sidebar
-  const bdCards=SB_BRAINDUMP.map(t=>`
-    <div class="sb-bd-card" id="sbBd-${t.id}" draggable="true"
-         data-id="${t.id}" data-name="${t.name}">
-      <div class="sb-bd-name"><span class="sb-bd-pri" style="background:${_sbPriColor(t.pri)}"></span>${t.name}</div>
-    </div>`).join('');
-
-  const sidebar=`
-  <div class="sb-sidebar" id="sbSidebar">
-    <div class="sb-side-hdr">Brain Dump <span class="sb-side-label">${SB_BRAINDUMP.length} items</span></div>
-    <div class="sb-qe-wrap">
-      <input class="sb-qe-input" id="sbQeInput" placeholder="Quick add: &quot;Lunch 12pm 1hr&quot;" autocomplete="off">
+  _sbRoot.innerHTML=`
+    <div class="sb-hdr">
+      <div class="sb-hdr-left">
+        <div class="sb-hdr-dot"></div>
+        <span class="sb-hdr-title">LuClaro</span>
+        <span class="sb-hdr-badge" id="sbPhaseBadge">SANDBOX</span>
+      </div>
+      <button class="sb-exit" onclick="_sbClose()">Exit demo</button>
     </div>
-    <div class="sb-bd-list" id="sbBdList">${bdCards}</div>
-  </div>`;
+    <div class="sb-prog"><div class="sb-prog-fill" id="sbProg" style="width:0%"></div></div>
+    <div class="sb-body">
+      <div class="sb-side" id="sbSide">
+        <div class="sb-side-tabs">
+          <button class="sb-side-tab active" id="sbTabBd" onclick="_sbSwitchTab('braindump')">Brain Dump</button>
+          <button class="sb-side-tab sb-locked" id="sbTabRt" onclick="_sbSwitchTab('routines')">Routines</button>
+        </div>
+        <div class="sb-side-content" id="sbSideContent"></div>
+      </div>
+      <div class="sb-tl-wrap" id="sbTlWrap">
+        <div class="sb-tl-hdr">
+          <div class="sb-tl-title">${dayTitle}</div>
+          <div class="sb-tl-sub" id="sbTlSub">${today.getFullYear()} · Today · Sandbox</div>
+        </div>
+        <div class="sb-tl-grid" id="sbGrid"></div>
+      </div>
+    </div>`;
 
-  // Timeline
-  let slotsHTML='';
+  document.body.appendChild(_sbRoot);
+  _sbRenderTimeline();
+  _sbRenderSidebar();
+  requestAnimationFrame(()=>_sbRoot.classList.add('sb-vis'));
+}
+
+// ── Timeline render ─────────────────────────────
+function _sbRenderTimeline(){
+  const grid=document.getElementById('sbGrid');if(!grid)return;
+  const isMobile=window.innerWidth<=640;
+  const slotH=isMobile?52:64;
+
+  let html='';
   SB_HOURS.forEach(h=>{
-    const t=h+':00';
-    const lbl=_sbFmt(t);
-    // Check routine
-    let routineClass='';
-    let routineLabel='';
-    for(const r of SB_ROUTINES){
-      const[rs]=r.start.split(':').map(Number);
-      const[re]=r.end.split(':').map(Number);
-      if(h>=rs&&h<re){
-        routineClass=r.blocked?'sb-routine-blocked':'sb-routine-window';
-        routineLabel=r.label;
+    const t=(h<10?'0':'')+h+':00';
+    const lbl=_sbFmt12(t);
+    let rtClass='',rtLabel='',rtOpen='';
+    _sbRoutines.forEach(r=>{
+      if(!r.active)return;
+      const rs=_sbHourToMin(r.start),re=_sbHourToMin(r.end);
+      if(h*60>=rs&&h*60<re){
+        rtClass=r.blocked?'sb-rt-blocked':'sb-rt-window';
+        rtLabel=r.label;
+        if(!r.blocked)rtOpen=`<span class="sb-tl-open" style="color:${r.color}">open</span>`;
+      }
+    });
+    const canDrop=_sbPhase>=2&&!rtClass.includes('blocked');
+    html+=`<div class="sb-tl-lbl">${lbl}</div>
+      <div class="sb-tl-slot ${rtClass}" data-hour="${h}"
+        ${canDrop?`ondragover="_sbDO(event)" ondragleave="_sbDL(event)" ondrop="_sbDrop(event,${h})"`:''}
+        ${_sbPhase>=2&&!rtClass.includes('blocked')?`onclick="_sbSlotClick(${h})"`:''}
+        >${rtLabel?`<span class="sb-tl-rt-lbl">${rtLabel}</span>`:''}${rtOpen}</div>`;
+  });
+  grid.innerHTML=html;
+
+  // Routine bands
+  _sbRoutines.forEach(r=>{
+    if(!r.active)return;
+    const rs=_sbHourToMin(r.start),re=_sbHourToMin(r.end);
+    const topIdx=SB_HOURS.indexOf(Math.floor(rs/60));
+    if(topIdx<0)return;
+    const topPx=topIdx*slotH+(rs%60)/60*slotH;
+    const hPx=(re-rs)/60*slotH;
+    const band=document.createElement('div');
+    band.className='sb-rt-band';
+    band.style.cssText=`top:${topPx}px;height:${hPx}px;background:${r.color}0c;border-left-color:${r.color}`;
+    grid.appendChild(band);
+    const banner=document.createElement('div');
+    banner.className='sb-rt-banner';
+    banner.style.cssText=`top:${topPx}px;background:${r.color}cc`;
+    banner.textContent=r.label;
+    grid.appendChild(banner);
+  });
+
+  // Task blocks
+  _sbTasks.forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    const topIdx=SB_HOURS.indexOf(h);
+    if(topIdx<0)return;
+    const topPx=topIdx*slotH+(m/60)*slotH;
+    const hPx=Math.max(22,(t.dur/60)*slotH);
+    const el=document.createElement('div');
+    el.className='sb-task';
+    el.style.cssText=`top:${topPx}px;height:${hPx}px;border-left-color:${t.color||'var(--accent)'};border-top-color:${t.color||'var(--accent)'};background:${t.color?t.color+'20':'rgba(var(--accent-rgb),.13)'}`;
+    el.innerHTML=`<span class="sb-task-name">${_sbEsc(t.name)}</span><span class="sb-task-dur">${_sbDurLabel(t.dur)}</span>`;
+    grid.appendChild(el);
+  });
+
+  // Sub line
+  const sub=document.getElementById('sbTlSub');
+  if(sub){
+    const done=_sbTasks.length;
+    const total=done+_sbBrain.length;
+    sub.textContent=new Date().getFullYear()+' · Today'+(total>0?' · '+done+'/'+total+' scheduled':'');
+  }
+}
+
+// ── Sidebar render ──────────────────────────────
+function _sbRenderSidebar(){
+  const el=document.getElementById('sbSideContent');if(!el)return;
+  if(_sbSideTab==='braindump')_sbRenderBrainDump(el);
+  else _sbRenderRoutines(el);
+}
+
+function _sbRenderBrainDump(el){
+  const canDrag=_sbPhase>=2;
+  const showInput=_sbPhase>=1;
+  let html='';
+  if(showInput){
+    html+=`<div class="sb-qe">
+      <input class="sb-qe-input" id="sbQeInput" placeholder="Quick add: &quot;Lunch 12pm 1hr&quot;"
+        autocomplete="off" onkeydown="if(event.key==='Enter')_sbQuickAdd()">
+    </div>`;
+  }
+  if(_sbBrain.length){
+    html+='<div class="sb-bd" id="sbBdList">';
+    _sbBrain.forEach(b=>{
+      html+=`<div class="sb-bd-card${canDrag?' sb-draggable':''}" id="sbBd-${b.id}" data-id="${b.id}"
+        ${canDrag?`draggable="true" ondragstart="_sbBdDragStart(event,'${b.id}')" ondragend="_sbBdDragEnd(event)"`:''}
+        ><span class="sb-bd-dot" style="background:${_sbPriColor(b.pri)}"></span>
+        <span class="sb-bd-name">${_sbEsc(b.name)}</span></div>`;
+    });
+    html+='</div>';
+  } else {
+    html+='<div class="sb-bd-empty">Brain dump is empty!<br>All tasks are on the calendar.</div>';
+  }
+  if(_sbPhase===4){
+    const hasItems=_sbBrain.length>0;
+    html+=`<div class="sb-ai-wrap">
+      <button class="sb-ai-btn" id="sbAiBtn" onclick="_sbRunAI()"${hasItems?'':' disabled'}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Plan my day
+      </button>
+      <div class="sb-ai-desc">${hasItems?'AI will place your remaining '+_sbBrain.length+' tasks into open windows.':'All tasks are already scheduled!'}</div>
+    </div>`;
+  }
+  el.innerHTML=html;
+}
+
+function _sbRenderRoutines(el){
+  let html='<div class="sb-rt-list">';
+  _sbRoutines.forEach(r=>{
+    html+=`<div class="sb-rt-card${r.active?' sb-rt-on':''}">
+      <div class="sb-rt-info">
+        <div class="sb-rt-name">${r.label}</div>
+        <div class="sb-rt-time">${_sbFmt12(r.start)} – ${_sbFmt12(r.end)}</div>
+      </div>
+      <span class="sb-rt-badge ${r.blocked?'sb-block':'sb-window'}">${r.blocked?'Block':'Window'}</span>
+      <button class="sb-rt-toggle${r.active?' sb-on':''}" onclick="_sbToggleRoutine('${r.id}')"></button>
+    </div>`;
+  });
+  html+='</div>';
+  html+=`<div class="sb-rt-hint">
+    <strong>Windows</strong> are open for tasks — AI fills them.<br>
+    <strong>Blocks</strong> are reserved — tasks can't go there.
+  </div>`;
+  el.innerHTML=html;
+}
+
+window._sbSwitchTab=function(tab){
+  if(tab==='routines'&&_sbPhase<3)return;
+  _sbSideTab=tab;
+  document.getElementById('sbTabBd').classList.toggle('active',tab==='braindump');
+  document.getElementById('sbTabRt').classList.toggle('active',tab==='routines');
+  _sbRenderSidebar();
+};
+
+
+/* ────────────────────────────────────────────────
+   INTERACTIONS
+──────────────────────────────────────────────────── */
+window._sbQuickAdd=function(){
+  const inp=document.getElementById('sbQeInput');if(!inp)return;
+  const raw=inp.value.trim();if(!raw){inp.focus();return;}
+  const parsed=_sbParseQE(raw);
+  if(!parsed){_sbToast('Could not parse — try "Lunch 12pm 1hr"');return;}
+  inp.value='';
+  if(parsed.time){
+    const snapDur=_sbSnap15(parsed.dur);
+    _sbTasks.push({id:_sbId(),name:parsed.name,time:parsed.time,dur:snapDur,color:'var(--accent)'});
+    _sbRenderTimeline();
+    _sbToast('"'+parsed.name+'" scheduled at '+_sbFmt12(parsed.time)+' · '+_sbDurLabel(snapDur));
+  } else {
+    _sbBrain.push({id:_sbId(),name:parsed.name,pri:'none'});
+    _sbRenderSidebar();
+    _sbToast('"'+parsed.name+'" added to Brain Dump — needs a time');
+  }
+};
+
+window._sbSlotClick=function(hour){
+  if(_sbPhase<2)return;
+  const blocked=_sbRoutines.some(r=>r.active&&r.blocked&&hour*60>=_sbHourToMin(r.start)&&hour*60<_sbHourToMin(r.end));
+  if(blocked){_sbToast('This slot is blocked by a routine');return;}
+  if(_sbBrain.length){
+    const item=_sbBrain.shift();
+    _sbTasks.push({id:item.id,name:item.name,time:(hour<10?'0':'')+hour+':00',dur:30,color:_sbPriColor(item.pri)});
+    _sbRenderTimeline();
+    _sbRenderSidebar();
+    _sbToast('"'+item.name+'" scheduled');
+  }
+};
+
+let _sbDragId=null;
+window._sbBdDragStart=function(e,id){
+  _sbDragId=id;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',id);
+  setTimeout(()=>{const c=document.getElementById('sbBd-'+id);if(c)c.classList.add('sb-drag-src');},0);
+};
+window._sbBdDragEnd=function(e){
+  const c=document.getElementById('sbBd-'+_sbDragId);if(c)c.classList.remove('sb-drag-src');
+  _sbDragId=null;
+  if(_sbRoot)_sbRoot.querySelectorAll('.sb-drop-over').forEach(s=>s.classList.remove('sb-drop-over'));
+};
+window._sbDO=function(e){if(!_sbDragId)return;e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('sb-drop-over')};
+window._sbDL=function(e){e.currentTarget.classList.remove('sb-drop-over')};
+window._sbDrop=function(e,hour){
+  e.preventDefault();e.currentTarget.classList.remove('sb-drop-over');
+  if(!_sbDragId)return;
+  const blocked=_sbRoutines.some(r=>r.active&&r.blocked&&hour*60>=_sbHourToMin(r.start)&&hour*60<_sbHourToMin(r.end));
+  if(blocked){_sbToast('Can\'t drop here — slot is blocked');_sbDragId=null;return;}
+  const idx=_sbBrain.findIndex(b=>b.id===_sbDragId);
+  if(idx<0){_sbDragId=null;return;}
+  const item=_sbBrain.splice(idx,1)[0];
+  _sbTasks.push({id:item.id,name:item.name,time:(hour<10?'0':'')+hour+':00',dur:30,color:_sbPriColor(item.pri)});
+  _sbDragId=null;
+  _sbRenderTimeline();_sbRenderSidebar();
+  _sbToast('"'+item.name+'" scheduled at '+_sbFmt12((hour<10?'0':'')+hour+':00'));
+};
+
+window._sbToggleRoutine=function(id){
+  const r=_sbRoutines.find(r=>r.id===id);if(!r)return;
+  r.active=!r.active;
+  _sbRenderTimeline();_sbRenderSidebar();
+};
+
+// ── Fake AI ─────────────────────────────────────
+window._sbRunAI=function(){
+  if(!_sbBrain.length){_sbToast('No tasks to schedule');return;}
+  const btn=document.getElementById('sbAiBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sb-spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Planning...';}
+
+  const grid=document.getElementById('sbGrid');
+  const isMobile=window.innerWidth<=640;
+  const slotH=isMobile?52:64;
+
+  // Build occupied set (15-min granularity)
+  const occupied=new Set();
+  _sbTasks.forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    for(let i=h*60+m;i<h*60+m+t.dur;i+=15)occupied.add(i);
+  });
+  _sbRoutines.forEach(r=>{
+    if(!r.active||!r.blocked)return;
+    for(let i=_sbHourToMin(r.start);i<_sbHourToMin(r.end);i+=15)occupied.add(i);
+  });
+
+  // Collect open 15-min slots — prefer routine windows
+  const openSlots=[];
+  _sbRoutines.forEach(r=>{
+    if(!r.active||r.blocked)return;
+    for(let i=_sbHourToMin(r.start);i<_sbHourToMin(r.end);i+=15){if(!occupied.has(i))openSlots.push(i);}
+  });
+  SB_HOURS.forEach(h=>{
+    const inRt=_sbRoutines.some(r=>r.active&&h*60>=_sbHourToMin(r.start)&&h*60<_sbHourToMin(r.end));
+    if(!inRt){for(let i=h*60;i<h*60+60;i+=15){if(!occupied.has(i)&&!openSlots.includes(i))openSlots.push(i);}}
+  });
+
+  // Greedy placement
+  const placements=[];
+  const usedMins=new Set([...occupied]);
+  [..._sbBrain].forEach(item=>{
+    const dur=30;
+    for(let wi=0;wi<openSlots.length;wi++){
+      const s=openSlots[wi];if(usedMins.has(s))continue;
+      let fits=true;
+      for(let k=0;k<dur/15;k++){if(usedMins.has(s+k*15)){fits=false;break;}}
+      if(fits){
+        for(let k=0;k<dur/15;k++)usedMins.add(s+k*15);
+        const h=Math.floor(s/60),m=s%60;
+        placements.push({item,time:(h<10?'0':'')+h+':'+(m<10?'0':'')+m,dur});
         break;
       }
     }
-    slotsHTML+=`
-      <div class="sb-time-lbl">${lbl}</div>
-      <div class="sb-slot ${routineClass}" data-hour="${h}" id="sbSlot-${h}">
-        ${routineLabel?`<span class="sb-routine-label">${routineLabel}</span>`:''}
-        <div class="sb-drop-ghost" id="sbGhost-${h}"></div>
-      </div>`;
   });
 
-  const timeline=`
-  <div class="sb-timeline-wrap" id="sbTimeline">
-    <div class="sb-day-hdr">
-      <div class="sb-day-title">${dayTitle}</div>
-      <div class="sb-day-sub">${today.getFullYear()} · Today · Sandbox</div>
-    </div>
-    <div class="sb-timeline" id="sbGrid">${slotsHTML}</div>
-  </div>`;
-
-  _sbRoot.innerHTML=hdr+`<div class="sb-body">${sidebar}${timeline}</div>`;
-  document.body.appendChild(_sbRoot);
-
-  // Place pre-existing task blocks
-  requestAnimationFrame(()=>{
-    SB_TASKS.forEach(t=>_sbPlaceTask(t));
-    // Animate in
-    requestAnimationFrame(()=>_sbRoot.classList.add('sb-visible'));
-  });
-}
-
-// ── Place a task block on the timeline ──────────────
-function _sbPlaceTask(t,extraClass){
-  const grid=document.getElementById('sbGrid');if(!grid)return;
-  const hourSlot=document.getElementById('sbSlot-'+parseInt(t.time));
-  if(!hourSlot)return;
-
-  const[h,m]=(t.time||'0:00').split(':').map(Number);
-  const slotH=window.innerWidth<=640?52:64;
-  const topOffset=(SB_HOURS.indexOf(h))*slotH+(m/60)*slotH;
-  const height=((t.dur||30)/60)*slotH;
-
-  // Offset for the header row in the grid (time-lbl col + slot col per hour)
-  const block=document.createElement('div');
-  block.className='sb-task-block'+(extraClass?' '+extraClass:'');
-  block.style.cssText=`
-    top:${topOffset}px;height:${Math.max(height,24)}px;
-    background:${t.color||'var(--accent)'};
-    left:74px;right:4px;
-  `;
-  block.innerHTML=`<span class="sb-task-block-name">${t.name}</span>
-    <span class="sb-task-block-dur">${t.dur}m</span>`;
-  block.id='sbTask-'+(t.id||t.name.replace(/\s/g,''));
-
-  // Place relative to the timeline grid's parent
-  const wrap=document.getElementById('sbTimeline');
-  const gridEl=document.getElementById('sbGrid');
-  // Use grid as positioning parent
-  gridEl.style.position='relative';
-  gridEl.appendChild(block);
-  return block;
-}
-
-
-// ── Show a step ─────────────────────────────────────
-function _sbShowStep(){
-  // Remove old tooltip/center cards
-  _sbRoot.querySelectorAll('.sb-tooltip,.sb-center-card,.sb-success').forEach(el=>el.remove());
-  _sbRoot.querySelectorAll('.sb-highlight').forEach(el=>el.classList.remove('sb-highlight'));
-
-  // Update progress
-  const pct=(_sbStep/SB_STEPS.length)*100;
-  const prog=document.getElementById('sbProgress');
-  if(prog)prog.style.width=pct+'%';
-
-  const step=SB_STEPS[_sbStep];
-  if(!step){_sbClose();return;}
-
-  if(step.pos==='center'){
-    _sbShowCenter(step);
-  } else {
-    _sbShowTooltip(step);
-  }
-
-  // Step-specific setup
-  if(step.id==='quickadd')_sbSetupQuickAdd();
-  if(step.id==='drag')_sbSetupDrag();
-  if(step.id==='routines')_sbSetupRoutines();
-  if(step.id==='ai')_sbSetupAI();
-}
-
-// ── Center card (welcome/done) ──────────────────────
-function _sbShowCenter(step){
-  const isWelcome=step.id==='welcome';
-  const isDone=step.id==='done';
-
-  const iconSvg=isWelcome
-    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
-    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
-
-  const card=document.createElement('div');
-  card.className='sb-center-card';
-  card.innerHTML=`
-    <div class="sb-center-inner">
-      <div class="sb-center-icon">${iconSvg}</div>
-      <div class="sb-center-title">${step.title}</div>
-      <div class="sb-center-body">${step.body}</div>
-      <button class="sb-center-btn" onclick="${isDone?'_sbClose()':'_sbNext()'}">${step.btn}</button>
-      ${_sbDotsHTML()}
-    </div>`;
-  _sbRoot.appendChild(card);
-  requestAnimationFrame(()=>card.classList.add('sb-visible'));
-}
-
-// ── Tooltip card ────────────────────────────────────
-function _sbShowTooltip(step){
-  const tip=document.createElement('div');
-  tip.className='sb-tooltip';
-  tip.id='sbTooltip';
-
-  const skipBtn=step.interactive?`<button class="sb-tooltip-skip" onclick="_sbNext()">Skip</button>`:'';
-
-  tip.innerHTML=`
-    <div class="sb-tooltip-title">${step.title}</div>
-    <div class="sb-tooltip-body">${step.body}</div>
-    <div class="sb-tooltip-actions">
-      ${skipBtn}
-      ${!step.interactive?`<button class="sb-tooltip-btn" onclick="_sbNext()">${step.btn}</button>`:''}
-    </div>
-    ${_sbDotsHTML()}`;
-
-  _sbRoot.querySelector('.sb-body').appendChild(tip);
-
-  // Position
-  requestAnimationFrame(()=>{
-    const isMobile=window.innerWidth<=640;
-    if(step.pos==='above-input'){
-      const inp=document.getElementById('sbQeInput');
-      if(inp){
-        const r=inp.getBoundingClientRect();
-        const overlay=_sbRoot.getBoundingClientRect();
-        tip.style.top=(r.bottom-overlay.top+8)+'px';
-        tip.style.left=isMobile?'12px':Math.max(12,r.left-overlay.left-10)+'px';
-      }
-    } else if(step.pos==='above-sidebar'){
-      const sb=document.getElementById('sbSidebar');
-      if(sb){
-        const r=sb.getBoundingClientRect();
-        const overlay=_sbRoot.getBoundingClientRect();
-        if(isMobile){
-          tip.style.top=(r.bottom-overlay.top+8)+'px';
-          tip.style.left='12px';
-        } else {
-          tip.style.top=(r.top-overlay.top+60)+'px';
-          tip.style.left=(r.right-overlay.left+12)+'px';
-        }
-      }
-    } else if(step.pos==='above-timeline'){
-      const tl=document.getElementById('sbTimeline');
-      if(tl){
-        const r=tl.getBoundingClientRect();
-        const overlay=_sbRoot.getBoundingClientRect();
-        if(isMobile){
-          tip.style.bottom='16px';
-          tip.style.left='12px';
-          tip.style.top='auto';
-        } else {
-          tip.style.top=(r.top-overlay.top+60)+'px';
-          tip.style.right='20px';
-          tip.style.left='auto';
-        }
-      }
-    }
-    tip.classList.add('sb-visible');
-  });
-}
-
-// ── Dots HTML ───────────────────────────────────────
-function _sbDotsHTML(){
-  return '<div class="sb-dots">'+SB_STEPS.map((_,i)=>
-    `<span class="sb-dot${i===_sbStep?' sb-active':''}"></span>`
-  ).join('')+'</div>';
-}
-
-// ── Next step ───────────────────────────────────────
-window._sbNext=function(){
-  _sbStep++;
-  _sbShowStep();
-};
-
-// ── Close sandbox ───────────────────────────────────
-window._sbClose=function(){
-  if(!_sbActive)return;
-  _sbActive=false;
-  if(_sbRoot){
-    _sbRoot.classList.remove('sb-visible');
-    setTimeout(()=>{
-      _sbRoot.remove();
-      _sbRoot=null;
-    },400);
-  }
-  if(_sbStyle){
-    _sbStyle.remove();
-    _sbStyle=null;
-  }
-  // Mark onboarded
-  localStorage.setItem('clarity_onboarded','true');
-  // If app is behind, enter it
-  const splash=document.getElementById('splash');
-  if(splash&&splash.style.display!=='none'){
-    if(typeof enterApp==='function')enterApp();
-  }
-};
-
-// ── Interactive: Quick Add ──────────────────────────
-function _sbSetupQuickAdd(){
-  const inp=document.getElementById('sbQeInput');
-  if(!inp)return;
-  inp.focus();
-  inp.value='';
-
-  inp.addEventListener('keydown',function handler(e){
-    if(e.key!=='Enter')return;
-    const val=inp.value.trim();
-    if(!val){inp.classList.add('sb-highlight');setTimeout(()=>inp.classList.remove('sb-highlight'),600);return;}
-
-    // Parse a simple name from the input
-    const name=val.replace(/\d{1,2}(:\d{2})?\s*(am|pm)?/gi,'').replace(/\d+\s*(min|m|hr|h|hour)/gi,'').trim()||val;
-    const timeMatch=val.match(/(\d{1,2})(:\d{2})?\s*(am|pm)/i);
-    let time='14:00';
-    if(timeMatch){
-      let h=parseInt(timeMatch[1]);
-      const m=timeMatch[2]?parseInt(timeMatch[2].slice(1)):0;
-      if(timeMatch[3].toLowerCase()==='pm'&&h<12)h+=12;
-      if(timeMatch[3].toLowerCase()==='am'&&h===12)h=0;
-      time=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
-    }
-    const durMatch=val.match(/(\d+)\s*(min|m(?:inute)?s?)\b/i)||val.match(/(\d+\.?\d*)\s*(hr|h|hour)/i);
-    let dur=30;
-    if(durMatch){
-      if(durMatch[2].startsWith('h'))dur=Math.round(parseFloat(durMatch[1])*60);
-      else dur=parseInt(durMatch[1]);
-    }
-    dur=Math.max(15,Math.round(dur/15)*15);
-
-    // Place the task
-    const task={id:'sbQe',name:name,time:time,dur:dur,color:'var(--accent)'};
-    const block=_sbPlaceTask(task,'sb-ai-task');
-    if(block)requestAnimationFrame(()=>block.classList.add('sb-ai-reveal'));
-
-    // Success flash
-    inp.value='';
-    inp.removeEventListener('keydown',handler);
-    _sbShowSuccess();
-    setTimeout(()=>_sbNext(),1000);
-  });
-}
-
-// ── Interactive: Drag ───────────────────────────────
-function _sbSetupDrag(){
-  // Highlight first available BD card
-  const firstCard=_sbRoot.querySelector('.sb-bd-card:not(.sb-placed)');
-  if(!firstCard){_sbNext();return;}
-  firstCard.classList.add('sb-highlight');
-
-  let _dragging=null;
-  let _dragName='';
-
-  function onDragStart(e){
-    _dragging=e.target.closest('.sb-bd-card');
-    if(!_dragging)return;
-    _dragName=_dragging.dataset.name;
-    _dragging.classList.add('sb-dragging');
-    e.dataTransfer.setData('text/plain',_dragging.dataset.id);
-    e.dataTransfer.effectAllowed='move';
-  }
-
-  function onDragOver(e){
-    const slot=e.target.closest('.sb-slot');
-    if(!slot||slot.classList.contains('sb-routine-blocked'))return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect='move';
-    // Show ghost
-    _sbRoot.querySelectorAll('.sb-drag-over').forEach(s=>s.classList.remove('sb-drag-over'));
-    slot.classList.add('sb-drag-over');
-    const ghost=slot.querySelector('.sb-drop-ghost');
-    if(ghost)ghost.classList.add('sb-visible');
-  }
-
-  function onDragLeave(e){
-    const slot=e.target.closest('.sb-slot');
-    if(slot){
-      slot.classList.remove('sb-drag-over');
-      const ghost=slot.querySelector('.sb-drop-ghost');
-      if(ghost)ghost.classList.remove('sb-visible');
-    }
-  }
-
-  function onDrop(e){
-    e.preventDefault();
-    const slot=e.target.closest('.sb-slot');
-    if(!slot||slot.classList.contains('sb-routine-blocked'))return;
-    const h=parseInt(slot.dataset.hour);
-    slot.classList.remove('sb-drag-over');
-    const ghost=slot.querySelector('.sb-drop-ghost');
-    if(ghost)ghost.classList.remove('sb-visible');
-
-    // Place task
-    const task={id:'sbDrag',name:_dragName,time:h+':00',dur:30,color:'#10b981'};
-    const block=_sbPlaceTask(task,'sb-ai-task');
-    if(block)requestAnimationFrame(()=>block.classList.add('sb-ai-reveal'));
-
-    // Mark BD card as placed
-    if(_dragging){
-      _dragging.classList.remove('sb-dragging','sb-highlight');
-      _dragging.classList.add('sb-placed');
-    }
-
-    // Cleanup
-    cleanup();
-    _sbShowSuccess();
-    setTimeout(()=>_sbNext(),1000);
-  }
-
-  function onDragEnd(){
-    if(_dragging)_dragging.classList.remove('sb-dragging');
-    _sbRoot.querySelectorAll('.sb-drag-over').forEach(s=>s.classList.remove('sb-drag-over'));
-    _sbRoot.querySelectorAll('.sb-drop-ghost.sb-visible').forEach(g=>g.classList.remove('sb-visible'));
-  }
-
-  function cleanup(){
-    _sbRoot.removeEventListener('dragstart',onDragStart);
-    _sbRoot.removeEventListener('dragover',onDragOver);
-    _sbRoot.removeEventListener('dragleave',onDragLeave);
-    _sbRoot.removeEventListener('drop',onDrop);
-    _sbRoot.removeEventListener('dragend',onDragEnd);
-  }
-
-  _sbRoot.addEventListener('dragstart',onDragStart);
-  _sbRoot.addEventListener('dragover',onDragOver);
-  _sbRoot.addEventListener('dragleave',onDragLeave);
-  _sbRoot.addEventListener('drop',onDrop);
-  _sbRoot.addEventListener('dragend',onDragEnd);
-}
-
-// ── Demo: Routines ──────────────────────────────────
-function _sbSetupRoutines(){
-  // Routine bands are already rendered. Just pulse them to draw attention.
-  const slots=_sbRoot.querySelectorAll('.sb-routine-blocked,.sb-routine-window');
-  slots.forEach((s,i)=>{
-    s.style.transition='box-shadow .3s';
-    setTimeout(()=>{
-      s.style.boxShadow='inset 0 0 0 2px '+(s.classList.contains('sb-routine-blocked')?'rgba(239,68,68,.25)':'rgba(59,130,246,.2)');
-    },i*80);
-    setTimeout(()=>{s.style.boxShadow='';},1500+i*80);
-  });
-}
-
-// ── Demo: AI Schedule ───────────────────────────────
-function _sbSetupAI(){
-  // Show shimmers first, then reveal tasks
-  const grid=document.getElementById('sbGrid');
-  if(!grid)return;
-
-  // Add shimmers
+  // Shimmer → reveal
   const shimmers=[];
-  SB_AI_TASKS.forEach((t,i)=>{
-    const[h,m]=t.time.split(':').map(Number);
-    const slotH=window.innerWidth<=640?52:64;
-    const topOffset=SB_HOURS.indexOf(h)*slotH+(m/60)*slotH;
-    const height=(t.dur/60)*slotH;
-
+  placements.forEach((p,i)=>{
+    const[h,m]=p.time.split(':').map(Number);
+    const topIdx=SB_HOURS.indexOf(h);if(topIdx<0)return;
+    const topPx=topIdx*slotH+(m/60)*slotH;
+    const hPx=Math.max(22,(p.dur/60)*slotH);
     const shim=document.createElement('div');
-    shim.className='sb-ai-shimmer';
-    shim.style.cssText=`top:${topOffset}px;height:${Math.max(height,24)}px;left:74px;right:4px;position:absolute;`;
+    shim.className='sb-shimmer';
+    shim.style.cssText=`top:${topPx}px;height:${hPx}px;opacity:0;transition:opacity .3s`;
     grid.appendChild(shim);
+    setTimeout(()=>{shim.style.opacity='1';},i*150);
     shimmers.push(shim);
   });
 
-  // After a delay, remove shimmers and reveal task blocks
   setTimeout(()=>{
     shimmers.forEach(s=>s.remove());
-    SB_AI_TASKS.forEach((t,i)=>{
-      // Don't place if slot already has a task with this name
-      const existing=document.getElementById('sbTask-'+t.name.replace(/\s/g,''));
-      if(existing)return;
-
-      const block=_sbPlaceTask(t,'sb-ai-task');
-      if(block){
-        setTimeout(()=>block.classList.add('sb-ai-reveal'),i*200);
-      }
+    placements.forEach((p,i)=>{
+      _sbBrain=_sbBrain.filter(b=>b.id!==p.item.id);
+      _sbTasks.push({id:p.item.id,name:p.item.name,time:p.time,dur:p.dur,color:'#8b5cf6'});
+      const[h,m]=p.time.split(':').map(Number);
+      const topIdx=SB_HOURS.indexOf(h);if(topIdx<0)return;
+      const topPx=topIdx*slotH+(m/60)*slotH;
+      const hPx=Math.max(22,(p.dur/60)*slotH);
+      const el=document.createElement('div');
+      el.className='sb-task sb-reveal';
+      el.style.cssText=`top:${topPx}px;height:${hPx}px;border-left-color:#8b5cf6;border-top-color:#8b5cf6;background:rgba(139,92,246,.13)`;
+      el.innerHTML=`<span class="sb-task-name">${_sbEsc(p.item.name)}</span><span class="sb-task-dur">${_sbDurLabel(p.dur)}</span>`;
+      grid.appendChild(el);
+      setTimeout(()=>el.classList.add('sb-revealed'),i*200+50);
     });
-  },1500);
+    setTimeout(()=>{
+      _sbRenderSidebar();_sbRenderTimeline();
+      _sbToast(placements.length+' task'+(placements.length!==1?'s':'')+' scheduled by AI');
+      setTimeout(()=>_sbSetPhase(5),1500);
+    },placements.length*200+400);
+  },placements.length*150+1200);
+};
+
+
+/* ────────────────────────────────────────────────
+   PHASE MANAGEMENT
+──────────────────────────────────────────────────── */
+function _sbSetPhase(p){
+  _sbPhase=p;
+  const prog=document.getElementById('sbProg');
+  if(prog)prog.style.width=(p/(PHASE_COUNT-1)*100)+'%';
+  const badge=document.getElementById('sbPhaseBadge');
+  if(badge)badge.textContent=PHASE_LABELS[p]||'SANDBOX';
+  const rtTab=document.getElementById('sbTabRt');
+  if(rtTab)rtTab.classList.toggle('sb-locked',p<3);
+  if(p===3)_sbSwitchTab('routines');
+  else if(p===4)_sbSwitchTab('braindump');
+  _sbRenderTimeline();_sbRenderSidebar();_sbRenderGuide();
 }
 
-// ── Success flash ───────────────────────────────────
-function _sbShowSuccess(){
-  const tip=document.getElementById('sbTooltip');
-  if(!tip)return;
-  const flash=document.createElement('div');
-  flash.className='sb-success';
-  flash.innerHTML='<div class="sb-success-check">✓</div>';
-  tip.appendChild(flash);
-  requestAnimationFrame(()=>flash.classList.add('sb-show'));
+window._sbNext=function(){_sbSetPhase(_sbPhase+1)};
+
+function _sbRenderGuide(){
+  if(!_sbRoot)return;
+  _sbRoot.querySelectorAll('.sb-guide,.sb-modal').forEach(e=>e.remove());
+
+  if(_sbPhase===0){
+    const m=document.createElement('div');m.className='sb-modal';
+    m.innerHTML=`<div class="sb-modal-inner">
+      <div class="sb-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+      <div class="sb-modal-title">Welcome to LuClaro</div>
+      <div class="sb-modal-body">This is a hands-on sandbox — nothing here touches your real data. You'll learn to brain dump, schedule, set up routines, and let AI plan your day.</div>
+      <button class="sb-modal-btn" onclick="_sbNext()">Let's start</button>
+    </div>`;
+    _sbRoot.appendChild(m);requestAnimationFrame(()=>m.classList.add('sb-vis'));return;
+  }
+  if(_sbPhase===5){
+    const m=document.createElement('div');m.className='sb-modal';
+    m.innerHTML=`<div class="sb-modal-inner">
+      <div class="sb-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <div class="sb-modal-title">You're all set!</div>
+      <div class="sb-modal-body">Brain dump, drag-to-schedule, routines, and AI planning — you've got the fundamentals. Time to plan your real day.</div>
+      <button class="sb-modal-btn" onclick="_sbClose()">Start planning</button>
+    </div>`;
+    _sbRoot.appendChild(m);requestAnimationFrame(()=>m.classList.add('sb-vis'));return;
+  }
+
+  const guides={
+    1:{title:'Brain Dump',body:'Get tasks out of your head. Type in the quick add box — try <em>"Team standup 10am 30min"</em> or just <em>"Buy milk"</em>.<br><br>Tasks with a time go straight to the calendar. Without a time, they land in your brain dump cards below.',btn:'I\'ve added some tasks'},
+    2:{title:'Drag to Schedule',body:'Grab any card from the brain dump and <strong>drag it onto a time slot</strong>. You can also <strong>click a slot</strong> to place the next card there.<br><br>Take your time — schedule as many as you want.',btn:'Done scheduling'},
+    3:{title:'Routines',body:'Toggle routines on to shape your day. <strong>Windows</strong> (blue) stay open for tasks. <strong>Blocks</strong> (red hatching) are reserved — tasks can\'t go there.<br><br>Watch the calendar update as you toggle each one.',btn:'Routines are set'},
+    4:{title:'AI Planner',body:'Hit <em>"Plan my day"</em> in the sidebar and watch AI fill your remaining brain dump items into open windows — avoiding blocks and existing tasks.',btn:null},
+  };
+  const g=guides[_sbPhase];if(!g)return;
+  const card=document.createElement('div');card.className='sb-guide';
+  const dots=Array.from({length:PHASE_COUNT},(_,i)=>`<span class="sb-guide-dot${i===_sbPhase?' sb-on':''}"></span>`).join('');
+  card.innerHTML=`<div class="sb-guide-title">${g.title}</div>
+    <div class="sb-guide-body">${g.body}</div>
+    ${g.btn?`<div class="sb-guide-actions"><button class="sb-guide-btn" onclick="_sbNext()">${g.btn} →</button></div>`:''}
+    <div class="sb-guide-dots">${dots}</div>`;
+  _sbRoot.querySelector('.sb-body').appendChild(card);
+  requestAnimationFrame(()=>card.classList.add('sb-vis'));
+}
+
+function _sbToast(msg){
+  if(!_sbRoot)return;
+  const old=_sbRoot.querySelector('.sb-toast');if(old)old.remove();
+  const t=document.createElement('div');t.className='sb-toast';t.textContent=msg;
+  _sbRoot.querySelector('.sb-body').appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('sb-vis'));
+  setTimeout(()=>{t.classList.remove('sb-vis');setTimeout(()=>t.remove(),300);},2200);
 }
 
 
-// ══ PUBLIC API ══════════════════════════════════════
+/* ────────────────────────────────────────────────
+   OPEN / CLOSE
+──────────────────────────────────────────────────── */
+window._sbClose=function(){
+  if(!_sbActive)return;_sbActive=false;
+  if(_sbRoot){_sbRoot.classList.remove('sb-vis');setTimeout(()=>{if(_sbRoot){_sbRoot.remove();_sbRoot=null;}},400);}
+  if(_sbStyle){_sbStyle.remove();_sbStyle=null;}
+  localStorage.setItem('clarity_onboarded','true');
+  const splash=document.getElementById('splash');
+  if(splash&&splash.style.display!=='none'&&typeof enterApp==='function')enterApp();
+};
+
 window.startSandboxDemo=function(){
-  if(_sbActive)return;
-  _sbActive=true;
-  _sbStep=0;
-  _sbInjectCSS();
-  _sbBuild();
-  // Show first step after overlay animates in
-  setTimeout(()=>_sbShowStep(),500);
+  if(_sbActive)return;_sbActive=true;
+  _sbPhase=0;_sbSideTab='braindump';
+  _sbResetData();_sbInjectCSS();_sbBuild();
+  setTimeout(()=>_sbRenderGuide(),500);
 };
 
 })();

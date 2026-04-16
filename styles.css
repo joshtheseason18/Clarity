@@ -1266,6 +1266,35 @@ header{
 .wk-task-narrow .wk-task-block-name{
   font-size:8px!important;line-height:1.2!important;
 }
+/* ── Compact mode for short (≤15min) tasks ── */
+/* Week view compact: no grip, single line, minimal padding */
+.wk-task-compact{
+  padding:3px 6px 3px!important;
+  flex-direction:row!important;align-items:center!important;gap:3px!important;
+  min-height:22px!important;
+}
+.wk-task-compact .drag-grip{display:none!important}
+.wk-task-compact .wk-task-block-name{
+  font-size:10px;line-height:1.2;flex:1;min-width:0;
+}
+.wk-task-compact .task-check{
+  width:13px;height:13px;min-width:13px;flex-shrink:0;
+}
+.wk-task-compact .task-check.checked::after{width:3px;height:5px;border-width:1.2px}
+.wk-task-compact .wk-task-meta-row{display:none!important}
+.wk-task-compact .recur-icon{font-size:9px}
+/* Day view compact: no grip, reduced padding, single line */
+.day-task-compact{
+  padding:4px 10px 4px!important;
+}
+.day-task-compact .drag-grip{display:none!important}
+.day-task-compact .day-task-block-name{
+  font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.day-task-compact .day-task-block-check{gap:5px}
+.day-task-compact .day-add-sub-btn{display:none}
+.day-task-compact .day-time-range{display:none}
+.day-task-compact .day-task-meta-row{display:none}
 /* Time range badge — top-right of the name row */
 .day-time-range{
   font-size:10px;font-weight:600;color:var(--accent);
@@ -2600,6 +2629,8 @@ header{
   .wk-time-col .time-lbl,.time-lbl{font-size:9px;padding:0 2px}
   .wk-task-block-name{font-size:10px}
   .wk-task-block-dur{font-size:9px}
+  .wk-task-compact .wk-task-block-name{font-size:9px}
+  .wk-task-compact .task-check{width:11px;height:11px;min-width:11px}
 
   /* ── Day view ── */
   .day-hdr{padding:10px 12px}
@@ -2608,6 +2639,8 @@ header{
   .day-slot{min-height:64px}
   .day-task-block{margin:2px 4px 2px 6px;padding:5px 10px 10px}
   .day-task-block-name{font-size:13px}
+  .day-task-compact{padding:3px 8px 3px!important}
+  .day-task-compact .day-task-block-name{font-size:12px}
   .allday-pill{font-size:10px;padding:2px 8px}
   .day-conflict-badge{font-size:9px}
   .day-time-range{font-size:9px;padding:1px 5px}
