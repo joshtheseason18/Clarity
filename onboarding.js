@@ -18,7 +18,7 @@ let _sbSideTab='braindump';
 let _sbIdCounter=100;
 
 const SB_HOURS=[7,8,9,10,11,12,13,14,15,16,17,18,19];
-const PHASE_LABELS=['Welcome','Brain Dump','Schedule','Routines','AI Planner','Ready!'];
+const PHASE_LABELS=['Welcome','Brain Dump','Schedule','Routines','Plan My Day','Ready!'];
 const PHASE_COUNT=6;
 
 /* ────────────────────────────────────────────────
@@ -78,6 +78,10 @@ function _sbParseQE(raw){
   // All day
   if(/\ball\s*day\b/i.test(text)){allday=true;text=text.replace(/\ball\s*day\b/i,'').trim();}
 
+  // Weekday patterns — strip from name (we don't implement recurrence in sandbox, just clean up)
+  text=text.replace(/\b(mon|tue|wed|thu|fri|sat|sun)(\s*\/\s*(mon|tue|wed|thu|fri|sat|sun))+\b/gi,'').trim();
+  text=text.replace(/\bevery\s+(mon|tue|wed|thu|fri|sat|sun)(day)?\b/gi,'').trim();
+
   // Duration: "45min", "45mins", "1.5hr", "2 hours", "for 30 minutes"
   const durRe=/\b(?:for\s+)?(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|m)\b/i;
   const dm=text.match(durRe);
@@ -126,7 +130,7 @@ function _sbInjectCSS(){
 .sb-body{flex:1;display:flex;overflow:hidden;position:relative}
 
 /* ── Sidebar ── */
-.sb-side{width:300px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;flex-shrink:0}
+.sb-side{width:300px;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;flex-shrink:0}
 .sb-side-tabs{display:flex;border-bottom:1px solid var(--border)}
 .sb-side-tab{flex:1;padding:10px 8px;font-size:11px;font-weight:600;text-align:center;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif}
 .sb-side-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -139,6 +143,20 @@ function _sbInjectCSS(){
 .sb-qe-input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface2);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
 .sb-qe-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)}
 .sb-qe-input::placeholder{color:var(--text3)}
+.sb-qe-highlight .sb-qe-input{
+  border-color:var(--accent);
+  animation:sbQePulse 1.8s ease-in-out infinite;
+}
+@keyframes sbQePulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),.3),0 0 0 1.5px var(--accent)}
+  50%{box-shadow:0 0 0 6px rgba(var(--accent-rgb),0),0 0 0 1.5px var(--accent)}
+}
+.sb-qe-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--accent);margin-bottom:6px;
+  padding:2px 7px;border-radius:5px;background:rgba(var(--accent-rgb),.1);
+}
 
 /* ── Brain dump cards ── */
 .sb-bd{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:5px}
@@ -206,7 +224,7 @@ function _sbInjectCSS(){
 @keyframes sbSpin{to{transform:rotate(360deg)}}
 
 /* ── Guide card ── */
-.sb-guide{position:absolute;bottom:16px;right:16px;z-index:10;width:320px;max-width:calc(100% - 32px);background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:16px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.12);opacity:0;transform:translateY(12px);transition:all .4s cubic-bezier(.34,1.56,.64,1)}
+.sb-guide{position:absolute;bottom:16px;left:16px;z-index:10;width:320px;max-width:calc(100% - 32px);background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:16px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.12);opacity:0;transform:translateY(12px);transition:all .4s cubic-bezier(.34,1.56,.64,1)}
 .sb-guide.sb-vis{opacity:1;transform:translateY(0)}
 .sb-guide-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--text);margin-bottom:4px}
 .sb-guide-body{font-size:12.5px;color:var(--text2);line-height:1.65;margin-bottom:12px}
@@ -241,9 +259,9 @@ function _sbInjectCSS(){
 
 /* ── Mobile ── */
 @media(max-width:640px){
-  .sb-side{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:200px}
+  .sb-side{width:100%;border-left:none;border-top:1px solid var(--border);max-height:200px}
   .sb-body{flex-direction:column}
-  .sb-guide{bottom:8px;right:8px;left:8px;width:auto}
+  .sb-guide{bottom:8px;left:8px;right:8px;width:auto}
   .sb-tl-lbl{font-size:10px;padding:4px 6px 0 0;height:52px}
   .sb-tl-slot{height:52px}
   .sb-tl-grid{grid-template-columns:52px 1fr}
@@ -284,19 +302,19 @@ function _sbBuild(){
     </div>
     <div class="sb-prog"><div class="sb-prog-fill" id="sbProg" style="width:0%"></div></div>
     <div class="sb-body">
-      <div class="sb-side" id="sbSide">
-        <div class="sb-side-tabs">
-          <button class="sb-side-tab active" id="sbTabBd" onclick="_sbSwitchTab('braindump')">Brain Dump</button>
-          <button class="sb-side-tab sb-locked" id="sbTabRt" onclick="_sbSwitchTab('routines')">Routines</button>
-        </div>
-        <div class="sb-side-content" id="sbSideContent"></div>
-      </div>
       <div class="sb-tl-wrap" id="sbTlWrap">
         <div class="sb-tl-hdr">
           <div class="sb-tl-title">${dayTitle}</div>
           <div class="sb-tl-sub" id="sbTlSub">${today.getFullYear()} · Today · Sandbox</div>
         </div>
         <div class="sb-tl-grid" id="sbGrid"></div>
+      </div>
+      <div class="sb-side" id="sbSide">
+        <div class="sb-side-tabs">
+          <button class="sb-side-tab active" id="sbTabBd" onclick="_sbSwitchTab('braindump')">Brain Dump</button>
+          <button class="sb-side-tab sb-locked" id="sbTabRt" onclick="_sbSwitchTab('routines')">Routines</button>
+        </div>
+        <div class="sb-side-content" id="sbSideContent"></div>
       </div>
     </div>`;
 
@@ -387,10 +405,12 @@ function _sbRenderSidebar(){
 function _sbRenderBrainDump(el){
   const canDrag=_sbPhase>=2;
   const showInput=_sbPhase>=1;
+  const emphasize=_sbPhase===1;
   let html='';
   if(showInput){
-    html+=`<div class="sb-qe">
-      <input class="sb-qe-input" id="sbQeInput" placeholder="Quick add: &quot;Lunch 12pm 1hr&quot;"
+    html+=`<div class="sb-qe${emphasize?' sb-qe-highlight':''}">
+      ${emphasize?'<div class="sb-qe-badge">✨ Quick Events</div>':''}
+      <input class="sb-qe-input" id="sbQeInput" placeholder="Try: &quot;Study 3pm 45min&quot;"
         autocomplete="off" onkeydown="if(event.key==='Enter')_sbQuickAdd()">
     </div>`;
   }
@@ -413,7 +433,7 @@ function _sbRenderBrainDump(el){
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         Plan my day
       </button>
-      <div class="sb-ai-desc">${hasItems?'AI will place your remaining '+_sbBrain.length+' tasks into open windows.':'All tasks are already scheduled!'}</div>
+      <div class="sb-ai-desc">${hasItems?'Luclaro will place your remaining '+_sbBrain.length+' tasks into open windows.':'All tasks are already scheduled!'}</div>
     </div>`;
   }
   el.innerHTML=html;
@@ -599,7 +619,7 @@ window._sbRunAI=function(){
     });
     setTimeout(()=>{
       _sbRenderSidebar();_sbRenderTimeline();
-      _sbToast(placements.length+' task'+(placements.length!==1?'s':'')+' scheduled by AI');
+      _sbToast(placements.length+' task'+(placements.length!==1?'s':'')+' scheduled');
       setTimeout(()=>_sbSetPhase(5),1500);
     },placements.length*200+400);
   },placements.length*150+1200);
@@ -633,7 +653,7 @@ function _sbRenderGuide(){
     m.innerHTML=`<div class="sb-modal-inner">
       <div class="sb-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
       <div class="sb-modal-title">Welcome to LuClaro</div>
-      <div class="sb-modal-body">This is a hands-on sandbox — nothing here touches your real data. You'll learn to brain dump, schedule, set up routines, and let AI plan your day.</div>
+      <div class="sb-modal-body">This is a hands-on sandbox — nothing here touches your real data. You'll learn to brain dump, schedule, set up routines, and let Luclaro plan your day.</div>
       <button class="sb-modal-btn" onclick="_sbNext()">Let's start</button>
     </div>`;
     _sbRoot.appendChild(m);requestAnimationFrame(()=>m.classList.add('sb-vis'));return;
@@ -643,17 +663,17 @@ function _sbRenderGuide(){
     m.innerHTML=`<div class="sb-modal-inner">
       <div class="sb-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
       <div class="sb-modal-title">You're all set!</div>
-      <div class="sb-modal-body">Brain dump, drag-to-schedule, routines, and AI planning — you've got the fundamentals. Time to plan your real day.</div>
+      <div class="sb-modal-body">Brain dump, drag-to-schedule, routines, and smart planning — you've got the fundamentals. Time to plan your real day.</div>
       <button class="sb-modal-btn" onclick="_sbClose()">Start planning</button>
     </div>`;
     _sbRoot.appendChild(m);requestAnimationFrame(()=>m.classList.add('sb-vis'));return;
   }
 
   const guides={
-    1:{title:'Brain Dump',body:'Get tasks out of your head. Type in the quick add box — try <em>"Team standup 10am 30min"</em> or just <em>"Buy milk"</em>.<br><br>Tasks with a time go straight to the calendar. Without a time, they land in your brain dump cards below.',btn:'I\'ve added some tasks'},
+    1:{title:'Brain Dump + Quick Events',body:'Get tasks out of your head — type in the quick add box on the right.<br><br>✨ <strong>Quick Events</strong> parses naturally: try <em>"Study 3pm 45min"</em>, <em>"Lunch tomorrow noon"</em>, or <em>"Gym Mon/Wed/Fri 6pm"</em>.<br><br>Tasks with a time go straight to the calendar. Without a time, they land in brain dump cards.',btn:'I\'ve added some tasks'},
     2:{title:'Drag to Schedule',body:'Grab any card from the brain dump and <strong>drag it onto a time slot</strong>. You can also <strong>click a slot</strong> to place the next card there.<br><br>Take your time — schedule as many as you want.',btn:'Done scheduling'},
     3:{title:'Routines',body:'Toggle routines on to shape your day. <strong>Windows</strong> (blue) stay open for tasks. <strong>Blocks</strong> (red hatching) are reserved — tasks can\'t go there.<br><br>Watch the calendar update as you toggle each one.',btn:'Routines are set'},
-    4:{title:'AI Planner',body:'Hit <em>"Plan my day"</em> in the sidebar and watch AI fill your remaining brain dump items into open windows — avoiding blocks and existing tasks.',btn:null},
+    4:{title:'Let Luclaro Plan',body:'Hit <em>"Plan my day"</em> in the sidebar. Luclaro will place your remaining brain dump items into open windows — respecting your routines, using smart defaults for duration, and avoiding blocked time.',btn:null},
   };
   const g=guides[_sbPhase];if(!g)return;
   const card=document.createElement('div');card.className='sb-guide';
@@ -681,8 +701,11 @@ function _sbToast(msg){
 ──────────────────────────────────────────────────── */
 window._sbClose=function(){
   if(!_sbActive)return;_sbActive=false;
-  if(_sbRoot){_sbRoot.classList.remove('sb-vis');setTimeout(()=>{if(_sbRoot){_sbRoot.remove();_sbRoot=null;}},400);}
-  if(_sbStyle){_sbStyle.remove();_sbStyle=null;}
+  if(_sbRoot)_sbRoot.classList.remove('sb-vis');
+  setTimeout(()=>{
+    if(_sbRoot){_sbRoot.remove();_sbRoot=null;}
+    if(_sbStyle){_sbStyle.remove();_sbStyle=null;}
+  },400);
   localStorage.setItem('clarity_onboarded','true');
   const splash=document.getElementById('splash');
   if(splash&&splash.style.display!=='none'&&typeof enterApp==='function')enterApp();

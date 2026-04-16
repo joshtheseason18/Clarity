@@ -580,7 +580,7 @@
       <!-- Detail Tabs -->
       <div class="modal-detail-tabs" id="modalDetailTabs">
         <button class="modal-dtab active" onclick="switchDetailTab('notes')">Notes <span class="dtab-dot" id="dtabDotNotes"></span></button>
-        <button class="modal-dtab" onclick="switchDetailTab('attach')">Attachments <span class="dtab-badge" id="dtabBadgeAttach"></span></button>
+        <button class="modal-dtab" onclick="switchDetailTab('attach')" style="display:none">Attachments <span class="dtab-badge" id="dtabBadgeAttach"></span></button>
         <button class="modal-dtab" onclick="switchDetailTab('subtasks')">Subtasks <span class="dtab-badge" id="dtabBadgeSubs"></span></button>
       </div>
       <!-- Notes panel -->
@@ -603,7 +603,7 @@
           <input class="fi subtask-add-input" id="fSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskFromModal()}">
           <button class="subtask-add-btn" onclick="addSubtaskFromModal()">+</button>
         </div>
-        <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="AI generate subtasks"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" fill="currentColor"/></svg> Generate with AI</button>
+        <button class="subtask-gen-btn-full" onclick="generateSubtasks()" title="Generate subtasks from templates or AI"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" fill="currentColor"/></svg> Generate Subtasks</button>
       </div>
     </div>
     <!-- Sticky footer: actions -->
@@ -899,7 +899,7 @@
     <!-- Additional input -->
     <div class="fg">
       <label class="flbl">Anything else?</label>
-      <textarea class="fi auto-expand" id="aiInput" placeholder="e.g. dentist at 2pm, study for 2 hours (subtasks: geography, calculus), call mom sometime today, birthday party 6pm" rows="3" oninput="autoExpand(this)" style="line-height:1.6;min-height:80px"></textarea>
+      <textarea class="fi auto-expand" id="aiInput" placeholder="One task per line. Add times like '3pm' and durations like '45min' for instant scheduling. Examples: Study 3pm 45min · Gym Mon/Wed/Fri 6pm · Mom's birthday 5/15" rows="3" oninput="autoExpand(this)" style="line-height:1.6;min-height:80px"></textarea>
     </div>
     <!-- Preference chips -->
     <div class="ai-pref-row">

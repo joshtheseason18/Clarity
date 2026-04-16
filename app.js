@@ -128,9 +128,15 @@ async function getAuthToken(){
   }catch(e){return null;}
 }
 
-// Proxied API call — uses Edge Function when authenticated, direct when in artifact
-async function callClaudeAPI(messages,maxTokens=1000){
+// Proxied API call — uses Edge Function when authenticated, direct when in artifact.
+// Model defaults to Haiku 4.5 (3× cheaper than Sonnet). Pass a different model string
+// (e.g. 'claude-sonnet-4-6') to override. Used by callClaudeAPIWithFallback for
+// silent tiered escalation when Haiku's output is insufficient.
+async function callClaudeAPI(messages,maxTokens=400,model='claude-haiku-4-5'){
+  // Hard cap to protect cost
+  const cappedTokens=Math.min(maxTokens,800);
   const token=await getAuthToken();
+  const body=JSON.stringify({model,max_tokens:cappedTokens,messages});
   let data;
   if(token){
     // Authenticated — use Edge Function proxy
@@ -140,7 +146,7 @@ async function callClaudeAPI(messages,maxTokens=1000){
         'Content-Type':'application/json',
         'Authorization':'Bearer '+token
       },
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,messages})
+      body
     });
     data=await res.json();
   } else {
@@ -148,7 +154,7 @@ async function callClaudeAPI(messages,maxTokens=1000){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,messages})
+      body
     });
     data=await res.json();
   }
@@ -159,9 +165,44 @@ async function callClaudeAPI(messages,maxTokens=1000){
   }
   if(!data.content||!Array.isArray(data.content)){
     console.error('Unexpected API response:',data);
-    throw new Error('Unexpected response from AI — check console for details');
+    throw new Error('Unexpected response from Luclaro — check console for details');
   }
   return data;
+}
+
+// ── Silent tiered fallback ──
+// Tries Haiku first. If the call throws OR the caller-provided validator returns
+// null/undefined (signalling bad output), silently retries with Sonnet.
+// User sees nothing — just gets a good result. Only pays double on the ~5% of
+// calls where Haiku's output is unusable.
+//
+// `validator` receives the raw API response and should return the parsed/validated
+// result (truthy) to accept, or null to trigger fallback.
+async function callClaudeAPIWithFallback(messages,maxTokens,validator){
+  let haikuErr=null;
+  // Attempt 1: Haiku 4.5
+  try{
+    const data=await callClaudeAPI(messages,maxTokens,'claude-haiku-4-5');
+    const validated=validator?validator(data):data;
+    if(validated){return{result:validated,model:'haiku'};}
+    // Validator rejected — fall through to Sonnet
+    console.warn('Haiku output rejected by validator, falling back to Sonnet');
+  }catch(err){
+    haikuErr=err;
+    console.warn('Haiku call failed, falling back to Sonnet:',err.message);
+  }
+  // Attempt 2: Sonnet 4.6 (silent upgrade)
+  bumpStat('ai_fallback_sonnet');
+  try{
+    const data=await callClaudeAPI(messages,maxTokens,'claude-sonnet-4-6');
+    const validated=validator?validator(data):data;
+    if(validated){return{result:validated,model:'sonnet'};}
+    // Both models failed validation
+    throw new Error('Both models returned invalid output');
+  }catch(err){
+    // Prefer Haiku error message if Sonnet also failed (usually same cause)
+    throw haikuErr||err;
+  }
 }
 
 // Listen for auth state changes (handles redirect back from Google)
@@ -290,215 +331,7 @@ const SPLASH_TAGLINES=[
   "Ordered steps, bright day.",
 ];
 
-// ══ GUIDED TOUR (contextual, tip-highlight style) ═══
-let _tourStep=0;
-const TOUR_STEPS=[
-  {
-    target:'.sidebar-toggle-btn',
-    arrow:'top',
-    title:'Brain Dump',
-    body:'Open the sidebar and write down whatever\'s on your mind — tasks, ideas, reminders. Don\'t organize, just dump.',
-    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
-  },
-  {
-    target:'#qeInput',
-    arrow:'right',
-    title:'Quick Events — Try it!',
-    body:'Type <strong>"Lunch Friday 12pm"</strong> below and press Enter.',
-    interactive:true,
-    pre:function(){if(!sidebarOpen)toggleSidebar();switchSide('braindump');switchView('day');},
-    setup:function(){
-      const input=document.getElementById('qeInput');
-      if(input){input.focus();input.placeholder='Try: Lunch Friday 12pm';}
-      _tourWatcher=function(){setTimeout(()=>{tourInteractiveSuccess();},300);};
-      window._tourOnQuickEvent=_tourWatcher;
-    },
-    cleanup:function(){window._tourOnQuickEvent=null;}
-  },
-  {
-    target:'.sidebar',
-    arrow:'right',
-    title:'Drag to Schedule — Try it!',
-    body:'Grab any card from the sidebar and <strong>drag it onto a time slot</strong> in the calendar.',
-    interactive:true,
-    pre:function(){
-      if(!sidebarOpen)toggleSidebar();switchSide('braindump');switchView('day');
-      // Ensure there's at least one brain dump item
-      if(!brainDump.length){brainDump.push({id:genId(),name:'Sample task',category:'none',priority:'none',notes:'',subtasks:[]});save();renderBD();}
-    },
-    setup:function(){
-      _tourWatcher=function(){setTimeout(()=>{tourInteractiveSuccess();},300);};
-      window._tourOnDrop=_tourWatcher;
-    },
-    cleanup:function(){window._tourOnDrop=null;}
-  },
-  {
-    target:'#schedTabRoutine',
-    arrow:'top',
-    title:'Routines',
-    body:'Build your day\'s skeleton. <strong>Windows</strong> are open for tasks — AI fills them. <strong>Blocks</strong> are fully reserved. Skip any routine for a single day with one tap.',
-    pre:function(){if(sidebarOpen)toggleSidebar();switchView('schedule');switchScheduleTab('routine');}
-  },
-  {
-    target:'#schedTabHolidays',
-    arrow:'top',
-    title:'Holidays & Days Off',
-    body:'Toggle US federal holidays with one click. Each one auto-creates an all-day event and pauses your routines so the day stays open.',
-    pre:function(){switchScheduleTab('holidays');}
-  },
-  {
-    target:'.day-hdr',
-    arrow:'bottom',
-    title:'Multi-day & Recurrence',
-    body:'Create events spanning multiple days (vacations, trips). Repeat tasks on specific weekdays — Mon/Wed/Fri for gym. Find these toggles when editing any event.',
-    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
-  },
-  {
-    target:'[onclick="openAISchedule()"]',
-    arrow:'top',
-    title:'AI Schedule',
-    body:'Describe your day and AI plans it around your <strong>routines, holidays, and existing events</strong>. It places tasks into windows and avoids blocked time.',
-    pre:function(){if(sidebarOpen)toggleSidebar();switchView('day');}
-  }
-];
-let _tourWatcher=null;
-
-function startGuidedTour(){
-  if(localStorage.getItem('clarity_onboarded'))return;
-  // Save name from splash
-  const nameInput=document.getElementById('splashName');
-  if(nameInput){
-    const name=nameInput.value.trim();
-    if(name)localStorage.setItem('clarity_username',name);
-  }
-  _tourStep=0;
-  setTimeout(showTourStep,600);
-}
-
-function showTourStep(){
-  // Clean up previous
-  clearTourUI();
-  if(_tourStep>=TOUR_STEPS.length){finishTour();return;}
-
-  const step=TOUR_STEPS[_tourStep];
-  if(step.pre)step.pre();
-
-  setTimeout(()=>{
-    const target=document.querySelector(step.target);
-    if(!target){_tourStep++;showTourStep();return;}
-
-    // Backdrop
-    const backdrop=document.createElement('div');
-    backdrop.className='tour-backdrop';
-    backdrop.id='tourBackdrop';
-    backdrop.addEventListener('click',finishTour);
-    document.body.appendChild(backdrop);
-
-    // Highlight target
-    target.classList.add('tip-highlight');
-    target.style.position=target.style.position||'relative';
-    target.style.zIndex='9999';
-    target._tourStyled=true;
-
-    // Tour card
-    const card=document.createElement('div');
-    card.className='tour-card arrow-'+step.arrow;
-    card.id='tourCard';
-
-    const dots=TOUR_STEPS.map((_,i)=>
-      `<span class="tour-step-dot${i===_tourStep?' active':''}"></span>`
-    ).join('');
-
-    const isInteractive=step.interactive;
-    const btnText=_tourStep<TOUR_STEPS.length-1?(isInteractive?'or Skip →':'Next →'):'Got it!';
-
-    card.innerHTML=`
-      <div class="tour-title">${step.title}</div>
-      <div class="tour-body">${step.body}</div>
-      <div class="tour-actions">
-        <button class="tour-skip" onclick="finishTour()">Skip tour</button>
-        <button class="tour-btn" onclick="nextTourStep()">${btnText}</button>
-      </div>
-      <div class="tour-step-dots">${dots}</div>
-      ${window.innerWidth<=640?'<div class="tour-tap-hint">Tap outside to skip</div>':''}`;
-    document.body.appendChild(card);
-
-    // Position card
-    const rect=target.getBoundingClientRect();
-    const isMobile=window.innerWidth<=640;
-    requestAnimationFrame(()=>{
-      const cardH=card.offsetHeight;
-      const cardW=Math.min(300,window.innerWidth-32);
-      if(isMobile){
-        card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
-        card.style.right='auto';
-        const spaceBelow=window.innerHeight-rect.bottom;
-        if(spaceBelow>=cardH+20){card.style.top=(rect.bottom+12)+'px';}
-        else{card.style.top=Math.max(8,rect.top-cardH-12)+'px';}
-      } else if(step.arrow==='top'){
-        card.style.top=(rect.bottom+12)+'px';
-        card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
-      } else if(step.arrow==='bottom'){
-        card.style.top=Math.max(8,(rect.top-cardH-12))+'px';
-        card.style.left=Math.max(16,Math.min(rect.left+rect.width/2-150,window.innerWidth-316))+'px';
-      } else if(step.arrow==='right'){
-        const rightVal=window.innerWidth-rect.left+12;
-        if(rightVal+cardW>window.innerWidth-16){
-          card.style.left=Math.max(16,(window.innerWidth-cardW)/2)+'px';
-          card.style.right='auto';
-          card.style.top=Math.max(8,rect.top)+'px';
-        } else {
-          card.style.top=rect.top+'px';
-          card.style.right=rightVal+'px';
-        }
-      }
-    });
-
-    // Setup interactive listener
-    if(step.setup)step.setup();
-  },400);
-}
-
-function tourInteractiveSuccess(){
-  // Show celebration flash on tour card
-  const card=document.getElementById('tourCard');
-  if(card){
-    const flash=document.createElement('div');
-    flash.className='tour-success-flash';
-    flash.textContent='✓ Nice!';
-    card.appendChild(flash);
-  }
-  // Clean up interactive listener and auto-advance
-  const step=TOUR_STEPS[_tourStep];
-  if(step&&step.cleanup)step.cleanup();
-  setTimeout(()=>{_tourStep++;showTourStep();},800);
-}
-
-function nextTourStep(){
-  _tourStep++;
-  showTourStep();
-}
-
-function clearTourUI(){
-  const card=document.getElementById('tourCard');if(card)card.remove();
-  const bd=document.getElementById('tourBackdrop');if(bd)bd.remove();
-  document.querySelectorAll('.tip-highlight').forEach(el=>{
-    el.classList.remove('tip-highlight');
-    if(el._tourStyled){el.style.zIndex='';delete el._tourStyled;}
-  });
-  // Clean up interactive listeners
-  if(_tourStep<TOUR_STEPS.length){
-    const step=TOUR_STEPS[_tourStep];
-    if(step&&step.cleanup)step.cleanup();
-  }
-}
-
-function finishTour(){
-  clearTourUI();
-  localStorage.setItem('clarity_onboarded','true');
-  renderGreeting();
-  if(sidebarOpen)toggleSidebar();
-}
+// ══ TOUR (replaced by sandbox demo — see onboarding.js) ═══
 function replayTour(){
   if(typeof startSandboxDemo==='function'){
     closeDrawer();
@@ -509,15 +342,11 @@ function replayTour(){
   }
 }
 
-function showOnboarding(){
-  startGuidedTour();
-}
-
 // ══ HELP CENTER ════════════════════════════════
 const HELP_TOPICS=[
   {cat:'Getting Started',items:[
     {q:'What is Brain Dump?',a:'Brain Dump is your inbox for thoughts. Open the sidebar and write down anything — tasks, ideas, reminders. Don\'t organize, just dump. When you\'re ready, drag items onto the calendar to schedule them.<div class="help-tip"><strong>Shortcut:</strong> Press <span class="help-key">N</span> to open Quick Add from anywhere.</div>'},
-    {q:'How do I schedule a task?',a:'Three ways:<br><br><strong>1. Drag from Brain Dump</strong> — open the sidebar, grab a card, drop it onto any time slot.<br><br><strong>2. Click a time slot</strong> — click any empty slot in Day or Week view to create a new task.<br><br><strong>3. AI Schedule</strong> — tap the sparkle button, describe your day, and AI builds the schedule.'},
+    {q:'How do I schedule a task?',a:'Three ways:<br><br><strong>1. Drag from Brain Dump</strong> — open the sidebar, grab a card, drop it onto any time slot.<br><br><strong>2. Click a time slot</strong> — click any empty slot in Day or Week view to create a new task.<br><br><strong>3. Plan My Day</strong> — tap the sparkle button, list what you want to do, and Luclaro builds the schedule around your routines.'},
     {q:'How do I move a task?',a:'Grab from the <strong>top edge</strong> of any task block — the top ~25 pixels are the drag zone. You\'ll see a subtle grip line and the area highlights on hover. Click and hold there, then drag to a new time slot.<br><br>Clicking <strong>below</strong> the top edge opens the edit modal instead.<div class="help-tip"><strong>Tip:</strong> The colored border + grip line = drag zone. Everything below = tap to edit.</div>'}
   ]},
   {cat:'Quick Events',items:[
@@ -526,7 +355,7 @@ const HELP_TOPICS=[
   ]},
   {cat:'Routines',items:[
     {q:'What are routines?',a:'Routines are <strong>time containers</strong>, not tasks. They define the structure of your day — when you work, exercise, sleep, commute. You never "check off" a routine. They show as background bands on the calendar.<br><br>Go to <strong>Schedule → My Routine</strong> to set them up.'},
-    {q:'Window vs Block — what\'s the difference?',a:'<strong>Window</strong> = time is reserved but <strong>open for tasks</strong>. AI actively places matching tasks here. You can manually schedule tasks inside windows too.<br><br><strong>Block</strong> = <strong>fully reserved</strong>. Nothing gets scheduled here — not manually, not by AI.<div class="help-tip"><strong>Key insight:</strong> Windows are containers. Put your "Chest & Triceps" recurring task inside your Gym window. The routine says <em>when</em>, the task says <em>what</em>.</div>'},
+    {q:'Window vs Block — what\'s the difference?',a:'<strong>Window</strong> = time is reserved but <strong>open for tasks</strong>. Luclaro actively places matching tasks here. You can manually schedule tasks inside windows too.<br><br><strong>Block</strong> = <strong>fully reserved</strong>. Nothing gets scheduled here — not manually, not automatically.<div class="help-tip"><strong>Key insight:</strong> Windows are containers. Put your "Chest & Triceps" recurring task inside your Gym window. The routine says <em>when</em>, the task says <em>what</em>.</div>'},
     {q:'Can I skip a routine for one day?',a:'Yes! In Day view, you\'ll see routine chips at the top of the timeline. Each chip has a <strong>Skip</strong> button. Tap it to skip that routine for just that day. Tap <strong>Undo</strong> to restore it.'}
   ]},
   {cat:'Events',items:[
@@ -536,9 +365,11 @@ const HELP_TOPICS=[
   {cat:'Holidays',items:[
     {q:'How do I add holidays?',a:'Go to <strong>Schedule → Holidays</strong>. Toggle any US federal holiday and it creates an all-day event that automatically pauses your routines.<br><br>Use <strong>Select All</strong> for all holidays, or <strong>+ Add custom day off</strong> for personal days.'}
   ]},
-  {cat:'AI Schedule',items:[
-    {q:'What does AI know about my day?',a:'When you generate a schedule, AI sees:<br><br><strong>✓ Routine windows</strong> — places matching tasks inside them<br><strong>✕ Blocked time</strong> — avoids completely<br><strong>✓ Existing tasks & events</strong> — won\'t double-book<br><strong>✓ Holidays</strong> — knows if routines are paused<br><strong>✓ Multi-day events</strong> — sees vacations spanning the day<br><br>AI also handles durations, priorities, subtask breakdowns, and day-of-week recurrence.'},
-    {q:'Can AI generate subtasks?',a:'Yes! When editing a task, go to the <strong>Subtasks</strong> tab and tap <strong>Generate with AI</strong>. It breaks the task into focused subtasks with realistic durations.'}
+  {cat:'Plan My Day',items:[
+    {q:'How does Plan My Day work?',a:'Tap the <strong>Plan My Day</strong> button to let Luclaro place your brain dump items and typed tasks into open time windows. It considers:<br><br><strong>✓ Routine windows</strong> — places matching tasks inside them<br><strong>✕ Blocked time</strong> — avoids completely<br><strong>✓ Existing tasks & events</strong> — won\'t double-book<br><strong>✓ Holidays</strong> — knows if routines are paused<br><strong>✓ Multi-day events</strong> — sees vacations spanning the day<br><br>Luclaro also infers realistic durations, detects events and birthdays, handles day-of-week recurrence, and splits tasks with sub-item lists into subtasks automatically.'},
+    {q:'What should I type in the "Anything else?" box?',a:'Type tasks one per line. For instant scheduling, include a time like <code>3pm</code> and duration like <code>45min</code>. Examples:<br><br><code>Study 3pm 45min</code><br><code>Lunch tomorrow noon</code><br><code>Gym Mon/Wed/Fri 6pm</code><br><code>Mom\'s birthday 5/15</code><br><br>Free-form text works too — Luclaro figures out durations based on common keywords (gym ≈ 45min, meeting ≈ 30min, etc.) and learns your personal patterns over time.'},
+    {q:'Does Luclaro learn my habits?',a:'Yes. Every time you schedule a task, Luclaro quietly remembers the duration, category, and time you chose. After you repeat a task 3+ times, it starts using <em>your</em> typical values as the default — so "gym" will auto-fill with your usual 45 or 60 minutes instead of a generic default.<br><br>This data stays on your device and is never shared.'},
+    {q:'Can Luclaro generate subtasks?',a:'Yes! When editing a task, go to the <strong>Subtasks</strong> tab and tap <strong>Generate Subtasks</strong>. Luclaro uses:<br><br><strong>1.</strong> Pattern split — if the task name contains a list like <code>"Study: geography, calculus, physics"</code>, it auto-splits into subtasks<br><strong>2.</strong> Templates — common patterns (study, workout, write, clean, code, etc.) have pre-built subtask structures<br><strong>3.</strong> AI — for unique tasks, Luclaro generates custom subtasks on demand'}
   ]},
   {cat:'Focus Mode',items:[
     {q:'How does Focus Mode work?',a:'Click <strong>▶ Focus</strong> on any task to start a timed session. Choose your mode:<br><br><strong>Sprint</strong> — 25-minute focused blocks<br><strong>Task duration</strong> — uses the task\'s set duration<br><strong>Custom</strong> — set your own time with the slider<br><br>You can minimize to a floating pill timer while you work.'}
@@ -906,6 +737,403 @@ function load(){
   try{const c=JSON.parse(localStorage.getItem('clarity_cats'));if(c&&c.length)categories=c;}catch{}
 }
 load();
+
+// ══ SMART SCHEDULER ═══════════════════════════════════════════════════
+// Algorithm-first planning. AI is the final fallback only when needed.
+// All the "AI" capabilities we promised users are fulfilled by code below,
+// with Haiku 4.5 as a safety net for genuinely ambiguous prose.
+
+// Keyword → duration (minutes) dictionary — seed defaults
+const SMART_DUR_RULES=[
+  {words:['call','phone','text','voicemail'],mins:15},
+  {words:['email','reply','respond','inbox','check'],mins:15},
+  {words:['quick','minor','remind','ping','confirm'],mins:15},
+  {words:['standup','daily','scrum','huddle'],mins:15},
+  {words:['meeting','sync','catchup','1on1','1-on-1','check-in'],mins:30},
+  {words:['review','admin','errand','plan','outline'],mins:30},
+  {words:['breakfast','coffee','snack'],mins:30},
+  {words:['clean','tidy','laundry','dishes','organize'],mins:30},
+  {words:['shopping','grocery','groceries'],mins:45},
+  {words:['workout','gym','run','yoga','exercise','training','walk','hike','bike'],mins:45},
+  {words:['lunch','dinner','meal','brunch'],mins:60},
+  {words:['study','read','learn','research','homework'],mins:60},
+  {words:['focus','deep work','deep-work','concentrate'],mins:90},
+  {words:['write','draft','design','code','build','create','develop','implement'],mins:90},
+  {words:['project','presentation','prepare','prep'],mins:60},
+];
+
+// Keyword → category guess (for smart category matching)
+const SMART_CAT_RULES=[
+  {words:['workout','gym','run','yoga','exercise','walk','hike','bike','training'],cat:'health'},
+  {words:['meal','lunch','dinner','breakfast','brunch','cook','recipe'],cat:'personal'},
+  {words:['study','read','learn','research','homework','class','lecture','school'],cat:'learning'},
+  {words:['email','reply','call','meeting','sync','standup','review','project','work','office'],cat:'work'},
+  {words:['clean','tidy','laundry','dishes','organize','shopping','grocery','errand'],cat:'personal'},
+  {words:['write','draft','design','code','build','create'],cat:'work'},
+];
+
+// Subtask templates — {keyword: (totalDur) => [[pct, 'name'], ...]}
+const SMART_SUB_TEMPLATES={
+  study:     d=>[['Review notes',30],['Practice problems',40],['Summarize key points',30]],
+  workout:   d=>[['Warmup',15],['Main sets',70],['Cooldown',15]],
+  gym:       d=>[['Warmup',15],['Main sets',70],['Cooldown',15]],
+  prepare:   d=>[['Review objectives',25],['Gather materials',25],['Practice walkthrough',50]],
+  prep:      d=>[['Review objectives',25],['Gather materials',25],['Practice walkthrough',50]],
+  write:     d=>[['Outline',25],['First draft',50],['Revise',25]],
+  draft:     d=>[['Outline',25],['First draft',50],['Revise',25]],
+  clean:     d=>[['Declutter',40],['Deep clean',40],['Put things away',20]],
+  code:      d=>[['Design & plan',20],['Implement',60],['Test',20]],
+  build:     d=>[['Design & plan',20],['Implement',60],['Test',20]],
+  read:      d=>[['Preview / skim',20],['Deep read',60],['Notes & takeaways',20]],
+  plan:      d=>[['Brainstorm',30],['Structure',50],['Finalize',20]],
+  research:  d=>[['Gather sources',30],['Analyze & note',50],['Summarize findings',20]],
+  meeting:   d=>[['Review agenda',20],['Main discussion',60],['Action items',20]],
+  project:   d=>[['Review scope',20],['Execute main work',60],['Wrap-up & review',20]],
+  shop:      d=>[['List items',20],['Shop',60],['Unpack & put away',20]],
+  travel:    d=>[['Prepare & pack',25],['Travel',50],['Settle in',25]],
+  review:    d=>[['Read through',40],['Identify issues',40],['Write feedback',20]],
+};
+
+// Personal pattern learning — stored as {name_lowered: {avgDur, cat, count, lastTime}}
+let userPatterns={};
+try{userPatterns=JSON.parse(localStorage.getItem('clarity_patterns')||'{}')}catch{userPatterns={}}
+function saveUserPatterns(){
+  try{localStorage.setItem('clarity_patterns',JSON.stringify(userPatterns))}catch(e){}
+}
+function recordPattern(name,dur,cat,time){
+  if(!name)return;
+  const key=name.toLowerCase().trim();
+  if(!key||key.length>60)return; // ignore huge names
+  const p=userPatterns[key]||{avgDur:0,count:0,cats:{},times:[]};
+  p.count++;
+  p.avgDur=Math.round(((p.avgDur*(p.count-1))+dur)/p.count/15)*15;
+  if(cat&&cat!=='none'){p.cats[cat]=(p.cats[cat]||0)+1;}
+  if(time&&p.times.length<10)p.times.push(time);
+  userPatterns[key]=p;
+  // Cap at 500 entries — evict least-used to prevent unbounded growth
+  const keys=Object.keys(userPatterns);
+  if(keys.length>500){
+    const sorted=keys.sort((a,b)=>userPatterns[a].count-userPatterns[b].count);
+    sorted.slice(0,keys.length-500).forEach(k=>delete userPatterns[k]);
+  }
+  saveUserPatterns();
+}
+
+// Smart usage stats (silent tracking)
+let smartStats={};
+try{smartStats=JSON.parse(localStorage.getItem('clarity_smart_stats')||'{}')}catch{smartStats={}}
+function bumpStat(key,n){smartStats[key]=(smartStats[key]||0)+(n||1);try{localStorage.setItem('clarity_smart_stats',JSON.stringify(smartStats))}catch(e){}}
+
+// Infer duration from task name — checks personal history first, then keywords
+function inferDuration(name){
+  if(!name)return 30;
+  const key=name.toLowerCase().trim();
+  // 1. Personal pattern (only trust after 3+ repetitions)
+  const p=userPatterns[key];
+  if(p&&p.count>=3&&p.avgDur>=15&&p.avgDur<=480)return p.avgDur;
+  // 2. Keyword dictionary — match any word in the name
+  const words=key.split(/\W+/).filter(Boolean);
+  for(const rule of SMART_DUR_RULES){
+    for(const w of words){
+      if(rule.words.includes(w))return rule.mins;
+    }
+    // Also check multi-word phrases in original
+    for(const phrase of rule.words){
+      if(phrase.includes(' ')&&key.includes(phrase))return rule.mins;
+    }
+  }
+  // 3. Fallback
+  return 30;
+}
+
+// Infer category from task name
+function inferCategory(name){
+  if(!name)return null;
+  const key=name.toLowerCase().trim();
+  const p=userPatterns[key];
+  if(p&&p.count>=3&&p.cats){
+    // Most-common category for this task
+    const topCat=Object.entries(p.cats).sort((a,b)=>b[1]-a[1])[0];
+    if(topCat&&topCat[1]>=2)return topCat[0];
+  }
+  const words=key.split(/\W+/).filter(Boolean);
+  for(const rule of SMART_CAT_RULES){
+    for(const w of words){
+      if(rule.words.includes(w))return rule.cat;
+    }
+  }
+  return null;
+}
+
+// Pattern split: "Study: geography, calculus" → {name:'Study', subtasks:[...]}
+// Also: "Meeting prep — slides, handouts" / "Clean kitchen - dishes, counters"
+function patternSplitSubtasks(name,totalDur){
+  if(!name)return null;
+  const m=name.match(/^(.+?)\s*[:—–\-]\s*(.+)$/);
+  if(!m)return null;
+  const baseName=m[1].trim();
+  const listStr=m[2].trim();
+  if(!baseName||!listStr)return null;
+  // Split on comma, semicolon, or "and"
+  const items=listStr.split(/\s*[,;]\s*|\s+and\s+/i).map(s=>s.trim()).filter(Boolean);
+  if(items.length<2)return null; // need at least 2 for it to be a real list
+  if(items.some(i=>i.length>40))return null; // probably not a subtask list
+  const durEach=Math.max(15,Math.round(totalDur/items.length/15)*15);
+  return{
+    name:baseName,
+    subtasks:items.map(i=>({id:genId(),name:i,duration:durEach,done:false}))
+  };
+}
+
+// Template-based subtask generator — returns subtasks or null
+function templateSubtasks(taskName,totalDur){
+  if(!taskName||totalDur<20)return null;
+  const key=taskName.toLowerCase();
+  const words=key.split(/\W+/).filter(Boolean);
+  // Find first matching template keyword
+  for(const w of words){
+    const tmpl=SMART_SUB_TEMPLATES[w];
+    if(tmpl){
+      const parts=tmpl(totalDur);
+      // parts = [['name', pct], ...]  — pct out of 100
+      const subs=parts.map(([name,pct])=>{
+        const d=Math.max(15,Math.round(totalDur*pct/100/15)*15);
+        return{id:genId(),name,duration:d,done:false};
+      });
+      return subs;
+    }
+  }
+  return null;
+}
+
+// Parse weekday patterns from text: "Mon/Wed/Fri" → [1,3,5], "every Monday" → [1]
+// Returns {days:[], strippedText:string}
+function extractWeekdays(text){
+  if(!text)return{days:[],strippedText:text};
+  const dayMap={sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6,
+                sunday:0,monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6};
+  const days=new Set();
+  let t=text;
+  // Pattern: "Mon/Wed/Fri" or "Mon Wed Fri" or "Mon, Wed, Fri"
+  const slashPat=/\b((?:sun|mon|tue|wed|thu|fri|sat)(?:day)?)(?:\s*[\/,\s]+\s*((?:sun|mon|tue|wed|thu|fri|sat)(?:day)?))+\b/gi;
+  const matches=[...t.matchAll(slashPat)];
+  matches.forEach(m=>{
+    const raw=m[0].toLowerCase();
+    const nameRe=/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?\b/g;
+    let dm;while((dm=nameRe.exec(raw))!==null){
+      if(dayMap[dm[1]]!==undefined)days.add(dayMap[dm[1]]);
+    }
+    t=t.replace(m[0],'').trim();
+  });
+  // Pattern: "every Monday" / "every weekday" / "weekends"
+  if(/\bevery\s+weekday\b/i.test(t)){[1,2,3,4,5].forEach(d=>days.add(d));t=t.replace(/\bevery\s+weekday\b/i,'').trim();}
+  if(/\b(every\s+)?weekends?\b/i.test(t)){days.add(0);days.add(6);t=t.replace(/\b(every\s+)?weekends?\b/i,'').trim();}
+  const everyPat=/\bevery\s+(sun|mon|tue|wed|thu|fri|sat)(?:day)?\b/gi;
+  const em=[...text.matchAll(everyPat)];
+  em.forEach(m=>{
+    const d=dayMap[m[1].toLowerCase()];
+    if(d!==undefined)days.add(d);
+    t=t.replace(m[0],'').trim();
+  });
+  return{days:[...days].sort((a,b)=>a-b),strippedText:t.replace(/\s+/g,' ').trim()};
+}
+
+// ══ PLACEMENT ALGORITHM ═══════════════════════════════════════════════
+// Find open 15-min slots in a day, respecting routines and existing tasks
+function findOpenWindows(dateKey,startMin){
+  // Returns array of [startMin, endMin] open windows on the day
+  const routines=getRoutineForDay(dateKey);
+  const suppressed=isRoutineSuppressed(dateKey);
+  const dayTasks=tasksOn(dateKey).filter(t=>t.time&&!t.allday);
+  // Start with the full day (from user's day start)
+  const DAY_END=24*60;
+  let windows=[[Math.max(0,startMin||8*60),DAY_END]];
+  // Carve out blocked routines (only if not suppressed)
+  if(!suppressed){
+    routines.forEach(b=>{
+      const isBlocked=b.schedulable!==undefined?!b.schedulable:!(ROUTINE_TYPES[b.type]?.schedulable);
+      if(!isBlocked)return;
+      const[bsh,bsm]=b.start.split(':').map(Number);
+      const[beh,bem]=b.end.split(':').map(Number);
+      const bStart=bsh*60+bsm,bEnd=beh*60+bem;
+      // Handle overnight routines (e.g. Sleep 10pm-6am) — split into two carves
+      if(bEnd<=bStart){
+        windows=_carveRange(windows,bStart,DAY_END);
+        windows=_carveRange(windows,0,bEnd);
+      } else {
+        windows=_carveRange(windows,bStart,bEnd);
+      }
+    });
+  }
+  // Carve out existing tasks
+  dayTasks.forEach(t=>{
+    const[h,m]=t.time.split(':').map(Number);
+    const tStart=h*60+m;
+    const tEnd=tStart+(t.duration||30);
+    windows=_carveRange(windows,tStart,tEnd);
+  });
+  return windows.filter(([s,e])=>e-s>=15);
+}
+function _carveRange(windows,cutStart,cutEnd){
+  const out=[];
+  windows.forEach(([s,e])=>{
+    if(cutEnd<=s||cutStart>=e){out.push([s,e]);return;}
+    if(cutStart>s)out.push([s,cutStart]);
+    if(cutEnd<e)out.push([cutEnd,e]);
+  });
+  return out;
+}
+// Check if a routine window matches the task's preferred time zone
+function _routineMatchesTaskTime(b,hour){
+  const[bsh]=b.start.split(':').map(Number);
+  const[beh]=b.end.split(':').map(Number);
+  return hour>=bsh&&hour<beh;
+}
+
+// Main smart scheduler — returns {scheduled:[], unscheduled:[], needsAI:[]}
+// selectedBd: brain dump items to schedule
+// extraLines: array of text lines (each could be a task)
+// dateKey: target day
+// prefs: {includeBreaks, prefMorning, prefAfternoon, startTime}
+function smartSchedule(selectedBd,extraLines,dateKey,prefs){
+  const scheduled=[];
+  const unscheduled=[];
+  const needsAI=[];
+  const[sh,sm]=(prefs.startTime||'08:00').split(':').map(Number);
+  const dayStartMin=sh*60+sm;
+  const breakBuffer=prefs.includeBreaks?15:0;
+
+  // 1. Parse each extra line
+  const fromLines=[];
+  (extraLines||[]).forEach(line=>{
+    line=line.trim();if(!line)return;
+    // Try the existing quick event parser first
+    const parsed=parseQuickEvent(line);
+    if(parsed&&parsed.name){
+      // Extract weekdays from the original line
+      const wd=extractWeekdays(parsed.name);
+      const cleanName=wd.strippedText||parsed.name;
+      fromLines.push({
+        name:cleanName,
+        time:parsed.time||null,
+        duration:parsed.duration||inferDuration(cleanName),
+        allday:parsed.allday||false,
+        location:parsed.location||'',
+        recur:parsed.recur||wd.days.length>0,
+        recurN:parsed.recurN||1,
+        recurU:wd.days.length>0?'week':(parsed.recurU||'day'),
+        recurDays:wd.days.length>0?wd.days:[],
+        category:inferCategory(cleanName)||'none',
+        _fromLine:true,
+      });
+    } else {
+      // Parser failed — might need AI
+      needsAI.push(line);
+    }
+  });
+
+  // 2. Build the task queue: fixed-time first (anchors), then everything else
+  const allItems=[
+    ...selectedBd.map(b=>({
+      name:b.name,
+      time:null,
+      duration:b.duration||inferDuration(b.name),
+      category:b.category&&b.category!=='none'?b.category:inferCategory(b.name)||'none',
+      priority:b.priority||'none',
+      notes:b.notes||'',
+      _fromBd:true,
+      _bdId:b.id,
+    })),
+    ...fromLines,
+  ];
+
+  // Detect subtask patterns in names
+  allItems.forEach(item=>{
+    if(item.subtasks&&item.subtasks.length)return;
+    const split=patternSplitSubtasks(item.name,item.duration);
+    if(split){
+      item.name=split.name;
+      item.subtasks=split.subtasks;
+    }
+  });
+
+  // Separate into fixed-time (anchors) and flexible
+  const fixed=allItems.filter(i=>i.time&&!i.allday);
+  const flexible=allItems.filter(i=>!i.time&&!i.allday);
+  const alldays=allItems.filter(i=>i.allday);
+
+  // 3. Place fixed-time items first (they have priority — pre-declared times)
+  fixed.forEach(item=>{
+    const mins=_timeToMin(item.time);
+    // Check if this slot is blocked (warn but still place)
+    const blocked=isBlockedByRoutine(dateKey,item.time);
+    scheduled.push({...item,time:_snap15Mins(mins),duration:Math.max(15,Math.round(item.duration/15)*15),_blocked:blocked.blocked});
+  });
+  alldays.forEach(item=>scheduled.push({...item,time:null,duration:item.duration||30}));
+
+  // 4. Place flexible items into open windows
+  // Sort by priority, morning/afternoon preference
+  flexible.sort((a,b)=>{
+    const pri={high:0,medium:1,low:2,none:3};
+    return (pri[a.priority]||3)-(pri[b.priority]||3);
+  });
+
+  // Refresh open windows after fixed placements
+  const tempTasks=[...tasks];
+  const tempFixed=fixed.map(f=>({time:f.time,duration:f.duration}));
+
+  flexible.forEach(item=>{
+    const dur=Math.max(15,Math.round(item.duration/15)*15);
+    const durWithBuffer=dur+breakBuffer;
+    // Recompute windows with currently-placed items
+    const placedTimes=scheduled.filter(s=>s.time&&!s.allday).map(s=>{
+      const m=_timeToMin(s.time);return[m,m+s.duration];
+    });
+    const routineWindows=findOpenWindows(dateKey,dayStartMin);
+    // Remove overlaps with already-scheduled items
+    let avail=routineWindows;
+    placedTimes.forEach(([ps,pe])=>{avail=_carveRange(avail,ps,pe+breakBuffer);});
+    avail=avail.filter(([s,e])=>e-s>=dur);
+    if(!avail.length){unscheduled.push(item);return;}
+
+    // Pick slot based on preference
+    let pickedStart=null;
+    if(prefs.prefMorning){
+      // Prefer slots before 12:00
+      const morning=avail.filter(([s,e])=>s<12*60);
+      pickedStart=morning.length?morning[0][0]:avail[0][0];
+    } else if(prefs.prefAfternoon){
+      const afternoon=avail.filter(([s,e])=>s>=12*60);
+      pickedStart=afternoon.length?afternoon[0][0]:avail[avail.length-1][0];
+    } else {
+      pickedStart=avail[0][0];
+    }
+    // Snap to 15
+    pickedStart=Math.round(pickedStart/15)*15;
+    scheduled.push({...item,time:_minToTime(pickedStart),duration:dur});
+  });
+
+  return{scheduled,unscheduled,needsAI};
+}
+function _timeToMin(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+function _minToTime(mins){const h=Math.floor(mins/60)%24,m=mins%60;return(h<10?'0':'')+h+':'+(m<10?'0':'')+m}
+function _snap15Mins(mins){return _minToTime(Math.round(mins/15)*15)}
+
+// Input sanitization for AI calls — strip injection attempts
+function sanitizeAIInput(text){
+  if(!text)return'';
+  return String(text)
+    .replace(/<\|[^|]*\|>/g,'') // Strip special tokens
+    .replace(/\b(ignore|disregard|forget)\s+(previous|all|above|prior)\b/gi,'[removed]')
+    .replace(/\byou\s+are\s+now\b/gi,'[removed]')
+    .replace(/\bsystem\s*[:>]/gi,'')
+    .replace(/\bassistant\s*[:>]/gi,'')
+    .slice(0,500); // Hard cap
+}
+
+// ══ END SMART SCHEDULER ══════════════════════════════════════════════
+
+
 
 // Seed sample Brain Dump for first-time users
 if(!tasks.length&&!brainDump.length&&!localStorage.getItem('clarity_t3')){
@@ -1385,35 +1613,11 @@ function renderAll(){
   renderProgressiveHint();
 }
 
-// ══ PROGRESSIVE HINTS ═════════════════════════
-const HINTS=[
-  {id:'routine',view:'day',check:()=>!getRoutineForDay(dk(selDate)).length&&!localStorage.getItem('clarity_routine'),
-   text:'Set up daily routines (work, gym, sleep) to structure your day and help AI schedule smarter.',action:'Schedule → My Routine',fn:()=>{switchView('schedule');switchScheduleTab('routine');}},
-  {id:'habits',view:'day',check:()=>getRecurringHabits().length>0&&!localStorage.getItem('clarity_hint_habits_seen'),
-   text:'You have recurring tasks! Open the Habits tab to track your streaks.',action:'Open Habits',fn:()=>{if(!sidebarOpen)toggleSidebar();switchSide('habits');localStorage.setItem('clarity_hint_habits_seen','1');}},
-  {id:'quickevent',view:'schedule',check:()=>tasks.filter(t=>(t.type||'task')==='event').length===0,
-   text:'Try the Quick Event bar — type "Dinner Friday 7pm" to instantly create events.',action:null,fn:null},
-  {id:'analytics',view:'day',check:()=>tasks.filter(t=>t.done||(t.doneOverrides||[]).length).length>=5&&!localStorage.getItem('clarity_hint_analytics_seen'),
-   text:'You\'ve completed several tasks! Check your Analytics to see productivity patterns.',action:'View Analytics',fn:()=>{openAnalytics();localStorage.setItem('clarity_hint_analytics_seen','1');}}
-];
+// ══ PROGRESSIVE HINTS (disabled — sandbox demo handles onboarding) ═══
 function renderProgressiveHint(){
-  const el=document.getElementById('progressiveHint');if(!el)return;
-  if(!localStorage.getItem('clarity_onboarded')){el.innerHTML='';return;} // don't show during tour
-  const dismissed=JSON.parse(localStorage.getItem('clarity_hints_dismissed')||'[]');
-  const hint=HINTS.find(h=>(h.view===curView||h.view==='any')&&!dismissed.includes(h.id)&&h.check());
-  if(!hint){el.innerHTML='';return;}
-  el.innerHTML=`<div class="prog-hint">
-    <span class="prog-hint-text">${hint.text}</span>
-    ${hint.action?`<button class="prog-hint-btn" onclick="event.stopPropagation();HINTS.find(h=>h.id==='${hint.id}').fn()">${hint.action}</button>`:''}
-    <button class="prog-hint-close" onclick="dismissHint('${hint.id}')">✕</button>
-  </div>`;
+  const el=document.getElementById('progressiveHint');if(el)el.innerHTML='';
 }
-function dismissHint(id){
-  const dismissed=JSON.parse(localStorage.getItem('clarity_hints_dismissed')||'[]');
-  if(!dismissed.includes(id))dismissed.push(id);
-  localStorage.setItem('clarity_hints_dismissed',JSON.stringify(dismissed));
-  renderProgressiveHint();
-}
+function dismissHint(){}
 function updateLabel(){
   const el=document.getElementById('curLabel');
   if(curView==='year')el.textContent=String(curYear);
@@ -2724,7 +2928,7 @@ function renderRoutineList(){
   if(!routineBlocks.length){
     el.innerHTML=`<div class="routine-hero">
       <div class="routine-hero-top"><div class="routine-hero-title">My Routine</div></div>
-      <div class="routine-hero-desc">Tell Luclaro about your typical day so the AI can plan around it.</div>
+      <div class="routine-hero-desc">Tell Luclaro about your typical day so your schedule can build around it.</div>
       <div class="rt-strip-wrap">
         <div class="rt-strip rt-strip-empty">
           <div class="rt-strip-empty-hint">Your routine blocks will appear here</div>
@@ -2737,8 +2941,8 @@ function renderRoutineList(){
       <div class="routine-instr">
         <div class="routine-instr-title">How routines work</div>
         <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--accent)"></span><div><strong>Window</strong> — Luclaro can schedule tasks during this time</div></div>
-        <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time the AI won't schedule over</div></div>
-        <div class="routine-instr-hint">Add blocks like Work, Gym, Sleep, or Church. The AI will build your schedule around them.</div>
+        <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time Luclaro won't schedule over</div></div>
+        <div class="routine-instr-hint">Add blocks like Work, Gym, Sleep, or Church. Luclaro will build your schedule around them.</div>
       </div>
       <div class="routine-blocks-list">
         <div class="routine-blocks-title">Your blocks</div>
@@ -2800,7 +3004,7 @@ function renderRoutineList(){
     <div class="routine-add-row"><button class="routine-add-btn" onclick="openRoutineModal()">+ Add routine block</button></div>
     <div class="routine-lower"><div class="routine-instr"><div class="routine-instr-title">How routines work</div>
       <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--accent)"></span><div><strong>Window</strong> — Luclaro can schedule tasks during this time</div></div>
-      <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time the AI won't schedule over</div></div>
+      <div class="routine-instr-item"><span class="routine-instr-dot" style="background:var(--text3)"></span><div><strong>Block</strong> — Protected time Luclaro won't schedule over</div></div>
       <div class="routine-instr-hint">Tap any block in the strip or list to edit. Overnight blocks wrap around.</div></div>
     <div class="routine-blocks-list"><div class="routine-blocks-title">Your blocks</div>${bkHtml}</div></div>`;
 }
@@ -4278,6 +4482,8 @@ function renderAnalytics(){
 
 // ══ AI SCHEDULE ═════════════════════════════════
 let _aiTasks=[];
+let _aiPlacedBdIds=new Set(); // BD items that were actually placed (prevent data loss on accept)
+let _aiUnscheduled=[];        // Items that couldn't fit (for warning UI)
 
 function openAISchedule(){
   document.getElementById('aiDate').value=dk(selDate);
@@ -4344,16 +4550,9 @@ function closeAISchedule(){
 async function generateAISchedule(){
   // Build input from BD chips + textarea
   const selectedBd=brainDump.filter(t=>_aiBdSelected.has(t.id));
-  const bdText=selectedBd.map(t=>{
-    let line=t.name;
-    if(t.priority&&t.priority!=='none')line+=` (${t.priority} priority)`;
-    if(t.category&&t.category!=='none'){const c=catById(t.category);if(c)line+=` [${c.name}]`;}
-    if(t.notes)line+=` — ${t.notes}`;
-    return line;
-  }).join('\n');
   const extraInput=document.getElementById('aiInput').value.trim();
-  const input=[bdText,extraInput].filter(Boolean).join('\n');
-  if(!input){document.getElementById('aiInput').focus();return;}
+  if(!selectedBd.length&&!extraInput){document.getElementById('aiInput').focus();return;}
+
   const dateVal=document.getElementById('aiDate').value;
   const startTime=document.getElementById('aiStartTime').value||'08:00';
   const d=fromDk(dateVal);
@@ -4363,30 +4562,6 @@ async function generateAISchedule(){
   const includeBreaks=document.getElementById('aiPrefBreaks').classList.contains('on');
   const prefMorning=document.getElementById('aiPrefMorning').classList.contains('on');
   const prefAfternoon=document.getElementById('aiPrefAfternoon').classList.contains('on');
-  let prefStr='';
-  if(includeBreaks)prefStr+='\n- Leave 10-15 minute gaps between focused work blocks (do NOT create separate break tasks — just space out the schedule)';
-  if(prefMorning)prefStr+='\n- Front-load important/difficult tasks in the morning';
-  if(prefAfternoon)prefStr+='\n- Schedule important/difficult tasks in the afternoon';
-
-  // Get existing tasks for that day (timed + all-day + multi-day)
-  const dayTasks=tasksOn(dateVal);
-  const existingTimed=dayTasks.filter(t=>t.time).map(t=>
-    `${fmtT(t.time)} - ${esc(t.name)} (${durLabel(t.duration||30)})`
-  );
-  const existingAllday=dayTasks.filter(t=>t.allday||t._isMultiDay).map(t=>
-    `All Day: ${esc(t.name)}${t._isMultiDay?' (day '+t._multiDayNum+' of '+t._multiDayTotal+')':''}`
-  );
-  const allExisting=[...existingAllday,...existingTimed];
-  const existingStr=allExisting.length
-    ?`\n\nAlready scheduled:\n${allExisting.join('\n')}`
-    :'';
-
-  // Get routine blocks for this day
-  const routineStr=routineContextStr(dateVal);
-
-  // Holiday / suppressed routines awareness
-  const isSuppressed=isRoutineSuppressed(dateVal);
-  const holidayStr=isSuppressed?'\n\nNote: Routines are paused for this day (holiday or day off). The entire day is open for flexible scheduling.':'';
 
   // Show spinner
   document.getElementById('aiGenLabel').style.display='none';
@@ -4394,68 +4569,155 @@ async function generateAISchedule(){
   document.getElementById('aiError').style.display='none';
   document.getElementById('aiPreviewWrap').style.display='none';
 
-  const prompt=`You are Luclaro, an intelligent scheduling assistant. Plan the user's ${dayName}, ${dateVal}. Day starts at ${startTime}.${existingStr}${routineStr}${holidayStr}
+  // ── LAYER 1: Try algorithmic scheduling first ──
+  const extraLines=extraInput?extraInput.split('\n').filter(l=>l.trim()):[];
+  bumpStat('plan_total');
 
-The user wants to schedule:
-"${input}"
+  const result=smartSchedule(selectedBd,extraLines,dateVal,{
+    includeBreaks,prefMorning,prefAfternoon,startTime
+  });
 
-Rules:
-- Schedule tasks INTO scheduling windows (match task category to window type when possible)
-- Do NOT schedule over blocked time
-- Don't overlap with existing tasks${prefStr}
-- Put time-specific requests at the exact time asked ("at noon", "at 2pm")
-- Estimate realistic durations: quick tasks ~15m, medium ~30-45m, deep work ~60-120m
-- All durations MUST be in 15-minute increments (15, 30, 45, 60, 75, 90, etc.)
-- All start times MUST be on 15-minute marks (e.g. 08:00, 08:15, 08:30, 08:45)
-- If the user specifies a duration, use it exactly
-- If something is clearly an event (birthday, meeting, appointment, class, church, party), set type:"event"
-- If it's a birthday or anniversary, set allday:true with recur/recurN:1/recurU:"year"
-- If user says recurring on specific weekdays (e.g. "every Mon/Wed/Fri"), set recurDays:[1,3,5] (0=Sun,6=Sat) and recurU:"week"
-- If the user lists sub-items after a task (e.g. "study: geography, calculus" or "meeting prep — slides, handouts"), create a subtasks array with proportional durations
-- For tasks over 60 minutes, break into subtasks with focused blocks (DO NOT create separate "Break" tasks)
-- DO NOT create separate "Break" tasks — leave natural gaps between tasks instead. The empty time IS the break.
-- Order by logical flow of the day
+  // Convert scheduled items to the format used by the preview/accept code
+  const algorithmicTasks=result.scheduled.map(item=>({
+    name:item.name,
+    time:item.time,
+    duration:item.duration,
+    priority:item.priority||'medium',
+    category:item.category||'none',
+    type:item.allday?'event':'task',
+    location:item.location||'',
+    allday:!!item.allday,
+    recur:!!item.recur,
+    recurN:item.recurN||1,
+    recurU:item.recurU||'day',
+    recurDays:item.recurDays||[],
+    subtasks:item.subtasks||[],
+    _bdId:item._bdId,
+    _smartPath:'algorithm'
+  }));
+  // Track which BD items actually got placed (for accept step — prevents data loss)
+  _aiPlacedBdIds=new Set(result.scheduled.filter(s=>s._bdId).map(s=>s._bdId));
+  // Track items that couldn't fit, so we can warn the user
+  _aiUnscheduled=result.unscheduled.map(u=>u.name);
 
-Respond with ONLY a JSON array, no markdown, no backticks:
-[{"name":"Task","time":"HH:MM","duration":30,"priority":"medium","category":"work","type":"task","location":"","allday":false,"recur":false,"recurN":1,"recurU":"day","recurDays":[],"subtasks":[]}]
-Subtask format: {"name":"Review notes","duration":25}`;
+  // ── LAYER 2: If there are unparseable prose lines, use AI for those only ──
+  if(result.needsAI.length){
+    bumpStat('plan_ai_calls');
+    try{
+      const sanitized=result.needsAI.map(sanitizeAIInput).filter(Boolean);
+      if(sanitized.length){
+        // Minimal prompt — only the unparsed lines + essential context
+        const routineStr=routineContextStr(dateVal);
+        const existingTimed=tasksOn(dateVal).filter(t=>t.time).map(t=>`${fmtT(t.time)}-${esc(t.name)} (${t.duration||30}m)`).slice(0,10).join(', ');
+        const existingStr=existingTimed?`\nExisting: ${existingTimed}`:'';
+        let prefStr='';
+        if(prefMorning)prefStr=' Prefer morning.';
+        if(prefAfternoon)prefStr=' Prefer afternoon.';
+        const prompt=`Parse these task descriptions for ${dayName}, ${dateVal} (day starts ${startTime}).${prefStr}${routineStr}${existingStr}
 
-  try{
-    const data=await callClaudeAPI([{role:"user",content:prompt}],1000);
-    const text=data.content.map(i=>i.text||'').join('');
-    const clean=text.replace(/```json|```/g,'').trim();
-    _aiTasks=JSON.parse(clean);
+Input:
+${sanitized.join('\n')}
 
-    // Show preview
-    const preview=document.getElementById('aiPreview');
-    preview.innerHTML=_aiTasks.map((t,i)=>{
-      const isEvent=(t.type||'task')==='event';
-      const isAllday=!!(t.allday);
-      const subs=t.subtasks||[];
-      const recurDays=t.recurDays||[];
-      const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      const recurLabel=t.recur?(recurDays.length?' · ↻ '+recurDays.map(d=>DAY_NAMES[d]).join('/'):(t.recurU==='year'?' · ↻ yearly':t.recurU==='month'?' · ↻ monthly':t.recurU==='week'?' · ↻ weekly':' · ↻ daily')):'';
-      let subsHtml=subs.length?`<div style="margin-left:26px;margin-top:3px">${subs.map(s=>`<div style="font-size:10px;color:var(--text3);padding-left:10px;border-left:2px solid var(--border)">↳ ${esc(s.name)}${s.duration?' · '+durLabel(s.duration):''}</div>`).join('')}</div>`:'';
-      return`<div class="ai-preview-task" style="${isEvent?'border-left:3px solid var(--accent);background:var(--accent-pale)':''}">
-        <span style="font-size:11px;font-weight:700;color:var(--text3);min-width:18px">${i+1}.</span>
-        <span class="ai-preview-time">${isAllday?'All Day':t.time?fmtT(t.time):''}</span>
-        <span class="ai-preview-name">${esc(t.name)}${isEvent?' <span style="font-size:9px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">EVENT</span>':''}${recurLabel?'<span style="font-size:9px;color:var(--text3)">'+recurLabel+'</span>':''}</span>
-        ${isAllday?'':` <span class="ai-preview-dur">${durLabel(t.duration||30)}</span>`}
-      </div>${subsHtml}`;
-    }).join('');
-    document.getElementById('aiPreviewWrap').style.display='';
-    document.getElementById('aiGenBtn').style.display='';
-    document.getElementById('aiGenLabel').textContent='Regenerate';
-    document.getElementById('aiAcceptBtn').style.display='';
-  }catch(err){
-    const isFetchErr=err.message&&(err.message.includes('fetch')||err.message.includes('network')||err.message.includes('Failed'));
-    if(isFetchErr){
-      document.getElementById('aiError').textContent='AI planning requires the Anthropic API. If you\'re using Luclaro standalone, set up a Supabase Edge Function to proxy the API — or use this feature inside claude.ai.';
-    } else {
-      document.getElementById('aiError').textContent='Something went wrong — try again. '+err.message;
+Return ONLY a JSON array. All times HH:MM, durations in 15-min increments. Avoid existing times. Detect events/birthdays/recurrence. For "X: a, b, c" create subtasks.
+[{"name":"...","time":"HH:MM","duration":30,"priority":"medium","category":"none","type":"task","allday":false,"recur":false,"recurN":1,"recurU":"day","recurDays":[],"subtasks":[]}]`;
+
+        // Validator: returns parsed array if valid, null to trigger Sonnet fallback
+        const validate=(data)=>{
+          try{
+            const text=data.content.map(i=>i.text||'').join('');
+            const clean=text.replace(/```json|```/g,'').trim();
+            const parsed=JSON.parse(clean);
+            if(!Array.isArray(parsed)||parsed.length===0)return null;
+            if(!parsed.every(t=>t&&typeof t.name==='string'&&t.name.trim()))return null;
+            return parsed;
+          }catch{return null;}
+        };
+        const{result:aiTasks,model:usedModel}=await callClaudeAPIWithFallback(
+          [{role:"user",content:prompt}],400,validate
+        );
+        if(usedModel==='sonnet')bumpStat('plan_sonnet_upgrades');
+
+        // Validate each AI task before accepting
+        if(Array.isArray(aiTasks)){
+          aiTasks.forEach(t=>{
+            if(!t||!t.name)return;
+            const dur=Math.max(15,Math.min(480,Math.round((t.duration||30)/15)*15));
+            const snapped=t.time?snapTo15(t.time):null;
+            algorithmicTasks.push({
+              name:String(t.name).slice(0,100),
+              time:snapped,
+              duration:dur,
+              priority:t.priority||'medium',
+              category:t.category||'none',
+              type:t.type||'task',
+              location:t.location||'',
+              allday:!!t.allday,
+              recur:!!t.recur,
+              recurN:t.recurN||1,
+              recurU:t.recurU||'day',
+              recurDays:Array.isArray(t.recurDays)?t.recurDays.filter(d=>d>=0&&d<=6):[],
+              subtasks:Array.isArray(t.subtasks)?t.subtasks.slice(0,20).map(s=>({name:String(s.name||'').slice(0,80),duration:Math.max(15,Math.round((s.duration||15)/15)*15)})):[],
+              _smartPath:'ai'
+            });
+          });
+        }
+      }
+    }catch(err){
+      console.error('AI fallback failed:',err);
+      // Don't hard-fail — we still have algorithmic results
+      if(!algorithmicTasks.length){
+        document.getElementById('aiError').textContent='Something went wrong — try again. '+(err.message||'');
+        document.getElementById('aiError').style.display='';
+        document.getElementById('aiGenLabel').style.display='';
+        document.getElementById('aiSpinner').style.display='none';
+        return;
+      }
     }
-    document.getElementById('aiError').style.display='';
   }
+
+  // Log which path handled this
+  const aiCount=algorithmicTasks.filter(t=>t._smartPath==='ai').length;
+  const algCount=algorithmicTasks.length-aiCount;
+  bumpStat('plan_alg_tasks',algCount);
+  bumpStat('plan_ai_tasks',aiCount);
+
+  _aiTasks=algorithmicTasks;
+
+  if(!_aiTasks.length){
+    document.getElementById('aiError').textContent='Nothing to schedule — add some tasks to your brain dump or type them in the box.';
+    document.getElementById('aiError').style.display='';
+    document.getElementById('aiGenLabel').style.display='';
+    document.getElementById('aiSpinner').style.display='none';
+    return;
+  }
+
+  // Show preview
+  const preview=document.getElementById('aiPreview');
+  preview.innerHTML=_aiTasks.map((t,i)=>{
+    const isEvent=(t.type||'task')==='event';
+    const isAllday=!!(t.allday);
+    const subs=t.subtasks||[];
+    const recurDays=t.recurDays||[];
+    const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const recurLabel=t.recur?(recurDays.length?' · ↻ '+recurDays.map(d=>DAY_NAMES[d]).join('/'):(t.recurU==='year'?' · ↻ yearly':t.recurU==='month'?' · ↻ monthly':t.recurU==='week'?' · ↻ weekly':' · ↻ daily')):'';
+    let subsHtml=subs.length?`<div style="margin-left:26px;margin-top:3px">${subs.map(s=>`<div style="font-size:10px;color:var(--text3);padding-left:10px;border-left:2px solid var(--border)">↳ ${esc(s.name)}${s.duration?' · '+durLabel(s.duration):''}</div>`).join('')}</div>`:'';
+    return`<div class="ai-preview-task" style="${isEvent?'border-left:3px solid var(--accent);background:var(--accent-pale)':''}">
+      <span style="font-size:11px;font-weight:700;color:var(--text3);min-width:18px">${i+1}.</span>
+      <span class="ai-preview-time">${isAllday?'All Day':t.time?fmtT(t.time):''}</span>
+      <span class="ai-preview-name">${esc(t.name)}${isEvent?' <span style="font-size:9px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">EVENT</span>':''}${recurLabel?'<span style="font-size:9px;color:var(--text3)">'+recurLabel+'</span>':''}</span>
+      ${isAllday?'':` <span class="ai-preview-dur">${durLabel(t.duration||30)}</span>`}
+    </div>${subsHtml}`;
+  }).join('');
+  // Show warning if some items couldn't fit
+  if(_aiUnscheduled.length){
+    preview.innerHTML+=`<div style="margin-top:8px;padding:8px 10px;background:var(--red-pale,#fef2f2);border-radius:8px;font-size:11px;color:var(--red,#ef4444);line-height:1.5">
+      <strong>Couldn't fit ${_aiUnscheduled.length} item${_aiUnscheduled.length!==1?'s':''}:</strong> ${_aiUnscheduled.map(n=>esc(n)).join(', ')}. They'll stay in your Brain Dump.
+    </div>`;
+  }
+  document.getElementById('aiPreviewWrap').style.display='';
+  document.getElementById('aiGenBtn').style.display='';
+  document.getElementById('aiGenLabel').textContent='Regenerate';
+  document.getElementById('aiAcceptBtn').style.display='';
   document.getElementById('aiGenLabel').style.display='';
   document.getElementById('aiSpinner').style.display='none';
 }
@@ -4487,12 +4749,16 @@ function acceptAISchedule(){
       doneOverrides:[],deletedOccurrences:[],
       multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
     });
+    // Record pattern for personal learning
+    if((t.type||'task')==='task'&&!isAllday)recordPattern(t.name,dur,t.category||'none',time);
   });
-  // Remove accepted Brain Dump items
-  if(_aiBdSelected.size){
-    brainDump=brainDump.filter(t=>!_aiBdSelected.has(t.id));
-    _aiBdSelected.clear();
+  // Remove ONLY Brain Dump items that were actually placed (not ones that couldn't fit)
+  if(_aiPlacedBdIds.size){
+    brainDump=brainDump.filter(t=>!_aiPlacedBdIds.has(t.id));
   }
+  _aiBdSelected.clear();
+  _aiPlacedBdIds=new Set();
+  _aiUnscheduled=[];
   save();closeAISchedule();
   selDate=fromDk(dateVal);
   switchView('day');
@@ -4711,8 +4977,6 @@ function addQuickEvent(){
       </div>`;
     el.style.display='flex';
   }
-  // Tour interactive trigger
-  if(window._tourOnQuickEvent)window._tourOnQuickEvent();
 }
 function dismissQeConfirm(){
   const el=document.getElementById('qeConfirm');
@@ -5063,7 +5327,6 @@ function onDropDate(e,dateKey){
     tasks.push({...t,type:'task',date:dateKey,time:defaultTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(e.currentTarget),100);
-    if(window._tourOnDrop)window._tourOnDrop();
   }else if(dragTaskId){
     rescheduleTask(dragTaskId,dragInstanceDate,dateKey,null);
     dragTaskId=null;dragInstanceDate=null;
@@ -5089,9 +5352,9 @@ function onDropSlot(e,dateKey,time){
       showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
     tasks.push({...t,type:'task',date:dateKey,time:smartTime,allday:false,duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:[],location:'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false});
+    recordPattern(t.name,30,t.category||'none',smartTime);
     brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     setTimeout(()=>snapFlash(dropEl),100);
-    if(window._tourOnDrop)window._tourOnDrop();
   }else if(dragTaskId){
     rescheduleTask(dragTaskId,dragInstanceDate,dateKey,smartTime,dropEl);
     dragTaskId=null;dragInstanceDate=null;
@@ -5682,22 +5945,75 @@ async function generateSubtasks(){
   const dur=_selDur||30;
   if(!taskName){showToast('Enter a task name first');return;}
   const btn=document.querySelector('.subtask-gen-btn-full');
+  const origBtnHtml=btn.innerHTML;
   btn.textContent='⏳ Generating…';btn.style.pointerEvents='none';
+  bumpStat('subtask_total');
+
+  const remaining=20-_modalSubtasks.length;
+  if(remaining<=0){
+    showToast('Max 20 subtasks');
+    btn.innerHTML=origBtnHtml;btn.style.pointerEvents='';
+    return;
+  }
+
+  // ── LAYER 1: Pattern split ("Task: a, b, c") ──
+  const split=patternSplitSubtasks(taskName,dur);
+  if(split&&split.subtasks&&split.subtasks.length){
+    bumpStat('subtask_pattern');
+    const toAdd=split.subtasks.slice(0,remaining);
+    toAdd.forEach(s=>_modalSubtasks.push(s));
+    renderModalSubtasks();
+    // Also update the task name in the input (strip the subtask list)
+    document.getElementById('fName').value=split.name;
+    btn.innerHTML=origBtnHtml;btn.style.pointerEvents='';
+    return;
+  }
+
+  // ── LAYER 2: Template library ──
+  const tmpl=templateSubtasks(taskName,dur);
+  if(tmpl&&tmpl.length){
+    bumpStat('subtask_template');
+    const toAdd=tmpl.slice(0,remaining);
+    toAdd.forEach(s=>_modalSubtasks.push(s));
+    renderModalSubtasks();
+    btn.innerHTML=origBtnHtml;btn.style.pointerEvents='';
+    return;
+  }
+
+  // ── LAYER 3: AI fallback (only for tasks without templates) ──
+  bumpStat('subtask_ai');
   try{
-    const prompt=`The user has a task called "${taskName}" with ${dur} minutes total. Break it into focused subtasks with realistic durations in minutes. Include short breaks if >60min. Respond with ONLY a JSON array: [{"name":"Subtask","duration":25}]`;
-    const data=await callClaudeAPI([{role:"user",content:prompt}],500);
-    const text=data.content.map(i=>i.text||'').join('');
-    const clean=text.replace(/```json|```/g,'').trim();
-    const subs=JSON.parse(clean);
-    const remaining=20-_modalSubtasks.length;
-    const toAdd=subs.slice(0,Math.max(0,remaining));
+    const sanitized=sanitizeAIInput(taskName);
+    const prompt=`Task: "${sanitized}" (${dur} min). Break into focused subtasks with 15-min-increment durations. Return ONLY a JSON array: [{"name":"...","duration":25}]`;
+    // Validator: parsed array of objects with names
+    const validate=(data)=>{
+      try{
+        const text=data.content.map(i=>i.text||'').join('');
+        const clean=text.replace(/```json|```/g,'').trim();
+        const parsed=JSON.parse(clean);
+        if(!Array.isArray(parsed)||parsed.length===0)return null;
+        if(!parsed.every(s=>s&&typeof s.name==='string'&&s.name.trim()))return null;
+        return parsed;
+      }catch{return null;}
+    };
+    const{result:subs,model:usedModel}=await callClaudeAPIWithFallback(
+      [{role:"user",content:prompt}],300,validate
+    );
+    if(usedModel==='sonnet')bumpStat('subtask_sonnet_upgrades');
+    const toAdd=subs.slice(0,remaining).map(s=>({
+      id:genId(),
+      name:String(s.name||'').slice(0,80),
+      duration:Math.max(15,Math.round((s.duration||15)/15)*15),
+      done:false
+    })).filter(s=>s.name);
     if(toAdd.length<subs.length)showToast(`Added ${toAdd.length} of ${subs.length} (max 20 subtasks)`);
-    toAdd.forEach(s=>_modalSubtasks.push({id:genId(),name:s.name,duration:s.duration||0,done:false}));
+    toAdd.forEach(s=>_modalSubtasks.push(s));
     renderModalSubtasks();
   }catch(err){
-    showToast('AI generation unavailable — add subtasks manually using the + button');
+    console.error('Subtask generation failed:',err);
+    showToast('Could not generate subtasks — try the + button to add manually');
   }
-  btn.innerHTML='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:-1px"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" fill="currentColor"/></svg> Generate with AI';btn.style.pointerEvents='';
+  btn.innerHTML=origBtnHtml;btn.style.pointerEvents='';
 }
 
 // ══ ATTACHMENT MANAGEMENT ═══════════════════════
@@ -6142,6 +6458,8 @@ function saveTask(){
   }
   if(mMode==='new'){tasks.push({id:genId(),name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,date:mDate,time:finalTime,allday,duration,scheduled:true,done:false,recur,recurN,recurU,recurDays,recurEnd,subtasks,doneOverrides:[],deletedOccurrences:[],multiDay,endDate,eventColor,suppressRoutines});}
   else{const t=tasks.find(t=>t.id===mId);if(t){Object.assign(t,{name,type,priority:type==='event'?'none':priority,category,notes,attachments,location,allday,time:finalTime,duration,recur,recurN,recurU,recurDays,recurEnd,subtasks,multiDay,endDate:multiDay?endDate:'',eventColor:multiDay?eventColor:'',suppressRoutines});delete t._draft;}if(t&&multiDay)t.date=mDate;}
+  // Record pattern for personal learning (only real tasks, not events or all-day)
+  if(type==='task'&&!allday)recordPattern(name,duration,category,finalTime);
   save();_modalCommitted=true;closeModal();renderAll();
 }
 function startDelete(){
@@ -6195,37 +6513,74 @@ function showUndoToast(msg,undoFn){
 
 
 // ══ HOLIDAY SCHEDULER ═══════════════════════════
-const US_HOLIDAYS={
-  2026:[
-    {name:"New Year's Day",date:'2026-01-01'},
-    {name:'Martin Luther King Jr. Day',date:'2026-01-19'},
-    {name:"Presidents' Day",date:'2026-02-16'},
-    {name:'Memorial Day',date:'2026-05-25'},
-    {name:'Independence Day',date:'2026-07-04'},
-    {name:'Labor Day',date:'2026-09-07'},
-    {name:'Columbus Day',date:'2026-10-12'},
-    {name:"Veterans Day",date:'2026-11-11'},
-    {name:'Thanksgiving Day',date:'2026-11-26'},
-    {name:'Day After Thanksgiving',date:'2026-11-27'},
-    {name:'Christmas Day',date:'2026-12-25'},
-  ],
-  2027:[
-    {name:"New Year's Day",date:'2027-01-01'},
-    {name:'Martin Luther King Jr. Day',date:'2027-01-18'},
-    {name:"Presidents' Day",date:'2027-02-15'},
-    {name:'Memorial Day',date:'2027-05-31'},
-    {name:'Independence Day',date:'2027-07-04'},
-    {name:'Labor Day',date:'2027-09-06'},
-    {name:'Columbus Day',date:'2027-10-11'},
-    {name:"Veterans Day",date:'2027-11-11'},
-    {name:'Thanksgiving Day',date:'2027-11-25'},
-    {name:'Day After Thanksgiving',date:'2027-11-26'},
-    {name:'Christmas Day',date:'2027-12-25'},
-  ]
-};
+// Holiday templates — dates computed per year automatically
+const HOLIDAY_TEMPLATES=[
+  {name:"New Year's Day",month:1,day:1},
+  {name:'Martin Luther King Jr. Day',month:1,week:3,weekday:1},
+  {name:"Presidents' Day",month:2,week:3,weekday:1},
+  {name:'Memorial Day',month:5,week:-1,weekday:1},
+  {name:'Juneteenth',month:6,day:19},
+  {name:'Independence Day',month:7,day:4},
+  {name:'Labor Day',month:9,week:1,weekday:1},
+  {name:'Columbus Day',month:10,week:2,weekday:1},
+  {name:"Veterans Day",month:11,day:11},
+  {name:'Thanksgiving Day',month:11,week:4,weekday:4},
+  {name:'Day After Thanksgiving',month:11,week:4,weekday:4,offset:1},
+  {name:'Christmas Day',month:12,day:25},
+];
 
+// Compute the actual date for a holiday template in a given year
+function holidayDate(tmpl,year){
+  if(tmpl.day){
+    // Fixed date
+    const d=new Date(year,tmpl.month-1,tmpl.day);
+    if(tmpl.offset)d.setDate(d.getDate()+tmpl.offset);
+    return dk(d);
+  }
+  // Nth weekday of month (or last if week === -1)
+  if(tmpl.week===-1){
+    // Last occurrence of weekday in month
+    const last=new Date(year,tmpl.month,0); // last day of month
+    let d=last.getDate()-(last.getDay()-tmpl.weekday+7)%7;
+    const result=new Date(year,tmpl.month-1,d);
+    if(tmpl.offset)result.setDate(result.getDate()+tmpl.offset);
+    return dk(result);
+  }
+  // Nth occurrence (1st, 2nd, 3rd, 4th)
+  const first=new Date(year,tmpl.month-1,1);
+  let dayOff=(tmpl.weekday-first.getDay()+7)%7;
+  let d=1+dayOff+(tmpl.week-1)*7;
+  const result=new Date(year,tmpl.month-1,d);
+  if(tmpl.offset)result.setDate(result.getDate()+tmpl.offset);
+  return dk(result);
+}
+
+// Format a template's typical date description
+function holidayDesc(tmpl){
+  const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if(tmpl.day){
+    let s=mNames[tmpl.month-1]+' '+tmpl.day;
+    if(tmpl.offset)s+=' + '+tmpl.offset+' day';
+    return s;
+  }
+  const wdNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const ordinal=tmpl.week===-1?'Last':['','1st','2nd','3rd','4th','5th'][tmpl.week];
+  let s=ordinal+' '+wdNames[tmpl.weekday]+' in '+mNames[tmpl.month-1];
+  if(tmpl.offset)s+=' + '+tmpl.offset+' day';
+  return s;
+}
+
+// Enabled holidays — stored as array of template names
 let _enabledHolidays=[];
-try{_enabledHolidays=JSON.parse(localStorage.getItem('clarity_holidays')||'[]')}catch{_enabledHolidays=[]}
+try{
+  const raw=JSON.parse(localStorage.getItem('clarity_holidays')||'[]');
+  // Migrate old format: [{name,date}] → ['name']
+  if(raw.length&&typeof raw[0]==='object'&&raw[0].date){
+    _enabledHolidays=[...new Set(raw.map(h=>h.name))];
+  } else {
+    _enabledHolidays=raw;
+  }
+}catch{_enabledHolidays=[]}
 function saveHolidays(){try{localStorage.setItem('clarity_holidays',JSON.stringify(_enabledHolidays))}catch(e){console.error(e)}}
 
 function ensureHolidayCategory(){
@@ -6235,93 +6590,111 @@ function ensureHolidayCategory(){
   }
 }
 
-function isHolidayEnabled(name,date){
-  return _enabledHolidays.some(h=>h.name===name&&h.date===date);
+function isHolidayEnabled(name){
+  return _enabledHolidays.includes(name);
 }
 
-function toggleHoliday(name,date){
-  if(isHolidayEnabled(name,date)){
-    // Remove holiday event
-    _enabledHolidays=_enabledHolidays.filter(h=>!(h.name===name&&h.date===date));
-    tasks=tasks.filter(t=>!(t._holidayId===name&&t.date===date));
+function toggleHoliday(name){
+  const now=new Date();
+  const curYear=now.getFullYear();
+  const years=[curYear,curYear+1];
+  const tmpl=HOLIDAY_TEMPLATES.find(t=>t.name===name);
+
+  if(isHolidayEnabled(name)){
+    // Remove — delete all events for this holiday
+    _enabledHolidays=_enabledHolidays.filter(n=>n!==name);
+    tasks=tasks.filter(t=>t._holidayTemplate!==name&&t._holidayId!==name);
   } else {
-    // Add holiday event
+    // Add — create events for current year + next year
     ensureHolidayCategory();
-    _enabledHolidays.push({name,date});
-    tasks.push({
-      id:genId(),name:'\u{1F1FA}\u{1F1F8} '+name,type:'event',date,time:null,
-      allday:true,suppressRoutines:true,_holidayId:name,
-      category:'holiday',priority:'none',notes:'',location:'',
-      duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
-      subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
-      multiDay:false,endDate:'',eventColor:'',recurDays:[]
+    _enabledHolidays.push(name);
+    // Clean any stale events first
+    tasks=tasks.filter(t=>t._holidayTemplate!==name&&t._holidayId!==name);
+    years.forEach(yr=>{
+      if(!tmpl)return;
+      const dateKey=holidayDate(tmpl,yr);
+      tasks.push({
+        id:genId(),name:name,type:'event',date:dateKey,time:null,
+        allday:true,suppressRoutines:true,_holidayTemplate:name,
+        category:'holiday',priority:'none',notes:'',location:'',
+        duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
+        subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
+        multiDay:false,endDate:'',eventColor:'',recurDays:[]
+      });
     });
   }
   saveHolidays();save();renderHolidaysList();renderAll();
 }
 
-function selectAllHolidays(year){
-  const list=US_HOLIDAYS[year]||[];
+function selectAllHolidays(){
   let changed=false;
-  list.forEach(h=>{
-    if(!isHolidayEnabled(h.name,h.date)){
+  const now=new Date();
+  const curYear=now.getFullYear();
+  const years=[curYear,curYear+1];
+  HOLIDAY_TEMPLATES.forEach(tmpl=>{
+    if(!isHolidayEnabled(tmpl.name)){
       ensureHolidayCategory();
-      _enabledHolidays.push({name:h.name,date:h.date});
-      tasks.push({
-        id:genId(),name:'\u{1F1FA}\u{1F1F8} '+h.name,type:'event',date:h.date,time:null,
-        allday:true,suppressRoutines:true,_holidayId:h.name,
-        category:'holiday',priority:'none',notes:'',location:'',
-        duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
-        subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
-        multiDay:false,endDate:'',eventColor:'',recurDays:[]
+      _enabledHolidays.push(tmpl.name);
+      tasks=tasks.filter(t=>t._holidayTemplate!==tmpl.name&&t._holidayId!==tmpl.name);
+      years.forEach(yr=>{
+        const dateKey=holidayDate(tmpl,yr);
+        tasks.push({
+          id:genId(),name:tmpl.name,type:'event',date:dateKey,time:null,
+          allday:true,suppressRoutines:true,_holidayTemplate:tmpl.name,
+          category:'holiday',priority:'none',notes:'',location:'',
+          duration:30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',
+          subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
+          multiDay:false,endDate:'',eventColor:'',recurDays:[]
+        });
       });
       changed=true;
     }
   });
   if(changed){saveHolidays();save();renderHolidaysList();renderAll();}
 }
-function clearAllHolidays(year){
-  const list=US_HOLIDAYS[year]||[];
-  let changed=false;
-  list.forEach(h=>{
-    if(isHolidayEnabled(h.name,h.date)){
-      _enabledHolidays=_enabledHolidays.filter(x=>!(x.name===h.name&&x.date===h.date));
-      tasks=tasks.filter(t=>!(t._holidayId===h.name&&t.date===h.date));
-      changed=true;
-    }
+
+function clearAllHolidays(){
+  if(!_enabledHolidays.length)return;
+  _enabledHolidays.forEach(name=>{
+    tasks=tasks.filter(t=>t._holidayTemplate!==name&&t._holidayId!==name);
   });
-  if(changed){saveHolidays();save();renderHolidaysList();renderAll();}
+  _enabledHolidays=[];
+  saveHolidays();save();renderHolidaysList();renderAll();
 }
 
 function renderHolidaysList(){
   const el=document.getElementById('holidaysList');if(!el)return;
-  const now=new Date();
+  const now=new Date();now.setHours(0,0,0,0);
   const curYear=now.getFullYear();
-  const years=[curYear,curYear+1];
-  let html='';
-  years.forEach(year=>{
-    const list=US_HOLIDAYS[year];if(!list)return;
-    html+=`<div class="holiday-year-section">`;
-    html+=`<div class="holiday-year-hdr"><span class="holiday-year-title">${year} US Federal Holidays</span>
-      <div class="holiday-year-actions">
-        <button class="holiday-action-btn" onclick="selectAllHolidays(${year})">Select All</button>
-        <button class="holiday-action-btn" onclick="clearAllHolidays(${year})">Clear All</button>
-      </div></div>`;
-    list.forEach(h=>{
-      const d=fromDk(h.date);
-      const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-      const monthName=MONTHS_S[d.getMonth()];
-      const on=isHolidayEnabled(h.name,h.date);
-      html+=`<label class="holiday-item${on?' on':''}">
-        <input type="checkbox" class="holiday-cb" ${on?'checked':''} onchange="toggleHoliday('${h.name.replace(/'/g,"\\'")}','${h.date}')">
-        <div class="holiday-info">
-          <span class="holiday-name">${h.name}</span>
-          <span class="holiday-date">${dayName}, ${monthName} ${d.getDate()}</span>
-        </div>
-      </label>`;
-    });
-    html+=`</div>`;
+  const enabledCount=_enabledHolidays.length;
+
+  let html=`<div class="holiday-year-hdr">
+    <span class="holiday-year-title">US Federal Holidays</span>
+    <div class="holiday-year-actions">
+      <button class="holiday-action-btn" onclick="selectAllHolidays()">Select All</button>
+      <button class="holiday-action-btn" onclick="clearAllHolidays()">Clear All</button>
+    </div>
+  </div>`;
+
+  HOLIDAY_TEMPLATES.forEach(tmpl=>{
+    // Find the next occurrence
+    let nextDate=holidayDate(tmpl,curYear);
+    if(fromDk(nextDate)<now)nextDate=holidayDate(tmpl,curYear+1);
+    const d=fromDk(nextDate);
+    const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const monthName=MONTHS_S[d.getMonth()];
+    const on=isHolidayEnabled(tmpl.name);
+    const desc=holidayDesc(tmpl);
+    const escapedName=tmpl.name.replace(/'/g,"\\'");
+    html+=`<label class="holiday-item${on?' on':''}">
+      <input type="checkbox" class="holiday-cb" ${on?'checked':''} onchange="toggleHoliday('${escapedName}')">
+      <div class="holiday-info">
+        <span class="holiday-name">${tmpl.name}</span>
+        <span class="holiday-date">Next: ${dayName}, ${monthName} ${d.getDate()}, ${d.getFullYear()} · ${desc}</span>
+      </div>
+    </label>`;
   });
+
   html+=`<div style="text-align:center;padding:16px 0"><button class="routine-add-btn" onclick="openNewHolidayEvent()">+ Add custom day off</button></div>`;
   el.innerHTML=html;
 }
@@ -6329,7 +6702,6 @@ function renderHolidaysList(){
 function openNewHolidayEvent(){
   ensureHolidayCategory();
   openNew(dk(new Date()),'09:00');
-  // Pre-set as event, all-day, suppress routines
   setItemType('event');
   _modalAllday=true;
   setAlldayModal(true);
@@ -6428,10 +6800,13 @@ function initTooltips(){
 
 // ══ SEARCH ══════════════════════════════════════
 let _searchOpen=false;
+let _searchJustOpened=false;
 function toggleSearch(){
   _searchOpen=!_searchOpen;
   document.getElementById('searchBar').classList.toggle('open',_searchOpen);
   if(_searchOpen){
+    _searchJustOpened=true;
+    setTimeout(()=>{_searchJustOpened=false;},0);
     setTimeout(()=>document.getElementById('searchInput').focus(),80);
   } else {
     document.getElementById('searchInput').value='';
@@ -6468,7 +6843,7 @@ function onSearchSelect(id,isBd,dateKey){
 }
 // Close search on outside click
 document.addEventListener('click',function(e){
-  if(_searchOpen&&!e.target.closest('.search-bar'))toggleSearch();
+  if(_searchOpen&&!_searchJustOpened&&!e.target.closest('.search-bar'))toggleSearch();
 });
 
 // ══ BRAIN DUMP REORDER ══════════════════════════
