@@ -1199,8 +1199,8 @@ header{
 }
 .wk-task-block:hover .wk-dur-btn{opacity:1}
 .wk-dur-btn:hover{background:var(--surface2);color:var(--accent)}
-.event-block .wk-dur-btn{color:rgba(255,255,255,.5)}
-.event-block .wk-dur-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+.event-block .wk-dur-btn{color:rgba(255,255,255,.85);background:rgba(0,0,0,.15);border-radius:3px}
+.event-block .wk-dur-btn:hover{background:rgba(0,0,0,.3);color:#fff}
 
 /* Day task block — in-flow inside .day-slot, min-height set per duration in JS */
 .day-task-block{
@@ -1295,6 +1295,18 @@ header{
 .day-task-compact .day-add-sub-btn{display:none}
 .day-task-compact .day-time-range{display:none}
 .day-task-compact .day-task-meta-row{display:none}
+/* Compact (15m) task expand button — shows "15m +" */
+.compact-expand-btn{
+  display:inline-flex;align-items:center;
+  font-size:9px;font-weight:600;color:var(--text3);
+  background:var(--surface2);border:none;
+  padding:1px 5px;border-radius:3px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;margin-left:auto;
+  font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.compact-expand-btn:hover{background:var(--accent-pale);color:var(--accent)}
+.event-block .compact-expand-btn{background:rgba(255,255,255,.2);color:rgba(255,255,255,.8)}
+.event-block .compact-expand-btn:hover{background:rgba(255,255,255,.35);color:#fff}
 /* Time range badge — top-right of the name row */
 .day-time-range{
   font-size:10px;font-weight:600;color:var(--accent);
@@ -1333,9 +1345,9 @@ header{
 .dur-step-btn:hover{color:var(--accent);background:var(--accent-pale)!important}
 .dur-step-btn:active{transform:scale(.9)}
 .event-block .dur-stepper:hover{border-color:rgba(255,255,255,.3)}
-.event-block .dur-step-btn{color:rgba(255,255,255,.5)}
-.event-block .dur-stepper:hover .dur-step-btn{opacity:1;background:rgba(255,255,255,.15)}
-.event-block .dur-step-btn:hover{color:#fff;background:rgba(255,255,255,.25)!important}
+.event-block .dur-step-btn{color:rgba(255,255,255,.85);opacity:1;background:rgba(0,0,0,.15);border-radius:4px}
+.event-block .dur-stepper:hover .dur-step-btn{background:rgba(0,0,0,.25)}
+.event-block .dur-step-btn:hover{color:#fff;background:rgba(0,0,0,.35)!important}
 .event-block .day-task-dur-pill{background:rgba(255,255,255,.2);color:rgba(255,255,255,.9)}
 /* Focus pill — replaces the old inline Focus button */
 .day-focus-pill{
@@ -1401,6 +1413,54 @@ header{
 .dur-opt.selected{background:var(--accent);border-color:var(--accent);color:#fff}
 
 /* ══ DURATION SPINNER ════════════════════════ */
+/* ── Time Picker (hour grid + minute pills) ── */
+.tp-wrap{position:relative}
+.tp-display{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  width:100%;padding:8px 10px;
+  border:1.5px solid var(--border);border-radius:8px;
+  background:var(--surface);color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+  cursor:pointer;transition:border-color .15s;
+}
+.tp-display:hover{border-color:var(--accent)}
+.tp-display:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)}
+.tp-arrow{font-size:10px;color:var(--text3);transition:transform .15s}
+.tp-wrap.tp-open .tp-arrow{transform:rotate(180deg)}
+.tp-drop{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:50;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:10px;
+  padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);
+}
+.tp-wrap.tp-open .tp-drop{display:block}
+.tp-ampm{display:flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:8px}
+.tp-ampm-btn{
+  flex:1;padding:6px 0;font-size:11px;font-weight:600;letter-spacing:.3px;
+  border:none;cursor:pointer;font-family:'DM Sans',sans-serif;
+  background:var(--surface);color:var(--text3);transition:all .12s;
+}
+.tp-ampm-btn.tp-sel{background:var(--accent);color:#fff}
+.tp-ampm-btn+.tp-ampm-btn{border-left:1.5px solid var(--border)}
+.tp-section-lbl{font-size:10px;font-weight:600;color:var(--text3);margin:6px 0 4px;letter-spacing:.3px;text-transform:uppercase}
+.tp-hr-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:8px}
+.tp-hr-btn{
+  padding:7px 2px;border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-weight:500;text-align:center;cursor:pointer;
+  background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;
+  transition:all .12s;
+}
+.tp-hr-btn:hover{background:var(--accent-pale);color:var(--accent);border-color:var(--accent)}
+.tp-hr-btn.tp-sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tp-min-row{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
+.tp-min-btn{
+  padding:6px 2px;border:1px solid var(--border);border-radius:6px;
+  font-size:11px;font-weight:600;text-align:center;cursor:pointer;
+  background:var(--surface);color:var(--text2);font-family:'DM Sans',sans-serif;
+  transition:all .12s;
+}
+.tp-min-btn:hover{background:var(--accent-pale);color:var(--accent);border-color:var(--accent)}
+.tp-min-btn.tp-sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+
 .dur-spinner-row{display:flex;gap:12px;align-items:center;margin-top:4px}
 .dur-spinner{display:flex;align-items:center;gap:6px}
 .dur-spinner-input{
@@ -2735,8 +2795,8 @@ header{
   /* Duration stepper buttons always visible on touch */
   .dur-step-btn{opacity:1;background:var(--surface2)}
   .dur-stepper{border-color:var(--border)}
-  .event-block .dur-step-btn{opacity:1;background:rgba(255,255,255,.15)}
-  .event-block .dur-stepper{border-color:rgba(255,255,255,.2)}
+  .event-block .dur-step-btn{opacity:1;background:rgba(0,0,0,.15)}
+  .event-block .dur-stepper{border-color:rgba(255,255,255,.25)}
 
   /* Subtask grip always visible on touch */
   .sub-grip{opacity:.5}
@@ -3003,3 +3063,149 @@ header{
 /* Reflection sub-sections */
 .mp-reflect-sub{margin-bottom:10px}
 .mp-reflect-label{font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px}
+
+/* ══ NEW: Brain Dump Redesign ══════════════════ */
+.bd-sort-row{display:flex;align-items:center;justify-content:space-between;padding:0 0 8px}
+.bd-sort-label{font-size:14px;font-weight:500;color:var(--text)}
+.bd-sort-toggle{font-size:10px;color:var(--text3);background:none;border:1px solid var(--border);padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit}
+.bd-sort-toggle:hover{background:var(--surface2)}
+.bd-card{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);border-left:3px solid var(--accent);cursor:grab;transition:background .15s}
+.bd-card:hover{background:var(--surface2)}
+.bd-card.bd-selected{background:var(--accent-pale)}
+.bd-card-body{flex:1;min-width:0}
+.bd-grip{color:var(--text3);font-size:10px;flex-shrink:0;cursor:grab}
+.bd-chk{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.bd-chk.on{background:var(--accent);border-color:var(--accent)}
+.bd-chk.on::after{content:'';display:block;width:4px;height:7px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.bd-chk.dis{opacity:.25;cursor:default}
+.bd-badge-overdue{background:#FCEBEB;color:#791F1F}
+.bd-badge-due-urgent{background:#FAEEDA;color:#633806}
+.bd-badge-due-soon{background:#FAEEDA;color:#854F0B}
+.bd-badge-due-later{background:#E6F1FB;color:#0C447C}
+.bd-badge-sess{background:var(--surface2);color:var(--text3)}
+.bd-badge-miss{background:#FCEBEB;color:#791F1F}
+.bd-hint-bottom{padding:8px 10px;font-size:10px;color:var(--text3);text-align:center;line-height:1.5}
+.bd-batch-btn{width:100%;padding:8px;margin:6px 0 0;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;border:1px dashed var(--border);background:var(--surface);color:var(--text3);transition:all .15s}
+.bd-batch-btn.active{border-style:solid;border-color:var(--accent);background:var(--accent);color:#fff}
+.bd-batch-btn:disabled{opacity:.5;cursor:default}
+.bd-pmd-btn{width:100%;padding:10px;margin:6px 0 0;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;border:none;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.bd-pmd-btn:not(.locked){background:var(--accent);color:#fff}
+.bd-pmd-btn:not(.locked):hover{background:var(--accent-dim)}
+.bd-pmd-btn.locked{background:var(--surface2);color:var(--text3);border:1px dashed var(--border)}
+
+/* ══ NEW: Just Scheduled ══════════════════════ */
+.js-area{margin:8px 0 0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.js-hdr{padding:6px 10px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:500;color:var(--text2);cursor:pointer}
+.js-arrow{font-size:8px;color:var(--text3);margin-right:4px}
+.js-cnt{font-size:8px;background:var(--accent-pale);color:var(--accent);padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:500}
+.js-clear{font-size:9px;color:var(--text3);cursor:pointer}
+.js-clear:hover{color:var(--text2)}
+.js-card{padding:6px 10px;display:flex;align-items:flex-start;gap:6px;font-size:11px;border-top:1px solid var(--border)}
+.js-check{color:var(--accent-dim);font-size:11px;flex-shrink:0;margin-top:1px}
+.js-body{flex:1;min-width:0}
+.js-name{font-weight:500;color:var(--text);font-size:11px}
+.js-dest{font-size:9px;color:var(--text3);margin-top:1px}
+.js-acts{display:flex;gap:8px;margin-top:3px}
+.js-act{font-size:9px;color:var(--accent);cursor:pointer}
+.js-act:hover{text-decoration:underline}
+.js-x{font-size:11px;color:var(--text3);cursor:pointer;flex-shrink:0;margin-top:1px}
+.js-x:hover{color:#E24B4A}
+
+/* ══ NEW: Deadlines Tab ══════════════════════ */
+.dl-add-bar{padding:8px 10px;display:flex;gap:6px;border-bottom:1px solid var(--border)}
+.dl-add-input{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:inherit;color:var(--text);background:var(--surface)}
+.dl-add-input::placeholder{color:var(--text3)}
+.dl-add-input:focus{border-color:var(--accent);outline:none}
+.dl-add-btn{padding:7px 12px;border:none;border-radius:6px;font-size:11px;font-weight:500;background:var(--accent);color:#fff;font-family:inherit;cursor:pointer}
+.dl-add-btn:hover{background:var(--accent-dim)}
+.dl-sec-hdr{padding:4px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-bottom:1px solid var(--border)}
+.dl-sec-left{display:flex;align-items:center;gap:5px}
+.dl-sec-arrow{font-size:8px;color:var(--text3)}
+.dl-sec-lbl{font-size:9px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;padding:7px 0}
+.dl-red{color:#A32D2D}
+.dl-amber{color:#854F0B}
+.dl-blue{color:#185FA5}
+.dl-green{color:#27500A}
+.dl-sec-cnt{font-size:8px;color:var(--text3);background:var(--surface2);padding:1px 5px;border-radius:8px}
+.dl-card{padding:7px 10px;display:flex;align-items:center;gap:6px;font-size:11px;border-bottom:1px solid var(--border)}
+.dl-card:last-child{border-bottom:none}
+.dl-chk{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;cursor:pointer}
+.dl-chk.done{background:var(--accent-dim);border-color:var(--accent-dim);position:relative}
+.dl-chk.done::after{content:'';position:absolute;top:2px;left:4px;width:3px;height:5px;border:solid #fff;border-width:0 1.2px 1.2px 0;transform:rotate(45deg)}
+.dl-left{width:3px;height:26px;border-radius:2px;flex-shrink:0}
+.dl-card-body{flex:1;min-width:0;cursor:pointer}
+.dl-card-name{font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-card-name.done-text{text-decoration:line-through;opacity:.5}
+.dl-card-meta{display:flex;gap:4px;align-items:center;margin-top:2px;flex-wrap:wrap}
+.dl-plus{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--text2);flex-shrink:0;background:var(--surface);transition:all .12s}
+.dl-plus:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dl-empty{padding:12px 10px;font-size:11px;color:var(--text3);text-align:center}
+.side-tab-lock{position:absolute;top:-2px;right:-2px;width:12px;height:12px;display:flex;align-items:center;justify-content:center;color:var(--text3)}
+.side-tab{position:relative}
+
+/* ══ NEW: Session Picker Modal ════════════════ */
+.session-picker-modal{background:var(--surface);border-radius:16px;padding:20px;max-width:380px;width:90%;position:relative}
+.sp-task-name{font-size:15px;font-weight:500;color:var(--text)}
+.sp-due-info{font-size:11px;color:var(--text2);margin-top:2px}
+.sp-session-list{margin:8px 0}
+.sp-session-row{padding:6px 8px;display:flex;align-items:center;gap:8px;border-radius:6px;margin:3px 0;background:var(--surface2);font-size:11px}
+.sp-session-day{font-weight:500;color:var(--text);min-width:32px}
+.sp-session-time{color:var(--text2);flex:1}
+.sp-session-dur{color:var(--text3)}
+.sp-session-del{font-size:13px;color:var(--text3);cursor:pointer;width:18px;text-align:center}
+.sp-session-del:hover{color:#E24B4A}
+.sp-empty{font-size:11px;color:var(--text3);text-align:center;padding:12px}
+.sp-conflict-warn{font-size:10px;color:#854F0B;background:#FAEEDA;padding:6px 8px;border-radius:6px;line-height:1.4}
+.sp-conflict-ok{font-size:10px;color:#27500A;background:#EAF3DE;padding:6px 8px;border-radius:6px}
+
+/* ══ NEW: Pro Prompt Modal ════════════════════ */
+.pro-prompt-modal{background:var(--surface);border-radius:16px;padding:28px;max-width:340px;width:90%;text-align:center;position:relative}
+.pro-prompt-title{font-size:16px;font-weight:500;color:var(--text);margin-bottom:6px}
+.pro-prompt-desc{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:18px}
+.pro-prompt-btn{width:100%;padding:12px;border-radius:8px;font-size:14px;font-weight:500;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:inherit;transition:background .15s}
+.pro-prompt-btn:hover{background:var(--accent-dim)}
+.pro-prompt-note{font-size:11px;color:var(--text3);margin-top:10px}
+
+/* ══ NEW: Overdue Banners ════════════════════ */
+.overdue-banner{padding:6px 10px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;margin:4px 10px;border-radius:0;border-left:3px solid}
+.overdue-red{background:#FCEBEB;color:#791F1F;border-color:#E24B4A}
+.overdue-amber{background:#FAEEDA;color:#633806;border-color:#EF9F27}
+.overdue-cnt{font-size:13px;font-weight:500}
+.overdue-names{font-weight:400;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.overdue-x{margin-left:auto;cursor:pointer;opacity:.6;font-size:14px;flex-shrink:0}
+.overdue-x:hover{opacity:1}
+
+/* ══ NEW: Due Date in Modal ══════════════════ */
+#fDueDateWrap{margin-bottom:8px}
+
+/* Dark mode overrides for new elements */
+[data-dark="true"] .session-picker-modal,
+[data-dark="true"] .pro-prompt-modal{background:var(--surface2)}
+[data-dark="true"] .dl-add-input{background:var(--surface);color:var(--text)}
+[data-dark="true"] .bd-card:hover{background:var(--surface3)}
+
+/* ══ Due Date Badge on Calendar Blocks ══════════ */
+.day-due-badge{font-size:8px;padding:1px 5px;border-radius:3px;font-weight:500;margin-left:4px;white-space:nowrap;vertical-align:1px}
+
+/* ══ Status Filter Chips (All Tasks view) ═══════ */
+.cat-status-chips{display:flex;gap:4px;flex-wrap:wrap}
+.cat-status-chip{font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid var(--border);cursor:pointer;font-family:inherit;background:var(--surface);color:var(--text2);font-weight:500;transition:all .12s;white-space:nowrap}
+.cat-status-chip:hover{background:var(--surface2)}
+.cat-status-chip.active{background:var(--accent-pale);color:var(--accent);border-color:var(--accent)}
+.cat-status-chip.chip-danger.active{background:#FCEBEB;color:#A32D2D;border-color:#E24B4A}
+.cat-collapsed-done{font-size:12px;padding:8px 0}
+
+/* ══ Guest Mode Banner ══════════════════════════ */
+.guest-banner{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--accent-pale);font-size:12px;color:var(--accent-dim);border-bottom:1px solid var(--accent-light)}
+.guest-banner-text{flex:1;font-weight:500}
+.guest-banner-btn{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:500;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:inherit}
+.guest-banner-btn:hover{background:var(--accent-dim)}
+.guest-banner-x{font-size:16px;cursor:pointer;opacity:.5;line-height:1}
+.guest-banner-x:hover{opacity:1}
+
+/* ══ Guest Entry Button (Splash) ══════════════ */
+.splash-guest-btn{background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:inherit;padding:8px 16px;transition:color .15s;text-decoration:underline;text-underline-offset:3px}
+.splash-guest-btn:hover{color:var(--text2)}
+
+/* ══ Theme Lock Indicator ═══════════════════ */
+.theme-swatch-lock{position:absolute;top:2px;right:2px;font-size:8px;color:var(--text3);opacity:.6}

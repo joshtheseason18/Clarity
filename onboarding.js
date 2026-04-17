@@ -203,7 +203,8 @@ function _sbInjectCSS(){
 .sb-tl-open{position:absolute;right:8px;bottom:4px;font-size:9px;font-weight:600;letter-spacing:.3px;opacity:.5}
 
 /* ── Task blocks on timeline ── */
-.sb-task{position:absolute;left:72px;right:4px;border-radius:0 7px 7px 0;border-left:3px solid var(--accent);border-top:2px solid var(--accent);background:rgba(var(--accent-rgb),.13);padding:5px 10px;font-size:12px;font-weight:500;color:var(--text);z-index:3;pointer-events:none;display:flex;align-items:center;gap:6px;overflow:hidden;cursor:pointer}
+.sb-task{position:absolute;left:72px;right:4px;border-radius:0 7px 7px 0;border-left:3px solid var(--accent);border-top:2px solid var(--accent);background:rgba(var(--accent-rgb),.13);padding:5px 10px;font-size:12px;font-weight:500;color:var(--text);z-index:3;display:flex;align-items:center;gap:6px;overflow:hidden;cursor:pointer;transition:opacity .15s}
+.sb-task:hover{opacity:.8}
 .sb-task-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-task-dur{font-size:10px;color:var(--text2);flex-shrink:0}
 .sb-task.sb-reveal{opacity:0;transform:translateY(6px) scale(.97)}
@@ -383,6 +384,8 @@ function _sbRenderTimeline(){
     el.className='sb-task';
     el.style.cssText=`top:${topPx}px;height:${hPx}px;border-left-color:${t.color||'var(--accent)'};border-top-color:${t.color||'var(--accent)'};background:${t.color?t.color+'20':'rgba(var(--accent-rgb),.13)'}`;
     el.innerHTML=`<span class="sb-task-name">${_sbEsc(t.name)}</span><span class="sb-task-dur">${_sbDurLabel(t.dur)}</span>`;
+    el.onclick=function(e){e.stopPropagation();_sbUnschedule(t.id);};
+    el.title='Tap to unschedule';
     grid.appendChild(el);
   });
 
@@ -429,11 +432,11 @@ function _sbRenderBrainDump(el){
   if(_sbPhase===4){
     const hasItems=_sbBrain.length>0;
     html+=`<div class="sb-ai-wrap">
-      <button class="sb-ai-btn" id="sbAiBtn" onclick="_sbRunAI()"${hasItems?'':' disabled'}>
+      <button class="sb-ai-btn" id="sbAiBtn" onclick="${hasItems?'_sbRunAI()':'_sbSetPhase(5)'}"${false?'':''}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        Plan my day
+        ${hasItems?'Plan my day':'Continue →'}
       </button>
-      <div class="sb-ai-desc">${hasItems?'Luclaro will place your remaining '+_sbBrain.length+' tasks into open windows.':'All tasks are already scheduled!'}</div>
+      <div class="sb-ai-desc">${hasItems?'Luclaro will place your remaining '+_sbBrain.length+' tasks into open windows.':'All tasks are already scheduled! Nice work.'}</div>
     </div>`;
   }
   el.innerHTML=html;
@@ -453,7 +456,7 @@ function _sbRenderRoutines(el){
   });
   html+='</div>';
   html+=`<div class="sb-rt-hint">
-    <strong>Windows</strong> are open for tasks — AI fills them.<br>
+    <strong>Windows</strong> are open for tasks — Luclaro fills them.<br>
     <strong>Blocks</strong> are reserved — tasks can't go there.
   </div>`;
   el.innerHTML=html;
@@ -493,6 +496,9 @@ window._sbSlotClick=function(hour){
   if(_sbPhase<2)return;
   const blocked=_sbRoutines.some(r=>r.active&&r.blocked&&hour*60>=_sbHourToMin(r.start)&&hour*60<_sbHourToMin(r.end));
   if(blocked){_sbToast('This slot is blocked by a routine');return;}
+  // Overlap check
+  const occupied=_sbTasks.some(t=>{const[h]=t.time.split(':').map(Number);return h===hour;});
+  if(occupied){_sbToast('That slot already has a task — tap it to unschedule first');return;}
   if(_sbBrain.length){
     const item=_sbBrain.shift();
     _sbTasks.push({id:item.id,name:item.name,time:(hour<10?'0':'')+hour+':00',dur:30,color:_sbPriColor(item.pri)});
@@ -521,6 +527,9 @@ window._sbDrop=function(e,hour){
   if(!_sbDragId)return;
   const blocked=_sbRoutines.some(r=>r.active&&r.blocked&&hour*60>=_sbHourToMin(r.start)&&hour*60<_sbHourToMin(r.end));
   if(blocked){_sbToast('Can\'t drop here — slot is blocked');_sbDragId=null;return;}
+  // Overlap check
+  const occupied=_sbTasks.some(t=>{const[h]=t.time.split(':').map(Number);return h===hour;});
+  if(occupied){_sbToast('That slot already has a task — tap it to unschedule first');_sbDragId=null;return;}
   const idx=_sbBrain.findIndex(b=>b.id===_sbDragId);
   if(idx<0){_sbDragId=null;return;}
   const item=_sbBrain.splice(idx,1)[0];
@@ -530,15 +539,44 @@ window._sbDrop=function(e,hour){
   _sbToast('"'+item.name+'" scheduled at '+_sbFmt12((hour<10?'0':'')+hour+':00'));
 };
 
+// Tap a scheduled task to send it back to brain dump
+window._sbUnschedule=function(taskId){
+  const idx=_sbTasks.findIndex(t=>t.id===taskId);
+  if(idx<0)return;
+  const task=_sbTasks.splice(idx,1)[0];
+  _sbBrain.push({id:task.id,name:task.name,pri:'none'});
+  _sbRenderTimeline();_sbRenderSidebar();
+  _sbToast('"'+task.name+'" moved back to Brain Dump');
+};
+
 window._sbToggleRoutine=function(id){
   const r=_sbRoutines.find(r=>r.id===id);if(!r)return;
+
+  // If turning ON a blocked routine, check for task conflicts
+  if(!r.active&&r.blocked){
+    const rStart=_sbHourToMin(r.start),rEnd=_sbHourToMin(r.end);
+    const conflicts=_sbTasks.filter(t=>{
+      const[h,m]=t.time.split(':').map(Number);
+      const tStart=h*60+m,tEnd=tStart+t.dur;
+      return tStart<rEnd&&tEnd>rStart; // overlaps
+    });
+    if(conflicts.length){
+      // Move conflicting tasks back to brain dump
+      conflicts.forEach(ct=>{
+        _sbTasks=_sbTasks.filter(t=>t.id!==ct.id);
+        _sbBrain.push({id:ct.id,name:ct.name,pri:'none'});
+      });
+      _sbToast(conflicts.length+' task'+(conflicts.length!==1?'s':'')+' moved back to Brain Dump — '+r.label+' blocks that time');
+    }
+  }
+
   r.active=!r.active;
   _sbRenderTimeline();_sbRenderSidebar();
 };
 
 // ── Fake AI ─────────────────────────────────────
 window._sbRunAI=function(){
-  if(!_sbBrain.length){_sbToast('No tasks to schedule');return;}
+  if(!_sbBrain.length){_sbToast('All tasks already scheduled!');setTimeout(()=>_sbSetPhase(5),1200);return;}
   const btn=document.getElementById('sbAiBtn');
   if(btn){btn.disabled=true;btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sb-spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Planning...';}
 
@@ -585,6 +623,14 @@ window._sbRunAI=function(){
       }
     }
   });
+
+  // Handle zero placements — no open slots available
+  if(!placements.length){
+    _sbToast('No open time slots available — try adjusting your routines');
+    if(btn){btn.disabled=false;btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Plan my day';}
+    setTimeout(()=>_sbSetPhase(5),2000);
+    return;
+  }
 
   // Shimmer → reveal
   const shimmers=[];
@@ -673,7 +719,9 @@ function _sbRenderGuide(){
     1:{title:'Brain Dump + Quick Events',body:'Get tasks out of your head — type in the quick add box on the right.<br><br>✨ <strong>Quick Events</strong> parses naturally: try <em>"Study 3pm 45min"</em>, <em>"Lunch tomorrow noon"</em>, or <em>"Gym Mon/Wed/Fri 6pm"</em>.<br><br>Tasks with a time go straight to the calendar. Without a time, they land in brain dump cards.',btn:'I\'ve added some tasks'},
     2:{title:'Drag to Schedule',body:'Grab any card from the brain dump and <strong>drag it onto a time slot</strong>. You can also <strong>click a slot</strong> to place the next card there.<br><br>Take your time — schedule as many as you want.',btn:'Done scheduling'},
     3:{title:'Routines',body:'Toggle routines on to shape your day. <strong>Windows</strong> (blue) stay open for tasks. <strong>Blocks</strong> (red hatching) are reserved — tasks can\'t go there.<br><br>Watch the calendar update as you toggle each one.',btn:'Routines are set'},
-    4:{title:'Let Luclaro Plan',body:'Hit <em>"Plan my day"</em> in the sidebar. Luclaro will place your remaining brain dump items into open windows — respecting your routines, using smart defaults for duration, and avoiding blocked time.',btn:null},
+    4:{title:'Let Luclaro Plan',body:_sbBrain.length
+        ?'Hit <em>"Plan my day"</em> in the sidebar. Luclaro will place your remaining brain dump items into open windows — respecting your routines, using smart defaults for duration, and avoiding blocked time.'
+        :'You\'ve already scheduled all your tasks — great job! Hit <em>"Continue"</em> in the sidebar to finish up.',btn:null},
   };
   const g=guides[_sbPhase];if(!g)return;
   const card=document.createElement('div');card.className='sb-guide';
