@@ -3112,6 +3112,14 @@ header{
 .js-x:hover{color:#E24B4A}
 
 /* ══ Phase A step 2: BD accordions (Tasks / Events / Just Scheduled) ══ */
+/* Card layout fix: two earlier .bd-card rules conflicted on flex-direction
+   (one set column, the other didn't override). Lock it to row here so the
+   checkbox sits to the left of the body, body fills the middle, grip on right. */
+.bd-card{flex-direction:row !important;align-items:center}
+.bd-card .bd-card-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bd-card .bd-name{font-size:12px}
+.bd-card .bd-meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+
 .bd-acc{border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;margin:0}
 .bd-acc-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;user-select:none;background:var(--surface2);border-bottom:1px solid transparent;transition:background .12s}
 .bd-acc-hdr:hover{background:var(--surface3)}
@@ -3120,6 +3128,13 @@ header{
 .bd-acc-label{font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text2)}
 .bd-acc-cnt{font-size:9px;background:var(--surface);color:var(--text3);padding:1px 6px;border-radius:8px;margin-left:auto;font-weight:500;border:1px solid var(--border)}
 .bd-acc.open .bd-acc-cnt{background:var(--accent-pale);color:var(--accent);border-color:transparent}
+/* Select-all checkbox in section header (Mid tier) */
+.bd-acc-selall{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--surface);transition:all .12s}
+.bd-acc-selall:hover{border-color:var(--accent)}
+.bd-acc-selall.on{background:var(--accent);border-color:var(--accent)}
+.bd-acc-selall.on::after{content:'';display:block;width:4px;height:7px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.bd-acc-selall.indet{background:var(--accent-pale);border-color:var(--accent)}
+.bd-acc-selall.indet::after{content:'';display:block;width:7px;height:1.5px;background:var(--accent)}
 .bd-acc-clear{font-size:9px;color:var(--text3);cursor:pointer;margin-left:8px;padding:2px 4px;border-radius:4px}
 .bd-acc-clear:hover{color:var(--text2);background:var(--surface)}
 .bd-acc-body{display:flex;flex-direction:column;gap:4px;padding:6px 8px}

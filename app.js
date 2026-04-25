@@ -5254,16 +5254,64 @@ function renderBdCard(t,mid){
   </div>`;
 }
 
+// ── Phase A step 2.1: per-section select-all (Mid tier) ──
+// Returns 'all' | 'some' | 'none' for the section's selection state.
+// Disabled (unselectable) items are excluded from the calculation so a section
+// of dimmed events doesn't pretend to be "all selected" when it's all-disabled.
+function bdSectionSelState(items){
+  const eligible=items.filter(t=>{
+    const isEv=isBdEvent(t);
+    if(!isEv)return true;
+    const hasDate=!!t._pendingDate||!!t.date;
+    const hasTime=!!t._pendingTime||!!t.time;
+    return hasDate&&hasTime;
+  });
+  if(!eligible.length)return 'none';
+  const sel=eligible.filter(t=>_bdSelectedIds.has(t.id)).length;
+  if(sel===0)return 'none';
+  if(sel===eligible.length)return 'all';
+  return 'some';
+}
+function toggleBdSectionSelAll(key){
+  const items=key==='tasks'
+    ? brainDump.filter(t=>!isBdEvent(t))
+    : brainDump.filter(t=>isBdEvent(t));
+  const eligible=items.filter(t=>{
+    const isEv=isBdEvent(t);
+    if(!isEv)return true;
+    const hasDate=!!t._pendingDate||!!t.date;
+    const hasTime=!!t._pendingTime||!!t.time;
+    return hasDate&&hasTime;
+  });
+  if(!eligible.length){renderBD();return;}
+  const state=bdSectionSelState(items);
+  // 'all' → deselect all in section; 'none' or 'some' → select all eligible
+  if(state==='all'){
+    eligible.forEach(t=>_bdSelectedIds.delete(t.id));
+  } else {
+    eligible.forEach(t=>_bdSelectedIds.add(t.id));
+  }
+  renderBD();
+}
+
 // ── Phase A step 2: render an accordion section (tasks/events) ──
 function renderBdAccordion(key,label,items,mid,emptyText){
   const acc=getBdAccordionState();
   const open=!!acc[key];
   const cnt=items.length;
+  // Section-level select-all checkbox (Mid only, only when section has items)
+  let selAllHtml='';
+  if(mid&&cnt>0){
+    const state=bdSectionSelState(items);
+    const cls=state==='all'?'bd-acc-selall on':state==='some'?'bd-acc-selall indet':'bd-acc-selall';
+    selAllHtml=`<div class="${cls}" onclick="event.stopPropagation();toggleBdSectionSelAll('${key}')" title="Select all in ${label.toLowerCase()}"></div>`;
+  }
   const cards=cnt
     ? items.map(t=>renderBdCard(t,mid)).join('')
     : `<div class="bd-acc-empty">${emptyText}</div>`;
   return `<div class="bd-acc${open?' open':''}" data-acc="${key}">
     <div class="bd-acc-hdr" onclick="toggleBdAccordion('${key}')">
+      ${selAllHtml}
       <span class="bd-acc-arrow">${open?'▼':'▶'}</span>
       <span class="bd-acc-label">${label}</span>
       <span class="bd-acc-cnt">${cnt}</span>
@@ -5328,36 +5376,38 @@ function renderBD(){
   list.innerHTML=html;
 }
 
-// ══ JUST SCHEDULED (accordion section, dashed wrap) ═══════════════════════
+// ══ JUST SCHEDULED (accordion section, always visible, dashed wrap) ═══════
 function renderJustScheduledAccordion(){
   const acc=getBdAccordionState();
   const open=!!acc.justScheduled;
   const cnt=_justScheduled.length;
-  // Hide section entirely when empty (avoids a third always-visible row that's never useful)
-  if(!cnt)return '';
 
-  const cards=_justScheduled.map((js,i)=>`
-    <div class="js-card">
-      <span class="js-check">✓</span>
-      <div class="js-body">
-        <div class="js-name">${esc(js.name)}</div>
-        <div class="js-dest">${js.dest} · ${js.type}</div>
-        <div class="js-acts">
-          <span class="js-act" onclick="undoJustScheduled(${i})">Undo</span>
-          <span class="js-act" onclick="editJustScheduled(${i})">Edit</span>
+  const body=cnt
+    ? _justScheduled.map((js,i)=>`
+      <div class="js-card">
+        <span class="js-check">✓</span>
+        <div class="js-body">
+          <div class="js-name">${esc(js.name)}</div>
+          <div class="js-dest">${js.dest} · ${js.type}</div>
+          <div class="js-acts">
+            <span class="js-act" onclick="undoJustScheduled(${i})">Undo</span>
+            <span class="js-act" onclick="editJustScheduled(${i})">Edit</span>
+          </div>
         </div>
-      </div>
-      <span class="js-x" onclick="dismissJustScheduled(${i})">×</span>
-    </div>`).join('');
+        <span class="js-x" onclick="dismissJustScheduled(${i})">×</span>
+      </div>`).join('')
+    : `<div class="bd-acc-empty">Nothing scheduled yet — items you schedule from this panel will land here briefly so you can undo.</div>`;
+
+  const clearLink=cnt?`<span class="bd-acc-clear" onclick="event.stopPropagation();clearJustScheduled()">Clear all</span>`:'';
 
   return `<div class="bd-acc bd-acc-js${open?' open':''}" data-acc="justScheduled">
     <div class="bd-acc-hdr" onclick="toggleBdAccordion('justScheduled')">
       <span class="bd-acc-arrow">${open?'▼':'▶'}</span>
       <span class="bd-acc-label">Just scheduled</span>
       <span class="bd-acc-cnt">${cnt}</span>
-      <span class="bd-acc-clear" onclick="event.stopPropagation();clearJustScheduled()">Clear all</span>
+      ${clearLink}
     </div>
-    <div class="bd-acc-body js-area-dashed" ${open?'':'hidden'}>${cards}</div>
+    <div class="bd-acc-body ${cnt?'js-area-dashed':''}" ${open?'':'hidden'}>${body}</div>
   </div>`;
 }
 // Back-compat alias — older call sites or external scripts may still call renderJustScheduled().
@@ -5533,7 +5583,13 @@ function openSessionPicker(bdId){
   document.getElementById('spTime').value='14:00';
   document.getElementById('spDur').value='60';
   document.getElementById('spConflict').innerHTML='';
+  // Phase A step 2.1: .modal-overlay defaults to opacity:0;pointer-events:none.
+  // Need both display:flex AND the .show class for the modal to be visible+clickable.
   el.style.display='flex';
+  // Force a reflow so the opacity transition fires from 0 → 1 (otherwise it would
+  // skip the transition because display:flex and class:show are set in the same tick).
+  void el.offsetWidth;
+  el.classList.add('show');
 }
 let _sessionPickerBdId='';
 
@@ -5606,7 +5662,10 @@ function removeSession(bdId,idx){
 }
 
 function closeSessionPicker(){
-  const el=document.getElementById('sessionPickerOverlay');if(el)el.style.display='none';
+  const el=document.getElementById('sessionPickerOverlay');if(!el)return;
+  el.classList.remove('show');
+  // Hide after the opacity transition completes (200ms) so it animates out.
+  setTimeout(()=>{el.style.display='none';},200);
 }
 
 // ══ PARSE DUE DATE FROM TEXT ══════════════════
