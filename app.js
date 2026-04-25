@@ -5198,94 +5198,145 @@ function openQeEdit(){
   openEdit(_lastQeId,t.date,fakeEvent);
 }
 
+// ── Phase A step 2: BD accordion state & event detection ──
+// An item is "event-flavored" if it carries any pending event fields, OR has explicit type='event'.
+// Plain tasks (including those with dueDate / sessions) live in the Tasks section.
+function isBdEvent(t){return !!(t&&(t._pendingDate||t._pendingTime||t._pendingAllday||t.type==='event'));}
+const BD_ACC_DEFAULT={tasks:true,events:true,justScheduled:false};
+function getBdAccordionState(){
+  try{return Object.assign({},BD_ACC_DEFAULT,JSON.parse(localStorage.getItem('clarity_bd_accordion')||'{}'));}
+  catch{return Object.assign({},BD_ACC_DEFAULT);}
+}
+function saveBdAccordionState(s){try{localStorage.setItem('clarity_bd_accordion',JSON.stringify(s));}catch{}}
+function toggleBdAccordion(key){
+  const s=getBdAccordionState();
+  s[key]=!s[key];
+  saveBdAccordionState(s);
+  renderBD();
+}
+
+// ── Phase A step 2: card renderer (extracted so all sections share one path) ──
+function renderBdCard(t,mid){
+  const cc=catColor(t.category);
+  const sel=_bdSelectedIds.has(t.id);
+  const hasDue=!!t.dueDate;
+  const isEvent=isBdEvent(t);
+  const hasDate=!!t._pendingDate||!!t.date;
+  const hasTime=!!t._pendingTime||!!t.time;
+  const ready=isEvent?(hasDate&&hasTime):true;
+
+  let badges='';
+  if(t.priority&&t.priority!=='none')badges+=`<span class="bd-badge pri-${t.priority}">${t.priority}</span>`;
+  if(hasDue){
+    const dueStr=fmtDueBadge(t.dueDate);
+    const cls=dueBadgeClass(t.dueDate);
+    badges+=`<span class="bd-badge ${cls}">${dueStr}</span>`;
+    const sessCnt=(t.sessions||[]).length;
+    badges+=`<span class="bd-badge bd-badge-sess">${sessCnt} session${sessCnt!==1?'s':''}</span>`;
+  }
+  if(!ready){
+    if(!hasDate)badges+=`<span class="bd-badge bd-badge-miss">needs date</span>`;
+    if(!hasTime)badges+=`<span class="bd-badge bd-badge-miss">needs time</span>`;
+  }
+  if(t.category&&t.category!=='none'){const cat=catById(t.category);badges+=`<span class="bd-badge" style="background:${cc}1a;color:${cc}">${cat?cat.name:t.category}</span>`;}
+
+  const chkHtml=mid?`<div class="bd-chk${sel?' on':''}${!ready&&isEvent?' dis':''}" onclick="event.stopPropagation();toggleBdSel('${t.id}',${ready||!isEvent})" data-id="${t.id}"></div>`:'';
+
+  return `<div class="bd-card${sel?' bd-selected':''}${!ready?' bd-card-pending':''}" draggable="true" style="border-left-color:${cc}"
+    ondragstart="onBDS(event,'${t.id}')" ondragend="onBDE(event)"
+    onclick="openBDDetail('${t.id}')">
+    ${chkHtml}
+    <div class="bd-card-body">
+      <div class="bd-name">${esc(t.name)}</div>
+      <div class="bd-meta">${badges}<button class="bd-del" onclick="event.stopPropagation();delBD('${t.id}')">Remove</button></div>
+    </div>
+    <span class="bd-grip">::</span>
+  </div>`;
+}
+
+// ── Phase A step 2: render an accordion section (tasks/events) ──
+function renderBdAccordion(key,label,items,mid,emptyText){
+  const acc=getBdAccordionState();
+  const open=!!acc[key];
+  const cnt=items.length;
+  const cards=cnt
+    ? items.map(t=>renderBdCard(t,mid)).join('')
+    : `<div class="bd-acc-empty">${emptyText}</div>`;
+  return `<div class="bd-acc${open?' open':''}" data-acc="${key}">
+    <div class="bd-acc-hdr" onclick="toggleBdAccordion('${key}')">
+      <span class="bd-acc-arrow">${open?'▼':'▶'}</span>
+      <span class="bd-acc-label">${label}</span>
+      <span class="bd-acc-cnt">${cnt}</span>
+    </div>
+    <div class="bd-acc-body" ${open?'':'hidden'}>${cards}</div>
+  </div>`;
+}
+
 function renderBD(){
   const list=document.getElementById('bdList');if(!list)return;
   const mid=isMid();
-  
-  // Sort brain dump items
+
+  // Sort
   const sorted=[...brainDump];
   if(_bdSortMode==='priority'){
     const p={high:0,medium:1,low:2,none:3};
     sorted.sort((a,b)=>(p[a.priority||'none']||3)-(p[b.priority||'none']||3));
   }
-  
-  // Build items HTML
+
+  // Split into Tasks vs Events accordions
+  const tasksList=sorted.filter(t=>!isBdEvent(t));
+  const eventsList=sorted.filter(t=>isBdEvent(t));
+
+  // First-time empty hint (no items at all)
+  const nothing=!brainDump.length&&!_justScheduled.length;
   let html='';
-  if(!sorted.length){
-    html=`<div class="bd-hint">Type above, then drag cards to the calendar →</div>`;
-  } else {
-    sorted.forEach(t=>{
-      const cc=catColor(t.category);
-      const sel=_bdSelectedIds.has(t.id);
-      const hasDue=!!t.dueDate;
-      // Determine readiness for events
-      const isEvent=(t.type||'task')==='event';
-      const hasDate=!!t._pendingDate||!!t.date;
-      const hasTime=!!t._pendingTime||!!t.time;
-      const ready=isEvent?(hasDate&&hasTime):true;
-      
-      let badges='';
-      if(t.priority&&t.priority!=='none')badges+=`<span class="bd-badge pri-${t.priority}">${t.priority}</span>`;
-      if(hasDue){
-        const dueStr=fmtDueBadge(t.dueDate);
-        const cls=dueBadgeClass(t.dueDate);
-        badges+=`<span class="bd-badge ${cls}">${dueStr}</span>`;
-        // Count sessions
-        const sessCnt=(t.sessions||[]).length;
-        badges+=`<span class="bd-badge bd-badge-sess">${sessCnt} session${sessCnt!==1?'s':''}</span>`;
-      }
-      if(!ready){
-        if(!hasDate)badges+=`<span class="bd-badge bd-badge-miss">needs date</span>`;
-        if(!hasTime)badges+=`<span class="bd-badge bd-badge-miss">needs time</span>`;
-      }
-      if(t.category&&t.category!=='none'){const cat=catById(t.category);badges+=`<span class="bd-badge" style="background:${cc}1a;color:${cc}">${cat?cat.name:t.category}</span>`;}
-      
-      // Checkbox (mid tier only)
-      const chkHtml=mid?`<div class="bd-chk${sel?' on':''}${!ready&&isEvent?' dis':''}" onclick="event.stopPropagation();toggleBdSel('${t.id}',${ready||!isEvent})" data-id="${t.id}"></div>`:'';
-      
-      html+=`<div class="bd-card${sel?' bd-selected':''}" draggable="true" style="border-left-color:${cc}"
-        ondragstart="onBDS(event,'${t.id}')" ondragend="onBDE(event)"
-        onclick="openBDDetail('${t.id}')">
-        ${chkHtml}
-        <div class="bd-card-body">
-          <div class="bd-name">${esc(t.name)}</div>
-          <div class="bd-meta">${badges}<button class="bd-del" onclick="event.stopPropagation();delBD('${t.id}')">Remove</button></div>
-        </div>
-        <span class="bd-grip">::</span>
-      </div>`;
-    });
+
+  if(nothing){
+    html+=`<div class="bd-hint">Type above, then drag cards to the calendar →</div>`;
   }
-  
-  // Plan My Day / Batch Schedule buttons
-  let btns='';
+
+  // Section 1: Tasks
+  html+=renderBdAccordion('tasks','Tasks',tasksList,mid,'No tasks yet — type above to add one.');
+
+  // Section 2: Events
+  html+=renderBdAccordion('events','Events',eventsList,mid,'No events yet — try "Coffee with Sam Friday 3pm".');
+
+  // Schedule button — sits between Events and Just Scheduled (Mid tier only)
   if(mid){
     const selCount=_bdSelectedIds.size;
-    btns+=`<button class="bd-batch-btn${selCount?' active':''}" onclick="batchScheduleSelected()" ${selCount?'':'disabled'}>
-      ${selCount?'Schedule '+selCount+' selected':'Select items to schedule'}</button>`;
+    html+=`<button class="bd-batch-btn${selCount?' active':''}" onclick="batchScheduleSelected()" ${selCount?'':'disabled'}>
+      ${selCount?'Schedule these '+selCount+' item'+(selCount!==1?'s':''):'Select items to schedule'}</button>`;
   }
+
+  // Section 3: Just Scheduled (accordion, dashed wrap, collapsed by default)
+  html+=renderJustScheduledAccordion();
+
+  // Plan My Day (Pro / locked)
   if(canUsePro('Plan My Day')){
-    btns+=`<button class="bd-pmd-btn" onclick="openAISchedule()">
+    html+=`<button class="bd-pmd-btn" onclick="openAISchedule()">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" fill="currentColor"/></svg>
       Plan My Day</button>`;
   } else {
-    btns+=`<button class="bd-pmd-btn locked" onclick="showProPrompt('Plan My Day')">
+    html+=`<button class="bd-pmd-btn locked" onclick="showProPrompt('Plan My Day')">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Plan My Day</button>`;
   }
-  
-  // Hint
-  const hint=`<div class="bd-hint-bottom">${mid?'Drag to calendar, select + schedule, or use Plan My Day':'Drag cards to the calendar to schedule'}</div>`;
-  
-  // Just Scheduled area
-  const jsHtml=renderJustScheduled();
-  
-  list.innerHTML=html+btns+hint+jsHtml;
+
+  // Bottom hint
+  html+=`<div class="bd-hint-bottom">${mid?'Drag to calendar, select + schedule, or use Plan My Day':'Drag cards to the calendar to schedule'}</div>`;
+
+  list.innerHTML=html;
 }
 
-// ══ JUST SCHEDULED ════════════════════════════
-function renderJustScheduled(){
-  if(!_justScheduled.length)return'';
-  let cards=_justScheduled.map((js,i)=>`
+// ══ JUST SCHEDULED (accordion section, dashed wrap) ═══════════════════════
+function renderJustScheduledAccordion(){
+  const acc=getBdAccordionState();
+  const open=!!acc.justScheduled;
+  const cnt=_justScheduled.length;
+  // Hide section entirely when empty (avoids a third always-visible row that's never useful)
+  if(!cnt)return '';
+
+  const cards=_justScheduled.map((js,i)=>`
     <div class="js-card">
       <span class="js-check">✓</span>
       <div class="js-body">
@@ -5298,14 +5349,20 @@ function renderJustScheduled(){
       </div>
       <span class="js-x" onclick="dismissJustScheduled(${i})">×</span>
     </div>`).join('');
-  return`<div class="js-area">
-    <div class="js-hdr" onclick="toggleJsCollapse()">
-      <span><span class="js-arrow" id="jsArrow">▶</span> Just scheduled <span class="js-cnt">${_justScheduled.length}</span></span>
-      <span class="js-clear" onclick="event.stopPropagation();clearJustScheduled()">Clear all</span>
+
+  return `<div class="bd-acc bd-acc-js${open?' open':''}" data-acc="justScheduled">
+    <div class="bd-acc-hdr" onclick="toggleBdAccordion('justScheduled')">
+      <span class="bd-acc-arrow">${open?'▼':'▶'}</span>
+      <span class="bd-acc-label">Just scheduled</span>
+      <span class="bd-acc-cnt">${cnt}</span>
+      <span class="bd-acc-clear" onclick="event.stopPropagation();clearJustScheduled()">Clear all</span>
     </div>
-    <div id="jsCards">${cards}</div>
+    <div class="bd-acc-body js-area-dashed" ${open?'':'hidden'}>${cards}</div>
   </div>`;
 }
+// Back-compat alias — older call sites or external scripts may still call renderJustScheduled().
+function renderJustScheduled(){return renderJustScheduledAccordion();}
+
 function dismissJustScheduled(i){_justScheduled.splice(i,1);renderBD();}
 function clearJustScheduled(){_justScheduled=[];renderBD();}
 function undoJustScheduled(i){
@@ -5321,12 +5378,9 @@ function editJustScheduled(i){
   const t=tasks.find(t=>t.id===js.id);if(!t)return;
   openEdit(js.id,t.date,{stopPropagation:()=>{}});
 }
-function toggleJsCollapse(){
-  const c=document.getElementById('jsCards');
-  if(c)c.style.display=c.style.display==='none'?'':'none';
-  const a=document.getElementById('jsArrow');
-  if(a)a.textContent=c&&c.style.display==='none'?'▶':'▼';
-}
+// Back-compat: old toggleJsCollapse kept as alias to the accordion toggle so any
+// stale event handlers in cached HTML don't throw.
+function toggleJsCollapse(){toggleBdAccordion('justScheduled');}
 
 // ══ BRAIN DUMP SELECTION (MID TIER) ════════════
 function toggleBdSel(id,allowed){
@@ -5338,6 +5392,12 @@ function toggleBdSel(id,allowed){
 
 function batchScheduleSelected(){
   if(!_bdSelectedIds.size)return;
+  // Phase A step 1: tier-based routing.
+  // Pro + guest → AI Plan My Day path (current behavior).
+  // Mid (signed-in, non-Pro) → Pro prompt for now.
+  // TODO Phase A step 4: Mid branch should route to scheduleSelectedItems()
+  //                       (algorithmic placer) once that function ships.
+  if(!canUsePro('Plan My Day')){showProPrompt('Plan My Day');return;}
   // Open Plan My Day with pre-selected items
   openAISchedule(_bdSelectedIds);
 }
@@ -6595,6 +6655,8 @@ function startSubtaskFocus(idx){
   if(metaEl)metaEl.textContent='Subtask of: '+(t?t.name:'');
 }
 async function generateSubtasks(){
+  // Phase A step 1: Pro gate — guests get a preview, Mid users hit the Pro prompt.
+  if(!canUsePro('Subtasks')){showProPrompt('Subtasks');return;}
   const taskName=document.getElementById('fName').value.trim();
   const dur=_selDur||30;
   if(!taskName){showToast('Enter a task name first');return;}

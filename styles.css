@@ -3111,6 +3111,33 @@ header{
 .js-x{font-size:11px;color:var(--text3);cursor:pointer;flex-shrink:0;margin-top:1px}
 .js-x:hover{color:#E24B4A}
 
+/* ══ Phase A step 2: BD accordions (Tasks / Events / Just Scheduled) ══ */
+.bd-acc{border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;margin:0}
+.bd-acc-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;user-select:none;background:var(--surface2);border-bottom:1px solid transparent;transition:background .12s}
+.bd-acc-hdr:hover{background:var(--surface3)}
+.bd-acc.open .bd-acc-hdr{border-bottom-color:var(--border)}
+.bd-acc-arrow{font-size:8px;color:var(--text3);width:10px;text-align:center;transition:transform .12s}
+.bd-acc-label{font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text2)}
+.bd-acc-cnt{font-size:9px;background:var(--surface);color:var(--text3);padding:1px 6px;border-radius:8px;margin-left:auto;font-weight:500;border:1px solid var(--border)}
+.bd-acc.open .bd-acc-cnt{background:var(--accent-pale);color:var(--accent);border-color:transparent}
+.bd-acc-clear{font-size:9px;color:var(--text3);cursor:pointer;margin-left:8px;padding:2px 4px;border-radius:4px}
+.bd-acc-clear:hover{color:var(--text2);background:var(--surface)}
+.bd-acc-body{display:flex;flex-direction:column;gap:4px;padding:6px 8px}
+.bd-acc-body[hidden]{display:none}
+.bd-acc-empty{font-size:10px;color:var(--text3);text-align:center;padding:10px 6px;font-style:italic;line-height:1.5}
+
+/* Just Scheduled — dashed wrap signals "ephemeral / recently completed" */
+.bd-acc-js .bd-acc-body.js-area-dashed{border:1px dashed var(--border);border-radius:6px;margin:6px 8px 8px;padding:4px;background:transparent;gap:0}
+.bd-acc-js .bd-acc-body.js-area-dashed .js-card{border-top:none;border-bottom:1px dashed var(--border);padding:6px 8px}
+.bd-acc-js .bd-acc-body.js-area-dashed .js-card:last-child{border-bottom:none}
+
+/* Pending event cards: slightly muted to signal "needs date/time" */
+.bd-card.bd-card-pending{opacity:.78}
+.bd-card.bd-card-pending:hover{opacity:1}
+
+/* Schedule button sits between Events and Just Scheduled — keep prior look but tighten margins */
+.bd-list .bd-batch-btn{margin:6px 0 2px}
+
 /* ══ NEW: Deadlines Tab ══════════════════════ */
 .dl-add-bar{padding:8px 10px;display:flex;gap:6px;border-bottom:1px solid var(--border)}
 .dl-add-input{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:inherit;color:var(--text);background:var(--surface)}
