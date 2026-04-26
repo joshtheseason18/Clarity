@@ -34,9 +34,17 @@ function showProPrompt(feature){
   };
   if(desc)desc.textContent=msgs[feature]||'Sign in with Google to unlock this feature.';
   if(btn)btn.textContent=_isGuest?'Sign in to save':'Upgrade to Pro';
+  // Phase A step 2 hotfix: .modal-overlay defaults to opacity:0; pointer-events:none.
+  // display:flex alone left this modal invisible.
   el.style.display='flex';
+  void el.offsetWidth;
+  el.classList.add('show');
 }
-function closeProPrompt(){const el=document.getElementById('proPromptOverlay');if(el)el.style.display='none';}
+function closeProPrompt(){
+  const el=document.getElementById('proPromptOverlay');if(!el)return;
+  el.classList.remove('show');
+  setTimeout(()=>{el.style.display='none';},200);
+}
 
 // Guest mode: clear data on fresh page load
 function clearGuestData(){
@@ -1267,6 +1275,12 @@ function snapTo15(timeStr){
   const totalMins=h*60+(snapped>=60?60:snapped);
   return pad(Math.floor(totalMins/60)%24)+':'+pad(totalMins%60);
 }
+
+// Phase A step 2 hotfix: deadline session-picker conflict checker calls toMins/fromMins
+// which were never defined anywhere. Function exists as _timeToMin. Add aliases plus
+// the inverse so existing calls work, without rewriting checkSessionConflicts.
+function toMins(t){return _timeToMin(t);}
+function fromMins(mins){const m=Math.max(0,Math.min(1439,mins|0));return pad(Math.floor(m/60)%24)+':'+pad(m%60);}
 
 // Find the next available time within a 30-min slot when tasks already exist there
 function nextAvailableTime(dateKey, slotTime){
@@ -5647,8 +5661,11 @@ function checkSessionConflicts(dateKey,time,dur){
     const ts=toMins(t.time),te=ts+(t.duration||30);
     if(startMin<te&&endMin>ts)return`Conflicts with "${t.name}" at ${fmtT(t.time)}. Try ${fmtT(fromMins(te))} instead.`;
   }
-  // Check blocked routines
-  if(isBlockedByRoutine(dateKey,time))return`Blocked by a routine. Try a different time.`;
+  // Phase A step 2 hotfix: isBlockedByRoutine returns an object {blocked, ...}, not a
+  // boolean. Treating the object as truthy made this branch fire on EVERY call (the
+  // false case still returns {blocked:false}, which is truthy). Read .blocked properly.
+  const rb=isBlockedByRoutine(dateKey,time);
+  if(rb.blocked)return`Blocked by ${rb.routineName} (${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}). Try a different time.`;
   return null;
 }
 
@@ -5691,7 +5708,18 @@ function parseDateFromText(text){
   }
   return'';
 }
-function delBD(id){brainDump=brainDump.filter(t=>t.id!==id);save();renderBD()}
+function delBD(id){
+  // Phase A step 2 hotfix: deadline tasks have linked session tasks on the calendar
+  // (created by addSessionFromPicker, joined via _parentBdId). Without this filter,
+  // deleting the deadline orphaned those sessions and they stayed on the calendar
+  // forever with broken parent references.
+  const t=brainDump.find(b=>b.id===id);
+  if(t&&t.dueDate){
+    tasks=tasks.filter(tk=>tk._parentBdId!==id);
+  }
+  brainDump=brainDump.filter(t=>t.id!==id);
+  save();renderAll();
+}
 function toggleBdSort(){
   _bdSortMode=_bdSortMode==='urgency'?'priority':'urgency';
   const btn=document.getElementById('bdSortBtn');
@@ -6032,6 +6060,10 @@ function onDropSlot(e,dateKey,time){
       dragBdId=null;save();renderAll();
       showToast('Session added for "'+t.name+'"');
     } else {
+      // Phase A step 2 hotfix: register in Just Scheduled before removing from BD,
+      // so the count pill in the panel updates and the user has an Undo affordance.
+      const jsD=fromDk(dateKey);
+      _justScheduled.unshift({id:newTaskId,name:t.name,dest:DAYS_S[jsD.getDay()]+' '+fmtT(smartTime),type:t.type||'task',date:dateKey,time:smartTime});
       // Regular task: remove from BD
       brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     }
@@ -7789,10 +7821,12 @@ function openBDDetail(id){
   document.getElementById('bdDetailPri').value=t.priority||'none';
   buildCatOptions('bdDetailCat',t.category||'none');
   document.getElementById('bdDetailNotes').value=t.notes||'';
-  // Pre-fill today's date as default suggestion
-  const todayStr=dk(new Date());
-  document.getElementById('bdDetailDate').value=t.scheduledDate||'';
-  document.getElementById('bdDetailTime').value=t.scheduledTime||'';
+  // Phase A step 2 hotfix: data lives in _pendingDate / _pendingTime (set by addQuickEvent
+  // for incomplete events). The old code read scheduledDate / scheduledTime which were
+  // never populated, so the time always rendered empty. Read _pending* first, fall back
+  // to scheduled* (in case any old data shape exists), then empty.
+  document.getElementById('bdDetailDate').value=t._pendingDate||t.scheduledDate||'';
+  document.getElementById('bdDetailTime').value=t._pendingTime||t.scheduledTime||'';
   document.getElementById('bdDetailOverlay').classList.add('open');
   setTimeout(()=>{
     const nameEl=document.getElementById('bdDetailName');
@@ -7803,8 +7837,13 @@ function openBDDetail(id){
 function closeBDDetail(){document.getElementById('bdDetailOverlay').classList.remove('open');bdDetailId=null}
 function deleteBDFromModal(){
   if(!bdDetailId)return;
+  // Phase A step 2 hotfix: same as delBD — clean up linked calendar sessions.
+  const t=brainDump.find(b=>b.id===bdDetailId);
+  if(t&&t.dueDate){
+    tasks=tasks.filter(tk=>tk._parentBdId!==bdDetailId);
+  }
   brainDump=brainDump.filter(t=>t.id!==bdDetailId);
-  save();closeBDDetail();renderBD();
+  save();closeBDDetail();renderAll();
 }
 function saveBDDetail(){
   if(!bdDetailId)return;
@@ -7815,21 +7854,34 @@ function saveBDDetail(){
   const category=document.getElementById('bdDetailCat').value;
   const notes=document.getElementById('bdDetailNotes').value.trim();
   const dateVal=document.getElementById('bdDetailDate').value;
-  const timeVal=document.getElementById('bdDetailTime').value;
+  const timeValRaw=document.getElementById('bdDetailTime').value;
+
+  // Phase A step 2 hotfix: snap to 15-min so times like 6:43 PM don't break the slot grid.
+  const timeVal=timeValRaw?snapTo15(timeValRaw):'';
 
   // If a date was provided, schedule it directly
   if(dateVal){
-    const time=timeVal||'09:00';
+    // If user didn't fill the time field, fall back to any _pendingTime they had,
+    // then to a sensible default. (Old code dropped _pendingTime on the floor.)
+    const time=timeVal||snapTo15(t._pendingTime||'')||'09:00';
+    const dur=t._pendingDuration||30;
+    const newId=genId();
     tasks.push({
-      id:genId(),name,type:'task',priority,category,notes,attachments:[],location:'',
-      date:dateVal,time,allday:false,duration:30,scheduled:true,done:false,
+      id:newId,name,type:'task',priority,category,notes,attachments:[],location:t._pendingLocation||'',
+      date:dateVal,time,allday:false,duration:dur,scheduled:true,done:false,
       recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],
       multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
     });
+    // Phase A step 2 hotfix: register in Just Scheduled so user can undo, and so the
+    // count pill in the BD panel actually moves when they schedule from the modal.
+    const jsD=fromDk(dateVal);
+    _justScheduled.unshift({id:newId,name,dest:DAYS_S[jsD.getDay()]+' '+fmtT(time),type:'task',date:dateVal,time});
     brainDump=brainDump.filter(t=>t.id!==bdDetailId);
   } else {
-    // Keep in Brain Dump but update details
+    // Keep in Brain Dump but update details. Preserve any _pendingTime so the
+    // info the user typed in the time field doesn't vanish.
     Object.assign(t,{name,priority,category,notes});
+    if(timeVal)t._pendingTime=timeVal;
   }
   save();closeBDDetail();renderAll();
 }
