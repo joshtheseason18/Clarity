@@ -406,7 +406,6 @@
         <div class="qe-row" style="padding:0">
           <div class="qe-wrap"><input class="qe-input" id="qeInput" placeholder='Quick add: "Study 3pm" or "Essay due Friday"' autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addQuickEvent();}"><span class="qe-enter">↵</span></div>
         </div>
-        <div class="qe-confirm" id="qeConfirm" style="display:none"></div>
       </div>
       <div class="bd-list" id="bdList"></div>
     </div>
@@ -612,23 +611,40 @@
 <!-- BRAIN DUMP DETAIL MODAL -->
 <div class="modal-overlay" id="bdDetailOverlay" onclick="if(event.target===this)closeBDDetail()">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
-    <div><div class="modal-title" id="bdDetailTitle">Edit Brain Dump</div><div class="modal-sub">Unscheduled · Brain Dump</div></div>
-    <div class="fg"><label class="flbl">Task</label><textarea class="fi auto-expand" id="bdDetailName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div><div class="modal-title" id="bdDetailTitle">Edit Brain Dump</div><div class="modal-sub" id="bdDetailSub">Unscheduled · Brain Dump</div></div>
+    <!-- Phase A step 5: task/event toggle. Switches the modal's contextual fields. -->
+    <div class="bd-type-tabs">
+      <button class="bd-type-tab active" id="bdTypeTabTask" onclick="setBdDetailType('task')">Task</button>
+      <button class="bd-type-tab" id="bdTypeTabEvent" onclick="setBdDetailType('event')">Event</button>
+    </div>
+    <div class="fg"><label class="flbl" id="bdDetailNameLabel">Task</label><textarea class="fi auto-expand" id="bdDetailName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <div class="fg">
+      <label class="flbl" id="bdDetailScheduleLabel">Schedule it now <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fi" type="date" id="bdDetailDate" style="flex:1;font-size:12px;padding:6px 9px">
+        <input class="fi" type="time" id="bdDetailTime" step="900" style="flex:1;font-size:12px;padding:6px 9px">
+      </div>
+      <!-- Event-only: all-day toggle. Hidden for tasks. -->
+      <div id="bdDetailAlldayWrap" style="display:none;margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+          <input type="checkbox" id="bdDetailAllday" onchange="toggleBdDetailAllday()" style="margin:0">
+          All day
+        </label>
+      </div>
+    </div>
+    <!-- Event-only: location field. Hidden for tasks. -->
+    <div class="fg" id="bdDetailLocationWrap" style="display:none">
+      <label class="flbl">Location <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input class="fi" type="text" id="bdDetailLocation" placeholder="Where?" style="font-size:12px;padding:6px 9px">
+    </div>
     <div class="frow">
-      <div class="fg"><label class="flbl">Priority</label>
+      <!-- Priority hidden for events, matching edit modal pattern -->
+      <div class="fg" id="bdDetailPriWrap"><label class="flbl">Priority</label>
         <select class="fi" id="bdDetailPri"><option value="none">None</option><option value="high"><span style="color:#ef4444">●</span> High</option><option value="medium"><span style="color:#f59e0b">●</span> Medium</option><option value="low"><span style="color:#22c55e">●</span> Low</option></select>
       </div>
       <div class="fg"><label class="flbl">Category</label><select class="fi" id="bdDetailCat"></select></div>
     </div>
     <div class="fg"><label class="flbl">Notes</label><textarea class="fi auto-expand" id="bdDetailNotes" placeholder="Add notes, context, or details…" rows="2" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
-    <div class="fg">
-      <label class="flbl">Schedule it now</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input class="fi" type="date" id="bdDetailDate" style="flex:1;font-size:12px;padding:6px 9px">
-        <input class="fi" type="time" id="bdDetailTime" step="900" style="flex:1;font-size:12px;padding:6px 9px">
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">optional</span>
-      </div>
-    </div>
     <div class="modal-acts">
       <button class="btn-d" onclick="deleteBDFromModal()">Remove</button>
       <button class="btn-c" onclick="closeBDDetail()">Cancel</button>
@@ -1125,32 +1141,105 @@
 </div>
 
 <!-- Session Picker -->
+<!-- ══ SESSION PICKER v2 (Phase B1) ══════════════════════════════════════
+     Replaces the v1 single-row picker. Adds:
+     - Mode toggle: Single | Recurring (day-of-week chips)
+     - Duration stepper (15-min increments) instead of dropdown
+     - Block preview strip ("2:00 PM → 3:30 PM · 3 sessions · 4h 30m total")
+     - Preview panel with per-day rows showing open/conflict/duplicate states
+     - Alternative chips (earlier + later times) when a row conflicts
+     - Day picker popover for the date field (opens on click)
+     - Action button reflects what gets added: "Add 3 sessions" / "Add 2 sessions" if one is skipped
+     ═══════════════════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="sessionPickerOverlay" style="display:none" onclick="if(event.target===this)closeSessionPicker()">
-  <div class="session-picker-modal" onclick="event.stopPropagation()">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="session-picker-modal sp-v2" onclick="event.stopPropagation()">
+    <!-- Header -->
+    <div class="sp-hdr">
       <div>
         <div class="sp-task-name" id="spTaskName">Task name</div>
         <div class="sp-due-info" id="spDueInfo">Due Sunday</div>
       </div>
       <button class="sp-close" onclick="closeSessionPicker()">&times;</button>
     </div>
+
+    <!-- Existing sessions -->
     <div id="spSessionList" class="sp-session-list"></div>
-    <div style="font-size:11px;font-weight:500;color:var(--text2);margin:12px 0 6px">Add new session</div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <input type="date" class="fi" id="spDate" style="font-size:12px;flex:1">
-      <input type="time" class="fi" id="spTime" style="font-size:12px;width:90px">
-      <select class="fi" id="spDur" style="font-size:12px;width:70px">
-        <option value="30">30m</option>
-        <option value="45">45m</option>
-        <option value="60" selected>1h</option>
-        <option value="90">1.5h</option>
-        <option value="120">2h</option>
-      </select>
-      <button class="btn-s" onclick="addSessionFromPicker()" style="padding:6px 12px;font-size:11px">Add</button>
+
+    <!-- Add area: mode toggle + inputs + preview -->
+    <div class="sp-add-area">
+      <div class="sp-add-label">Add sessions</div>
+
+      <!-- Mode toggle -->
+      <div class="sp-mode-tabs">
+        <button class="sp-mode-tab active" id="spModeTabSingle" onclick="setSpMode('single')">Single</button>
+        <button class="sp-mode-tab" id="spModeTabRecurring" onclick="setSpMode('recurring')">Recurring</button>
+      </div>
+
+      <!-- Single-mode inputs -->
+      <div class="sp-single-inputs" id="spSingleInputs">
+        <div class="sp-day-field-wrap">
+          <label class="sp-field-lbl">Day</label>
+          <button class="sp-day-btn" id="spDayBtn" onclick="openSpDayPicker()">
+            <span id="spDayBtnText">Pick a day</span>
+            <span class="sp-day-btn-icon">▾</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Recurring-mode inputs (hidden by default) -->
+      <div class="sp-recurring-inputs" id="spRecurringInputs" style="display:none">
+        <div class="sp-field-lbl">Days of week</div>
+        <div class="sp-day-chips" id="spDayChips">
+          <button class="sp-day-chip" data-d="0" onclick="toggleSpRecurDay(0)">S</button>
+          <button class="sp-day-chip" data-d="1" onclick="toggleSpRecurDay(1)">M</button>
+          <button class="sp-day-chip" data-d="2" onclick="toggleSpRecurDay(2)">T</button>
+          <button class="sp-day-chip" data-d="3" onclick="toggleSpRecurDay(3)">W</button>
+          <button class="sp-day-chip" data-d="4" onclick="toggleSpRecurDay(4)">T</button>
+          <button class="sp-day-chip" data-d="5" onclick="toggleSpRecurDay(5)">F</button>
+          <button class="sp-day-chip" data-d="6" onclick="toggleSpRecurDay(6)">S</button>
+        </div>
+        <div class="sp-recur-note" id="spRecurNote">Stops at due date</div>
+      </div>
+
+      <!-- Time + duration row (shared by both modes) -->
+      <div class="sp-time-row">
+        <div class="sp-field-col">
+          <label class="sp-field-lbl">Start time</label>
+          <input type="time" class="fi sp-time-input" id="spTime" step="900" value="14:00" onchange="onSpInputChange()">
+        </div>
+        <div class="sp-field-col">
+          <label class="sp-field-lbl">Duration</label>
+          <div class="sp-dur-stepper">
+            <button class="sp-dur-btn" onclick="stepSpDur(-15)">−</button>
+            <span class="sp-dur-val" id="spDurVal">1h</span>
+            <button class="sp-dur-btn" onclick="stepSpDur(15)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Block preview strip -->
+      <div class="sp-block-preview" id="spBlockPreview"></div>
+
+      <!-- Preview panel: per-day rows -->
+      <div class="sp-preview-panel" id="spPreviewPanel"></div>
+
+      <!-- Action -->
+      <button class="sp-add-btn" id="spAddBtn" onclick="commitSessions()">Add 1 session</button>
     </div>
-    <div id="spConflict" style="margin-top:8px"></div>
-    <div style="margin-top:12px;text-align:right">
-      <span style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline" onclick="closeSessionPicker();openBDDetail(_sessionPickerBdId)">Open full editor</span>
+
+    <!-- Day picker popover (positioned absolutely inside modal) -->
+    <div class="sp-day-picker-pop" id="spDayPickerPop" style="display:none">
+      <div class="sp-dp-hdr">
+        <button class="sp-dp-nav" onclick="spDayPickerNav(-1)">‹</button>
+        <span class="sp-dp-month" id="spDpMonth"></span>
+        <button class="sp-dp-nav" onclick="spDayPickerNav(1)">›</button>
+      </div>
+      <div class="sp-dp-grid" id="spDpGrid"></div>
+      <div class="sp-dp-legend">
+        <span><span class="sp-dp-dot dp-today"></span>Today</span>
+        <span><span class="sp-dp-dot dp-session"></span>Has session</span>
+        <span><span class="sp-dp-dot dp-deadline"></span>Deadline</span>
+      </div>
     </div>
   </div>
 </div>

@@ -911,27 +911,8 @@ header{
 .qe-add-btn{font-size:11px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;transition:opacity .12s}
 .qe-add-btn:hover{opacity:.85}
 .qe-hint{font-size:10px;color:var(--text3);margin-top:4px;font-style:italic;line-height:1.5}
-.qe-confirm{
-  display:flex;align-items:flex-start;gap:10px;margin-top:8px;
-  background:var(--accent-pale);border:1px solid var(--accent);
-  border-radius:10px;padding:10px 12px;
-}
-.qe-confirm-icon{
-  width:22px;height:22px;border-radius:50%;background:var(--accent);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
-}
-.qe-confirm-body{flex:1;min-width:0}
-.qe-confirm-title{font-size:13px;font-weight:600;color:var(--text)}
-.qe-confirm-detail{font-size:11px;color:var(--text2);margin-top:2px}
-.qe-confirm-actions{display:flex;gap:6px;margin-top:6px}
-.qe-confirm-btn{
-  font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;
-  border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .12s;
-}
-.qe-edit{background:var(--surface3);color:var(--text2)}
-.qe-edit:hover{opacity:.8}
-.qe-done{background:var(--accent);color:#fff}
-.qe-done:hover{opacity:.85}
+/* Phase A audit cleanup: .qe-confirm rules removed (deprecated by Step 3 — quick-add no
+   longer auto-schedules so the confirmation card is gone). */
 /* When today has both task dot and event dot, offset task dot left */
 .ym-day.today.has-event .ym-dot{left:calc(50% - 3px)}
 .ym-day.today.has-event::after{background:rgba(255,255,255,.7);bottom:3px}
@@ -990,7 +971,9 @@ header{
 .week-scroll{flex:1;overflow-y:auto}
 .week-grid{display:grid;grid-template-columns:68px repeat(7,1fr)}
 .wk-time-col{border-right:1px solid var(--border)}
-.time-lbl{height:48px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px 7px 0 0;font-size:10px;color:var(--text);font-weight:700;letter-spacing:.2px;white-space:nowrap}
+/* Phase A step 2 hotfix: time labels MUST match .wk-slot height (54px) or the
+   per-slot drift accumulates and tasks render at the wrong visual time. Was 48px. */
+.time-lbl{height:54px;display:flex;align-items:flex-start;justify-content:flex-end;padding:3px 7px 0 0;font-size:10px;color:var(--text);font-weight:700;letter-spacing:.2px;white-space:nowrap}
 .wk-day-col{border-right:1px solid var(--border)}
 .wk-slot{height:54px;border-bottom:1px solid var(--border);padding:2px 3px;cursor:pointer;transition:background .1s;display:flex;flex-direction:column;gap:1px;position:relative}
 .wk-slot:hover{background:var(--accent-pale)}
@@ -1905,20 +1888,24 @@ header{
   border:1px solid rgba(245,158,11,.25);
 }
 /* ══ SLOT FULL / DUPLICATE TOAST ════════════════ */
+/* Phase A audit v3: bottom:24px puts the toast outside the mobile sidebar's vertical
+   span (sidebar occupies [56px, 56+55vh]); z-index 9100 keeps it visible above all
+   modals. v2's bottom:80px was inside-sidebar — visually overlapped sidebar content. */
 .slot-warn-toast{
   position:fixed;bottom:24px;left:50%;
   transform:translateX(-50%) translateY(12px);
   background:var(--red);color:#fff;
-  padding:9px 18px;border-radius:99px;
+  padding:9px 18px;border-radius:14px;
   font-size:12px;font-weight:600;
   z-index:9100;pointer-events:none;
   opacity:0;transition:opacity .2s,transform .2s;
-  white-space:nowrap;
+  white-space:normal;text-align:center;line-height:1.45;
+  max-width:min(420px,90vw);
   box-shadow:0 4px 16px rgba(239,68,68,.35);
   display:flex;align-items:center;gap:8px;
 }
 .slot-warn-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
-.slot-warn-toast.persistent{border-radius:12px;white-space:normal;max-width:420px;text-align:left;padding:10px 14px}
+.slot-warn-toast.persistent{padding:10px 14px;text-align:left}
 .warn-toast-msg{flex:1}
 .warn-toast-x{background:transparent;border:none;color:#fff;font-size:18px;font-weight:700;cursor:pointer;padding:0 2px;line-height:1;opacity:.7;flex-shrink:0;font-family:'DM Sans',sans-serif}
 .warn-toast-x:hover{opacity:1}
@@ -2686,7 +2673,10 @@ header{
   .wk-day-head{padding:5px 2px}
   .wdh-name{font-size:9px}
   .wdh-num{font-size:12px}
-  .wk-time-col .time-lbl,.time-lbl{font-size:9px;padding:0 2px}
+  /* Phase A audit Bug 11: mobile week-view height was 54px (cramped). Now 44px to match
+     JS WK_SLOT_H mobile value. Time labels MUST match exactly or task blocks drift. */
+  .wk-time-col .time-lbl,.time-lbl{font-size:9px;padding:0 2px;height:44px}
+  .wk-slot{height:44px}
   .wk-task-block-name{font-size:10px}
   .wk-task-block-dur{font-size:9px}
   .wk-task-compact .wk-task-block-name{font-size:9px}
@@ -3111,6 +3101,13 @@ header{
 .js-x{font-size:11px;color:var(--text3);cursor:pointer;flex-shrink:0;margin-top:1px}
 .js-x:hover{color:#E24B4A}
 
+/* Phase A step 5: BD detail modal task/event toggle */
+.bd-type-tabs{display:flex;gap:0;background:var(--surface2);border-radius:8px;padding:3px;margin-bottom:14px}
+.bd-type-tab{flex:1;background:transparent;border:0;font-size:12px;font-weight:500;color:var(--text2);padding:6px 12px;border-radius:6px;cursor:pointer;transition:all .12s;font-family:inherit}
+.bd-type-tab:hover{color:var(--text)}
+.bd-type-tab.active{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px var(--shadow-color)}
+[data-dark="true"] .bd-type-tab.active{background:var(--surface3)}
+
 /* ══ Phase A step 2: BD accordions (Tasks / Events / Just Scheduled) ══ */
 /* Card layout fix: two earlier .bd-card rules conflicted on flex-direction
    (one set column, the other didn't override). Lock it to row here so the
@@ -3187,6 +3184,106 @@ header{
 
 /* ══ NEW: Session Picker Modal ════════════════ */
 .session-picker-modal{background:var(--surface);border-radius:16px;padding:20px;max-width:380px;width:90%;position:relative}
+/* ══ Phase B1: session picker v2 styles ═══════════════════════════════ */
+.sp-v2{max-width:440px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.sp-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;flex-shrink:0}
+.sp-close{background:none;border:0;font-size:22px;color:var(--text3);cursor:pointer;line-height:1;padding:0 4px;font-family:inherit}
+.sp-close:hover{color:var(--text)}
+.sp-v2 .sp-session-list{flex-shrink:0;max-height:120px;overflow-y:auto;margin:6px 0 0}
+.sp-add-area{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);overflow-y:auto;flex:1;min-height:0}
+.sp-add-label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+
+/* Mode toggle (segmented control) */
+.sp-mode-tabs{display:flex;background:var(--surface2);border-radius:8px;padding:3px;margin-bottom:12px}
+.sp-mode-tab{flex:1;background:transparent;border:0;font-size:12px;font-weight:500;color:var(--text2);padding:6px 10px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .12s}
+.sp-mode-tab:hover{color:var(--text)}
+.sp-mode-tab.active{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px var(--shadow-color)}
+[data-dark="true"] .sp-mode-tab.active{background:var(--surface3)}
+
+/* Field labels and rows */
+.sp-field-lbl{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px;display:block}
+.sp-day-field-wrap{margin-bottom:10px}
+.sp-day-btn{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit}
+.sp-day-btn:hover{border-color:var(--accent)}
+.sp-day-btn-icon{color:var(--text3);font-size:10px}
+
+/* Recurring day chips */
+.sp-day-chips{display:flex;gap:5px;margin-bottom:6px}
+.sp-day-chip{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 0;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .12s}
+.sp-day-chip:hover{border-color:var(--accent)}
+.sp-day-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sp-recur-note{font-size:10px;color:var(--text3);font-style:italic;margin-bottom:10px}
+
+/* Time + duration row */
+.sp-time-row{display:flex;gap:10px;margin:10px 0}
+.sp-field-col{flex:1}
+.sp-time-input{width:100%;font-size:12px;padding:7px 9px}
+.sp-dur-stepper{display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;height:32px}
+.sp-dur-btn{background:transparent;border:0;width:32px;height:30px;font-size:14px;color:var(--text);cursor:pointer;font-family:inherit;font-weight:600}
+.sp-dur-btn:hover{background:var(--surface3)}
+.sp-dur-val{flex:1;text-align:center;font-size:12px;font-weight:500;color:var(--text)}
+
+/* Block preview strip */
+.sp-block-preview{margin:10px 0 8px}
+.sp-block-strip{font-size:11px;color:var(--text2);background:var(--surface2);padding:7px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;justify-content:center;font-weight:500}
+.sp-block-sep{color:var(--text3)}
+.sp-block-empty{font-size:10px;color:var(--text3);font-style:italic;text-align:center;padding:6px}
+
+/* Preview rows */
+.sp-preview-panel{margin:0 0 10px}
+.sp-preview-row{padding:7px 10px;border-radius:7px;background:var(--surface2);margin:4px 0;font-size:11px}
+.sp-preview-row.sp-row-dim{opacity:.5}
+.sp-row-main{display:flex;align-items:center;gap:8px}
+.sp-row-day{font-weight:500;color:var(--text);min-width:90px}
+.sp-row-status{flex:1}
+.sp-stat-open{color:#27500A}
+[data-dark="true"] .sp-stat-open{color:#A8D87C}
+.sp-stat-conflict{color:#854F0B}
+[data-dark="true"] .sp-stat-conflict{color:#FFC57A}
+.sp-stat-dup{color:#854F0B}
+.sp-stat-skipped{color:var(--text3);font-style:italic}
+.sp-row-skip,.sp-row-restore{font-size:10px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:auto;padding:0 4px}
+.sp-row-skip:hover,.sp-row-restore:hover{opacity:.7}
+.sp-row-alts{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+.sp-alt-chip{background:#FAEEDA;color:#854F0B;border:0;border-radius:99px;padding:3px 9px;font-size:10px;font-weight:500;cursor:pointer;font-family:inherit;transition:opacity .12s}
+.sp-alt-chip:hover{opacity:.8}
+.sp-alt-chip.sp-alt-skip{background:var(--surface3);color:var(--text2)}
+[data-dark="true"] .sp-alt-chip{background:#3D2D14;color:#FFC57A}
+[data-dark="true"] .sp-alt-chip.sp-alt-skip{background:var(--surface3);color:var(--text2)}
+
+/* Add button */
+.sp-add-btn{width:100%;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;transition:opacity .12s}
+.sp-add-btn:hover:not(:disabled){opacity:.9}
+.sp-add-btn:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed}
+
+/* Day picker popover */
+.sp-day-picker-pop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:10;width:280px}
+[data-dark="true"] .sp-day-picker-pop{background:var(--surface2)}
+.sp-dp-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sp-dp-month{font-size:12px;font-weight:600;color:var(--text)}
+.sp-dp-nav{background:transparent;border:0;width:24px;height:24px;font-size:14px;color:var(--text2);cursor:pointer;border-radius:6px;font-family:inherit}
+.sp-dp-nav:hover{background:var(--surface2);color:var(--text)}
+.sp-dp-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.sp-dp-dow span{font-size:9px;font-weight:600;color:var(--text3);text-align:center;text-transform:uppercase;letter-spacing:.4px}
+.sp-dp-cells{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.sp-dp-cell{position:relative;aspect-ratio:1;background:transparent;border:1px solid transparent;border-radius:6px;font-size:11px;color:var(--text);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;font-weight:500}
+.sp-dp-cell:hover{background:var(--surface2)}
+.sp-dp-cell.is-today{font-weight:700;border-color:var(--text2)}
+.sp-dp-cell.is-past{color:var(--text3);opacity:.6}
+.sp-dp-cell.is-due{color:var(--red);font-weight:700}
+.sp-dp-cell.is-due::after{content:'due';position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--red);font-weight:600}
+.sp-dp-cell.has-session::before{content:'';position:absolute;top:2px;right:3px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.sp-dp-cell.past-due{opacity:.4}
+.sp-dp-cell.is-sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sp-dp-cell.is-sel:hover{background:var(--accent-dim,var(--accent))}
+.sp-dp-legend{display:flex;justify-content:space-around;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text3)}
+.sp-dp-legend span{display:flex;align-items:center;gap:4px}
+.sp-dp-dot{width:6px;height:6px;border-radius:50%}
+.sp-dp-dot.dp-today{background:var(--text2)}
+.sp-dp-dot.dp-session{background:var(--accent)}
+.sp-dp-dot.dp-deadline{background:var(--red)}
+
+/* Dark mode keeps the modal max-height tall enough for the picker */
 .sp-task-name{font-size:15px;font-weight:500;color:var(--text)}
 .sp-due-info{font-size:11px;color:var(--text2);margin-top:2px}
 .sp-session-list{margin:8px 0}

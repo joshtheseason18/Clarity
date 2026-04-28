@@ -12,7 +12,30 @@ let _isGuest=false;
 // Signed in (free): data saves, some features locked
 // Pro (signed in + paid): everything
 function isMid(){return !_isGuest && !!_authUser;}
-function isPro(){return !_isGuest && !!_authUser;} // Phase 1: signed-in = Pro for testing. Phase 2: check _subscription?.status
+// Phase A audit Bug 13 fix: until Stripe lands in Phase H, isPro() needs a way to
+// distinguish "I'm signed in" from "I have a Pro subscription". A localStorage flag
+// lets Josh manually flip between Mid and Pro to test both code paths.
+//
+//   In DevTools console:
+//     localStorage.setItem('clarity_force_tier','mid')   → forces Mid (signed-in, no Pro)
+//     localStorage.setItem('clarity_force_tier','pro')   → forces Pro
+//     localStorage.removeItem('clarity_force_tier')      → defaults to Pro for testing
+//
+// When Stripe ships, replace the default-true return with a real subscription check:
+//   return !_isGuest && !!_authUser && !!_subscription?.active;
+function isPro(){
+  if(_isGuest)return false;
+  if(!_authUser)return false;
+  // Manual override for testing the Mid path — read every time, not cached, so console
+  // changes take effect on next render without a refresh.
+  try{
+    const override=localStorage.getItem('clarity_force_tier');
+    if(override==='mid')return false;
+    if(override==='pro')return true;
+  }catch{}
+  // Default: Phase 1 behavior — signed-in = Pro
+  return true;
+}
 function canUsePro(feature){
   // Guests can try everything (no save anyway)
   if(_isGuest)return true;
@@ -794,7 +817,7 @@ function eventRow(t,isPast=false){
         ${dateLabel?`<span>${dateLabel}</span>`:''}
         ${timeLabel?`<span style="font-weight:600;color:var(--accent)">${timeLabel}</span>`:''}
         ${t.location?`<span>${IC_PIN} ${esc(t.location)}</span>`:''}
-        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${catById(t.category)?.name||t.category}</span>`:''}
+        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${esc(catById(t.category)?.name||t.category)}</span>`:''}
       </div>
     </div>
     <div class="cat-edit-hint" onclick="event.stopPropagation();openCatEdit('${t.id}','${idate}',event)">Edit</div>
@@ -1479,7 +1502,7 @@ function tasksOn(dateKey){const d=fromDk(dateKey);return expandedTasks(d,d).filt
 
 function buildCatOptions(selId,val){
   const sel=document.getElementById(selId);if(!sel)return;
-  sel.innerHTML=`<option value="none">None</option>`+categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  sel.innerHTML=`<option value="none">None</option>`+categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   if(val)sel.value=val;
 }
 function buildAllCatSelects(val){buildCatOptions('fCat',val)}
@@ -2220,7 +2243,11 @@ function renderWeek(){
   document.getElementById('weekAlldayRow').innerHTML=alldayRowHtml;
 
   const sl=slots();
-  const WK_SLOT_H=54;
+  // Phase A audit Bug 11 fix: week-view slot height was hardcoded at 54px, but day view
+  // uses 64px on screens ≤640px (line 2598). Match that. JS height drives task-block
+  // positioning math, so it must agree with the CSS .wk-slot height — handled below
+  // with an inline style override.
+  const WK_SLOT_H=window.innerWidth<=640?44:54;
   let g=`<div class="wk-time-col">${sl.map(s=>`<div class="time-lbl">${s.m===0?fmtT(sk(s.h,s.m)):''}</div>`).join('')}</div>`;
   days.forEach(d=>{
     const k=dk(d);
@@ -2852,7 +2879,7 @@ function renderCatChips(){
   categories.forEach(c=>{
     const isActive=catFilter===c.id;
     html+=`<div class="cat-chip${isActive?' active':''}" style="${isActive?`background:${c.color}`:'background:var(--surface3)'};${isActive?'':'color:var(--text2)'}" onclick="setCF('${c.id}')">
-      ${c.name}${!c.locked?`<button class="cat-chip-del" onclick="delCat('${c.id}',event)">×</button>`:''}
+      ${esc(c.name)}${!c.locked?`<button class="cat-chip-del" onclick="delCat('${c.id}',event)">×</button>`:''}
     </div>`;
   });
   html+=`</div>`;
@@ -3031,7 +3058,7 @@ function catHabitRow(t){
       ${changeNote}
       <div class="cat-task-meta" style="margin-top:3px">
         ${t.priority&&t.priority!=='none'?`<span class="mbadge ${t.priority}">${t.priority}</span>`:''}
-        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${catById(t.category)?.name||t.category}</span>`:''}
+        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${esc(catById(t.category)?.name||t.category)}</span>`:''}
         ${t.date?`<span style="font-size:10px;color:var(--text3)">Next: ${t.date}${t.time?' @ '+fmtT(t.time):''}</span>`:''}
       </div>
     </div>
@@ -3067,7 +3094,7 @@ function catRow(t){
         ${t.date?`<span>${t.date}${t.time?' @ '+fmtT(t.time):''}</span>`:''}
         ${!t.scheduled&&isBd?`<span>Brain Dump</span>`:''}
         ${t.priority&&t.priority!=='none'?`<span class="mbadge ${t.priority}">${t.priority}</span>`:''}
-        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${catById(t.category)?.name||t.category}</span>`:''}
+        ${t.category&&t.category!=='none'?`<span class="mbadge" style="background:${cc}1a;color:${cc}">${esc(catById(t.category)?.name||t.category)}</span>`:''}
         ${t.recur?`<span class="mbadge recur">↻ ${recurLbl(t)}</span>`:''}
       </div>
     </div>
@@ -3472,7 +3499,7 @@ function openFocusOverlay(){
   // Populate content
   document.getElementById('foTaskName').textContent=t.name;
   const cc=catColor(t.category);
-  const catName=catById(t.category)?.name||'';
+  const catName=esc(catById(t.category)?.name||'');
   const timeStr=t.time?fmtT(t.time)+' – '+fmtT(pad(Math.floor(((t.time.split(':').map(Number)[0]*60+t.time.split(':').map(Number)[1])+(t.duration||30))/60)%24)+':'+pad(((t.time.split(':').map(Number)[0]*60+t.time.split(':').map(Number)[1])+(t.duration||30))%60)):'';
   document.getElementById('foTaskMeta').innerHTML=`<span class="fo-cat-dot" style="background:${cc}"></span>${catName}${timeStr?' · '+timeStr:''}`;
   // Set mode toggle
@@ -3585,7 +3612,7 @@ function updatePlayBtnIcon(){
 function updateFocusMetaTime(){
   const t=tasks.find(t=>t.id===_focusTaskId);if(!t)return;
   const cc=catColor(t.category);
-  const catName=catById(t.category)?.name||'';
+  const catName=esc(catById(t.category)?.name||'');
   let timeStr='';
   if(t.time){
     const[h,m]=t.time.split(':').map(Number);
@@ -3979,13 +4006,17 @@ let _overdueDismissedToday=false;
 function dismissOverdueBanners(){
   const todayKey=dk(new Date());
   const overdueTasks=brainDump.filter(t=>t.dueDate&&t.dueDate<todayKey&&!t.done);
-  const dismissed=JSON.parse(localStorage.getItem('clarity_overdue_dismiss')||'{}');
-  overdueTasks.forEach(t=>{dismissed[t.id]=todayKey;});
-  localStorage.setItem('clarity_overdue_dismiss',JSON.stringify(dismissed));
+  // Phase A audit Bug 20: this dict grows over time as users dismiss banners. On a
+  // full disk, setItem can throw QuotaExceededError. Catch and warn instead of crashing.
+  try{
+    const dismissed=JSON.parse(localStorage.getItem('clarity_overdue_dismiss')||'{}');
+    overdueTasks.forEach(t=>{dismissed[t.id]=todayKey;});
+    localStorage.setItem('clarity_overdue_dismiss',JSON.stringify(dismissed));
+  }catch(e){console.warn('Could not save overdue dismissal:',e);}
   renderDay();
 }
 function dismissDueWeekBanner(){
-  localStorage.setItem('clarity_due_week_dismiss',dk(new Date()));
+  try{localStorage.setItem('clarity_due_week_dismiss',dk(new Date()));}catch(e){}
   const el=document.querySelector('.overdue-banner.overdue-amber');
   if(el)el.remove();
 }
@@ -4096,6 +4127,16 @@ function findOpenSlots(dateKey,count,durations){
     const bStart=bh*60+bm,bEnd=beh*60+bem;
     for(let mm=bStart;mm<bEnd;mm+=15)occupied.add(mm);
   });
+  // Phase A audit Bug 24 fix: when placing tasks for TODAY, mark all minutes before
+  // "now + 15min" as occupied so scheduleSelectedItems can't put a task at 8 AM if it's
+  // currently 4 PM. The +15 buffer rounds up to the next quarter-hour so we don't try
+  // to schedule into a slot that's about to start.
+  const todayKey=dk(new Date());
+  if(dateKey===todayKey){
+    const now=new Date();
+    const nowMins=now.getHours()*60+now.getMinutes()+15; // +15min buffer
+    for(let mm=0;mm<nowMins;mm+=15)occupied.add(mm);
+  }
   // Find open slots within windows
   const slots=[];
   const allWindows=windows.length?windows:[{start:'08:00',end:'18:00'}]; // fallback if no routine
@@ -5111,11 +5152,10 @@ function parseQuickEvent(raw){
   if(!name)return null;
   return{name,date:date||null,time:allday?null:(time||null),allday,location,duration,recur,recurN,recurU};
 }
-let _lastQeId=null;
 function addQuickEvent(){
   const input=document.getElementById('qeInput');if(!input)return;
   const raw=input.value.trim();if(!raw){showToast('Type a task or event name');input.focus();return;}
-  
+
   // ── Check for "due" keyword → deadline task to Brain Dump ──
   const dueMatch=raw.match(/\bdue\s+(.+)$/i);
   if(dueMatch){
@@ -5129,10 +5169,10 @@ function addQuickEvent(){
       return;
     }
   }
-  
+
   const parsed=parseQuickEvent(raw);
   if(!parsed){
-    // Couldn't parse — just add as plain brain dump item
+    // Couldn't parse — plain task to BD
     brainDump.push({id:genId(),name:raw,type:'task',category:'none',priority:'none',notes:'',subtasks:[]});
     input.value='';save();renderAll();
     showToast('"'+raw+'" added to Brain Dump');
@@ -5142,74 +5182,47 @@ function addQuickEvent(){
 
   const hasDate=!!parsed.date;
   const hasTime=!!parsed.time||parsed.allday;
-  const isComplete=hasDate&&hasTime;
+  const isEvent=hasDate||hasTime||parsed.allday||!!parsed.location;
   const dur=parsed.duration||60;
 
-  // ── Incomplete → save to Brain Dump for later ──
-  if(!isComplete){
-    const bdItem={
-      id:genId(),name:parsed.name,type:'task',category:'none',priority:'none',
-      notes:'',subtasks:[],
-      _pendingDate:parsed.date||'',_pendingTime:parsed.time||'',
-      _pendingLocation:parsed.location||'',_pendingAllday:parsed.allday,_pendingDuration:dur,
-      _pendingRecur:!!parsed.recur,_pendingRecurN:parsed.recurN||1,_pendingRecurU:parsed.recurU||'day'
-    };
-    brainDump.push(bdItem);
-    save();renderAll();
-    if(!hasDate&&!hasTime){
-      showToast('"'+parsed.name+'" added to Brain Dump');
+  // ── Phase A step 3: ALL parsed items land in Brain Dump first.
+  // Previously, complete events ("Coffee Friday 3pm") auto-scheduled and bypassed BD.
+  // Now they land in the Events accordion as "ready to schedule" — user makes the
+  // explicit schedule decision via the Schedule button or drag.
+  // The qeConfirm card is removed since there's nothing to confirm now.
+  const newItem={
+    id:genId(),
+    name:parsed.name,
+    type:isEvent?'event':'task',
+    category:'none',priority:'none',notes:'',subtasks:[],
+    _pendingDate:parsed.date||'',
+    _pendingTime:parsed.time?snapTo15(parsed.time):'',
+    _pendingLocation:parsed.location||'',
+    _pendingAllday:!!parsed.allday,
+    _pendingDuration:Math.round(dur/15)*15||15,
+    _pendingRecur:!!parsed.recur,
+    _pendingRecurN:parsed.recurN||1,
+    _pendingRecurU:parsed.recurU||'day'
+  };
+  brainDump.push(newItem);
+  save();renderAll();
+
+  // Toast wording adapts to what we have:
+  // - Complete event (date+time): "added to Events — ready to schedule"
+  // - Partial event (one of date/time): "added to Events — needs date/time"
+  // - Plain task: "added to Brain Dump"
+  if(isEvent){
+    if(hasDate&&hasTime){
+      showToast('"'+parsed.name+'" added to Events — ready to schedule');
     } else {
       const missing=[];
       if(!hasDate)missing.push('date');
       if(!hasTime)missing.push('time');
-      showToast('"'+parsed.name+'" saved to Brain Dump — needs '+missing.join(' & '));
+      showToast('"'+parsed.name+'" added to Events — needs '+missing.join(' & '));
     }
-    return;
+  } else {
+    showToast('"'+parsed.name+'" added to Brain Dump');
   }
-
-  // ── Complete → schedule with draft flag ──
-  const newId=genId();
-  _lastQeId=newId;
-  const qeTime=parsed.allday?null:(parsed.time?snapTo15(parsed.time):null);
-  const qeDur=Math.round((dur)/15)*15||15;
-  tasks.push({id:newId,name:parsed.name,type:'event',priority:'none',category:'none',notes:'',date:parsed.date,time:qeTime,allday:parsed.allday,duration:qeDur,scheduled:true,done:false,location:parsed.location||'',recur:!!parsed.recur,recurN:parsed.recurN||1,recurU:parsed.recurU||'day',recurDays:[],subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,_draft:true});
-  // Track in Just Scheduled
-  const jsD=fromDk(parsed.date);
-  _justScheduled.unshift({id:newId,name:parsed.name,dest:DAYS_S[jsD.getDay()]+' '+(parsed.allday?'all day':fmtT(qeTime)),type:'event',date:parsed.date,time:qeTime});
-  save();renderAll();
-  // Show confirmation card
-  const d=fromDk(parsed.date);
-  const dateStr=DLONG[d.getDay()]+', '+MONTHS_S[d.getMonth()]+' '+d.getDate();
-  const timeStr=parsed.allday?'All Day':fmtT(parsed.time);
-  const locStr=parsed.location?` · ${esc(parsed.location)}`:'';
-  const durStr=!parsed.allday&&dur!==60?' · '+durLabel(dur):'';
-  const recurStr=parsed.recur?(parsed.recurU==='year'?' · ↻ yearly':parsed.recurU==='month'?' · ↻ monthly':' · ↻ recurring'):'';
-  const el=document.getElementById('qeConfirm');
-  if(el){
-    el.innerHTML=`<div class="qe-confirm-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l3 3 5-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-      <div class="qe-confirm-body">
-        <div class="qe-confirm-title">${esc(parsed.name)}</div>
-        <div class="qe-confirm-detail">${dateStr} · ${timeStr}${durStr}${recurStr}${locStr}</div>
-        <div class="qe-confirm-actions">
-          <button class="qe-confirm-btn qe-edit" onclick="openQeEdit()">Edit details</button>
-          <button class="qe-confirm-btn qe-done" onclick="dismissQeConfirm()">Done</button>
-        </div>
-      </div>`;
-    el.style.display='flex';
-  }
-}
-function dismissQeConfirm(){
-  const el=document.getElementById('qeConfirm');
-  if(el){el.style.display='none';el.innerHTML='';}
-  // User accepted — clear draft flag
-  if(_lastQeId){const t=tasks.find(t=>t.id===_lastQeId);if(t)delete t._draft;save();}
-}
-function openQeEdit(){
-  dismissQeConfirm();
-  if(!_lastQeId)return;
-  const t=tasks.find(t=>t.id===_lastQeId);if(!t)return;
-  const fakeEvent={stopPropagation:()=>{}};
-  openEdit(_lastQeId,t.date,fakeEvent);
 }
 
 // ── Phase A step 2: BD accordion state & event detection ──
@@ -5252,7 +5265,7 @@ function renderBdCard(t,mid){
     if(!hasDate)badges+=`<span class="bd-badge bd-badge-miss">needs date</span>`;
     if(!hasTime)badges+=`<span class="bd-badge bd-badge-miss">needs time</span>`;
   }
-  if(t.category&&t.category!=='none'){const cat=catById(t.category);badges+=`<span class="bd-badge" style="background:${cc}1a;color:${cc}">${cat?cat.name:t.category}</span>`;}
+  if(t.category&&t.category!=='none'){const cat=catById(t.category);badges+=`<span class="bd-badge" style="background:${cc}1a;color:${cc}">${esc(cat?cat.name:t.category)}</span>`;}
 
   const chkHtml=mid?`<div class="bd-chk${sel?' on':''}${!ready&&isEvent?' dis':''}" onclick="event.stopPropagation();toggleBdSel('${t.id}',${ready||!isEvent})" data-id="${t.id}"></div>`:'';
 
@@ -5264,7 +5277,7 @@ function renderBdCard(t,mid){
       <div class="bd-name">${esc(t.name)}</div>
       <div class="bd-meta">${badges}<button class="bd-del" onclick="event.stopPropagation();delBD('${t.id}')">Remove</button></div>
     </div>
-    <span class="bd-grip">::</span>
+    <span class="bd-grip" onclick="event.stopPropagation()">::</span>
   </div>`;
 }
 
@@ -5456,14 +5469,124 @@ function toggleBdSel(id,allowed){
 
 function batchScheduleSelected(){
   if(!_bdSelectedIds.size)return;
-  // Phase A step 1: tier-based routing.
-  // Pro + guest → AI Plan My Day path (current behavior).
-  // Mid (signed-in, non-Pro) → Pro prompt for now.
-  // TODO Phase A step 4: Mid branch should route to scheduleSelectedItems()
-  //                       (algorithmic placer) once that function ships.
-  if(!canUsePro('Plan My Day')){showProPrompt('Plan My Day');return;}
-  // Open Plan My Day with pre-selected items
-  openAISchedule(_bdSelectedIds);
+  // Phase A step 4: tier-based routing.
+  // Pro + guest → AI Plan My Day path.
+  // Mid (signed-in, non-Pro) → algorithmic placer.
+  if(canUsePro('Plan My Day')){
+    openAISchedule(_bdSelectedIds);
+  } else {
+    scheduleSelectedItems();
+  }
+}
+
+// ── Phase A step 4: algorithmic placer for Mid-tier batch schedule ──
+// No AI. Honors existing _pendingDate / _pendingTime when present, otherwise places
+// into the next open slot today (or tomorrow if today is too full / past business hours).
+// Uses findOpenSlots() so it respects routines and existing tasks.
+function scheduleSelectedItems(){
+  const ids=Array.from(_bdSelectedIds);
+  if(!ids.length)return;
+  const items=brainDump.filter(t=>ids.includes(t.id));
+  if(!items.length){_bdSelectedIds.clear();renderBD();return;}
+
+  // Step 1: bucket items by date.
+  const now=new Date();
+  const fallbackDate=now.getHours()>=18?dk(addDays(now,1)):dk(now);
+  const buckets={};
+  items.forEach(t=>{
+    const targetDate=t._pendingDate||fallbackDate;
+    if(!buckets[targetDate])buckets[targetDate]=[];
+    buckets[targetDate].push(t);
+  });
+
+  // Step 2: place items in each bucket.
+  const placed=[];
+  const skipped=[];
+  Object.keys(buckets).sort().forEach(dateKey=>{
+    const dayItems=buckets[dateKey];
+    // Items with explicit times go first ("fixed" — try their time, fall back to find-open)
+    const fixedTimeItems=dayItems.filter(t=>t._pendingTime);
+    const flexItems=dayItems.filter(t=>!t._pendingTime);
+
+    fixedTimeItems.forEach(t=>{
+      const wantedTime=snapTo15(t._pendingTime);
+      const dur=t._pendingDuration||30;
+      const conflict=checkSessionConflicts(dateKey,wantedTime,dur);
+      if(!conflict){
+        placeItemOnCalendar(t,dateKey,wantedTime,dur,placed);
+      } else {
+        const openSlots=findOpenSlots(dateKey,1,[dur]);
+        if(openSlots.length){
+          placeItemOnCalendar(t,dateKey,openSlots[0],dur,placed);
+        } else {
+          skipped.push(t);
+        }
+      }
+    });
+
+    if(flexItems.length){
+      const durations=flexItems.map(t=>t._pendingDuration||30);
+      const openSlots=findOpenSlots(dateKey,flexItems.length,durations);
+      flexItems.forEach((t,i)=>{
+        if(openSlots[i]){
+          placeItemOnCalendar(t,dateKey,openSlots[i],durations[i],placed);
+        } else {
+          skipped.push(t);
+        }
+      });
+    }
+  });
+
+  // Step 3: clean up
+  if(placed.length){
+    const placedIds=new Set(placed.map(p=>p.bdId));
+    brainDump=brainDump.filter(t=>!placedIds.has(t.id));
+  }
+  _bdSelectedIds.clear();
+  save();renderAll();
+
+  // Step 4: feedback
+  if(placed.length&&!skipped.length){
+    showToast(placed.length+' item'+(placed.length!==1?'s':'')+' scheduled');
+  } else if(placed.length&&skipped.length){
+    showToast(placed.length+' scheduled, '+skipped.length+" couldn't fit today — try splitting across days");
+  } else if(skipped.length){
+    showWarnToast("Couldn't find open slots today — try a different day or shorter duration");
+  }
+}
+
+// Helper for scheduleSelectedItems: pushes a task to the calendar AND _justScheduled.
+function placeItemOnCalendar(bdItem,dateKey,time,dur,placedTracker){
+  const newId=genId();
+  const isEv=isBdEvent(bdItem);
+  tasks.push({
+    id:newId,name:bdItem.name,
+    type:isEv?'event':'task',
+    priority:bdItem.priority||'none',
+    category:bdItem.category||'none',
+    notes:bdItem.notes||'',
+    attachments:bdItem.attachments||[],
+    location:bdItem._pendingLocation||bdItem.location||'',
+    date:dateKey,time:time,
+    allday:!!bdItem._pendingAllday,
+    duration:dur,scheduled:true,done:false,
+    recur:!!bdItem._pendingRecur,
+    recurN:bdItem._pendingRecurN||1,
+    recurU:bdItem._pendingRecurU||'day',
+    recurDays:[],
+    subtasks:bdItem.subtasks||[],
+    doneOverrides:[],deletedOccurrences:[],
+    multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
+  });
+  recordPattern(bdItem.name,dur,bdItem.category||'none',time);
+  const jsD=fromDk(dateKey);
+  _justScheduled.unshift({
+    id:newId,name:bdItem.name,
+    dest:DAYS_S[jsD.getDay()]+' '+(bdItem._pendingAllday?'all day':fmtT(time)),
+    type:isEv?'event':'task',
+    date:dateKey,time:time
+  });
+  placedTracker.push({bdId:bdItem.id,newId});
 }
 
 // ══ DUE DATE HELPERS ════════════════════════════
@@ -5543,7 +5666,8 @@ function renderDeadlines(){
   
   html+=section('overdue','Overdue',overdue,'dl-red',true);
   html+=section('dueWeek','Due this week',dueWeek,'dl-amber',true);
-  html+=section('dueLater','Due later',dueLater,'dl-blue',false);
+  // Phase A audit polish: master vision section 4.2 calls for "Due later" → "Upcoming"
+  html+=section('dueLater','Upcoming',dueLater,'dl-blue',false);
   html+=section('completed','Completed',completed,'dl-green',false);
   
   panel.innerHTML=html;
@@ -5558,8 +5682,42 @@ function toggleDlSection(key){
 
 function toggleDeadlineDone(id){
   const t=brainDump.find(t=>t.id===id);if(!t)return;
-  t.done=!t.done;
-  save();renderDeadlines();if(activeSide==='braindump')renderBD();
+  // Phase A audit Bug 16: per master vision section 4.2, marking a deadline complete
+  // should remove future calendar sessions but keep past ones (history of effort).
+  // Toast-with-undo pattern means cascade is reversible for 5 seconds.
+  if(!t.done){
+    // Marking COMPLETE → cascade
+    const todayKey=dk(new Date());
+    const futureSessTasks=tasks.filter(tk=>tk._parentBdId===id&&tk.date>=todayKey&&!tk.done);
+    if(futureSessTasks.length){
+      const removedSnapshot=JSON.parse(JSON.stringify(futureSessTasks));
+      const removedSessions=t.sessions?[...t.sessions.filter(s=>s.date>=todayKey)]:[];
+      // Remove future session tasks from calendar AND from parent.sessions[]
+      tasks=tasks.filter(tk=>!(tk._parentBdId===id&&tk.date>=todayKey&&!tk.done));
+      if(t.sessions)t.sessions=t.sessions.filter(s=>s.date<todayKey);
+      t.done=true;
+      save();renderDeadlines();renderAll();if(activeSide==='braindump')renderBD();
+      showUndoToast(
+        `"${t.name}" complete · ${futureSessTasks.length} future session${futureSessTasks.length!==1?'s':''} removed`,
+        ()=>{
+          // Restore everything
+          tasks.push(...removedSnapshot);
+          if(!t.sessions)t.sessions=[];
+          t.sessions.push(...removedSessions);
+          t.sessions.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+          t.done=false;
+          save();renderDeadlines();renderAll();if(activeSide==='braindump')renderBD();
+        }
+      );
+      return;
+    }
+    // No future sessions — just toggle
+    t.done=true;
+  } else {
+    // Un-completing — just toggle off, no cascade needed
+    t.done=false;
+  }
+  save();renderDeadlines();renderAll();if(activeSide==='braindump')renderBD();
 }
 
 function addDeadlineTask(){
@@ -5584,29 +5742,70 @@ function addDeadlineTask(){
 }
 
 // ══ SESSION PICKER ════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// SESSION PICKER v2 (Phase B1)
+// State: mode (single/recurring), selected days for recurring, single-mode date,
+// time, duration, plus a per-row "overrides" map so the user can pick alternative
+// times or skip individual rows in the preview without clobbering the base config.
+// ══════════════════════════════════════════════════════════════════════════
+let _sessionPickerBdId='';
+let _spMode='single';                    // 'single' | 'recurring'
+let _spSingleDate='';                    // YYYY-MM-DD; '' = nothing picked
+let _spRecurDays=[];                     // [0..6] for Sun..Sat
+let _spTime='14:00';
+let _spDur=60;                           // minutes; multiples of 15
+let _spOverrides={};                     // { 'YYYY-MM-DD': {time?, skip?} }
+let _spDpCursor=null;                    // Date object — month shown in day picker
+
 function openSessionPicker(bdId){
   const t=brainDump.find(t=>t.id===bdId);if(!t)return;
   _sessionPickerBdId=bdId;
   const el=document.getElementById('sessionPickerOverlay');if(!el)return;
   document.getElementById('spTaskName').textContent=t.name;
   document.getElementById('spDueInfo').textContent=t.dueDate?'Due '+fmtDueBadge(t.dueDate):'No due date set';
+  // Reset state
+  _spMode='single';
+  // Default single-mode date: tomorrow (or today if before 6 PM, since the past-time
+  // guard from Bug 24 will skip past slots anyway)
+  const def=addDays(new Date(),1);
+  _spSingleDate=dk(def);
+  _spRecurDays=[];
+  _spTime='14:00';
+  _spDur=60;
+  _spOverrides={};
+  _spDpCursor=fromDk(_spSingleDate);
+  // Sync UI
   renderSessionList(t);
-  // Default next session to tomorrow at next open slot
-  const tomorrow=addDays(new Date(),1);
-  document.getElementById('spDate').value=dk(tomorrow);
-  document.getElementById('spTime').value='14:00';
-  document.getElementById('spDur').value='60';
-  document.getElementById('spConflict').innerHTML='';
-  // Phase A step 2.1: .modal-overlay defaults to opacity:0;pointer-events:none.
-  // Need both display:flex AND the .show class for the modal to be visible+clickable.
+  setSpMode('single');
+  document.getElementById('spTime').value=_spTime;
+  updateSpDurDisplay();
+  refreshSpPreview();
+  // Show modal (Bug fix from earlier — needs both display:flex and .show class)
   el.style.display='flex';
-  // Force a reflow so the opacity transition fires from 0 → 1 (otherwise it would
-  // skip the transition because display:flex and class:show are set in the same tick).
   void el.offsetWidth;
   el.classList.add('show');
 }
-let _sessionPickerBdId='';
 
+function closeSessionPicker(){
+  const el=document.getElementById('sessionPickerOverlay');if(!el)return;
+  el.classList.remove('show');
+  document.getElementById('spDayPickerPop').style.display='none';
+  setTimeout(()=>{el.style.display='none';},200);
+}
+
+// ── Mode toggle ────────────────────────────────────────────────────────────
+function setSpMode(mode){
+  _spMode=mode;
+  document.getElementById('spModeTabSingle').classList.toggle('active',mode==='single');
+  document.getElementById('spModeTabRecurring').classList.toggle('active',mode==='recurring');
+  document.getElementById('spSingleInputs').style.display=mode==='single'?'':'none';
+  document.getElementById('spRecurringInputs').style.display=mode==='recurring'?'':'none';
+  // Reset overrides on mode change since the row set changes
+  _spOverrides={};
+  refreshSpPreview();
+}
+
+// ── Existing sessions list (unchanged from v1) ────────────────────────────
 function renderSessionList(t){
   const list=document.getElementById('spSessionList');if(!list)return;
   if(!t.sessions||!t.sessions.length){
@@ -5617,72 +5816,378 @@ function renderSessionList(t){
     const d=fromDk(s.date);
     const dayName=DAYS_S[d.getDay()];
     return`<div class="sp-session-row">
-      <span class="sp-session-day">${dayName}</span>
+      <span class="sp-session-day">${dayName} ${d.getMonth()+1}/${d.getDate()}</span>
       <span class="sp-session-time">${fmtT(s.time)}</span>
       <span class="sp-session-dur">${durLabel(s.duration)}</span>
-      <span class="sp-session-del" onclick="removeSession('${t.id}',${i})">×</span>
+      <span class="sp-session-del" onclick="removeSession('${t.id}',${i})" title="Remove">×</span>
     </div>`;
   }).join('');
 }
 
-function addSessionFromPicker(){
-  const t=brainDump.find(t=>t.id===_sessionPickerBdId);if(!t)return;
-  const date=document.getElementById('spDate').value;
-  const time=document.getElementById('spTime').value;
-  const dur=parseInt(document.getElementById('spDur').value)||60;
-  if(!date||!time){showToast('Pick a date and time');return;}
-  
-  // Conflict check
-  const conflicts=checkSessionConflicts(date,time,dur);
-  const conflictEl=document.getElementById('spConflict');
-  if(conflicts){
-    if(conflictEl)conflictEl.innerHTML=`<div class="sp-conflict-warn">${conflicts}</div>`;
-    return;
-  }
-  
-  if(!t.sessions)t.sessions=[];
-  t.sessions.push({date,time:snapTo15(time),duration:dur});
-  t.sessions.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  
-  // Create a task on the calendar for this session
-  const sessId=genId();
-  tasks.push({id:sessId,name:t.name,type:'task',priority:t.priority||'none',category:t.category||'none',notes:'Session for: '+t.name,date:date,time:snapTo15(time),duration:dur,scheduled:true,done:false,recur:false,subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],_parentBdId:t.id});
-  
-  save();renderSessionList(t);renderDeadlines();renderAll();
-  if(conflictEl)conflictEl.innerHTML=`<div class="sp-conflict-ok">Session added for ${fmtT(snapTo15(time))} on ${DAYS_S[fromDk(date).getDay()]}</div>`;
+// ── Recurring day chips ────────────────────────────────────────────────────
+function toggleSpRecurDay(d){
+  const i=_spRecurDays.indexOf(d);
+  if(i>=0)_spRecurDays.splice(i,1);
+  else _spRecurDays.push(d);
+  document.querySelectorAll('#spDayChips .sp-day-chip').forEach(el=>{
+    const d2=parseInt(el.getAttribute('data-d'));
+    el.classList.toggle('active',_spRecurDays.includes(d2));
+  });
+  _spOverrides={}; // row set changed
+  refreshSpPreview();
 }
 
+// ── Time / duration handlers ───────────────────────────────────────────────
+function onSpInputChange(){
+  const tEl=document.getElementById('spTime');
+  if(tEl)_spTime=snapTo15(tEl.value)||_spTime;
+  if(tEl)tEl.value=_spTime;
+  _spOverrides={}; // base time changed
+  refreshSpPreview();
+}
+
+function stepSpDur(delta){
+  _spDur=Math.max(15,Math.min(480,_spDur+delta)); // 15min – 8h
+  updateSpDurDisplay();
+  _spOverrides={}; // duration changed
+  refreshSpPreview();
+}
+
+function updateSpDurDisplay(){
+  const el=document.getElementById('spDurVal');if(!el)return;
+  el.textContent=durLabel(_spDur);
+}
+
+// ── Preview generation ────────────────────────────────────────────────────
+// Returns: [{ dateKey, time, dur, status: 'open'|'conflict'|'duplicate', conflictMsg?,
+//   alternatives?: [{time,label}], skipped?: bool }]
+function previewSessions(){
+  const t=brainDump.find(t=>t.id===_sessionPickerBdId);
+  if(!t)return [];
+  const dur=_spDur;
+  const baseTime=_spTime;
+
+  // Step 1: figure out which dates the user wants sessions on
+  let dates=[];
+  if(_spMode==='single'){
+    if(_spSingleDate)dates=[_spSingleDate];
+  } else {
+    // Recurring: from tomorrow until due date (or 12 weeks if no due date)
+    if(!_spRecurDays.length)return [];
+    const start=addDays(new Date(),1);
+    const end=t.dueDate?fromDk(t.dueDate):addDays(new Date(),84);
+    let cur=new Date(start);
+    while(cur<=end){
+      if(_spRecurDays.includes(cur.getDay()))dates.push(dk(cur));
+      cur=addDays(cur,1);
+    }
+  }
+
+  // Step 2: for each date, classify the row
+  const rows=dates.map(dateKey=>{
+    const ov=_spOverrides[dateKey]||{};
+    if(ov.skip){
+      return {dateKey,time:ov.time||baseTime,dur,status:'skipped'};
+    }
+    const time=ov.time||baseTime;
+    // Check duplicate (this BD already has a session at this date+time)
+    if(t.sessions&&t.sessions.find(s=>s.date===dateKey&&s.time===time)){
+      return {dateKey,time,dur,status:'duplicate'};
+    }
+    const conflictMsg=checkSessionConflicts(dateKey,time,dur);
+    if(conflictMsg){
+      return {dateKey,time,dur,status:'conflict',conflictMsg,alternatives:findAlternativesForDay(dateKey,time,dur)};
+    }
+    return {dateKey,time,dur,status:'open'};
+  });
+  return rows;
+}
+
+// Find earlier and later open slots for a conflict day. Returns up to 2 chips.
+function findAlternativesForDay(dateKey,wantedTime,dur){
+  const wanted=_timeToMin(wantedTime);
+  const alts=[];
+  // Look for the next open slot AFTER the wanted time
+  const allOpen=findOpenSlots(dateKey,20,Array(20).fill(dur));
+  for(const slot of allOpen){
+    const m=_timeToMin(slot);
+    if(m>wanted){alts.push({time:slot,label:'Later: '+fmtT(slot)});break;}
+  }
+  // Look for the closest open slot BEFORE the wanted time (search backwards)
+  const earlier=allOpen.filter(s=>_timeToMin(s)<wanted);
+  if(earlier.length){
+    const closest=earlier[earlier.length-1];
+    alts.unshift({time:closest,label:'Earlier: '+fmtT(closest)});
+  }
+  return alts;
+}
+
+// ── Render the preview UI ────────────────────────────────────────────────
+function refreshSpPreview(){
+  const t=brainDump.find(t=>t.id===_sessionPickerBdId);
+  if(!t)return;
+
+  // Update single-mode day button label
+  const dayBtnText=document.getElementById('spDayBtnText');
+  if(dayBtnText){
+    if(_spSingleDate){
+      const d=fromDk(_spSingleDate);
+      dayBtnText.textContent=DLONG[d.getDay()]+', '+MONTHS_S[d.getMonth()]+' '+d.getDate();
+    } else {
+      dayBtnText.textContent='Pick a day';
+    }
+  }
+
+  // Update recur note
+  const recurNote=document.getElementById('spRecurNote');
+  if(recurNote){
+    if(t.dueDate){
+      const due=fromDk(t.dueDate);
+      recurNote.textContent='Stops at due date — '+MONTHS_S[due.getMonth()]+' '+due.getDate();
+    } else {
+      recurNote.textContent='Repeats for the next 12 weeks (no due date set)';
+    }
+  }
+
+  const rows=previewSessions();
+  const blockEl=document.getElementById('spBlockPreview');
+  const previewEl=document.getElementById('spPreviewPanel');
+  const addBtn=document.getElementById('spAddBtn');
+
+  // Block strip — quick summary at the top of preview
+  const baseEnd=_timeToMin(_spTime)+_spDur;
+  const placeable=rows.filter(r=>r.status!=='skipped'&&r.status!=='duplicate');
+  const totalMins=placeable.length*_spDur;
+  const totalLabel=durLabel(totalMins);
+  const sessionsLabel=placeable.length+' session'+(placeable.length!==1?'s':'');
+  if(rows.length===0){
+    blockEl.innerHTML=_spMode==='recurring'
+      ?'<div class="sp-block-empty">Pick days to see the preview</div>'
+      :'<div class="sp-block-empty">Pick a day to see the preview</div>';
+  } else {
+    blockEl.innerHTML=`<div class="sp-block-strip">
+      <span>${fmtT(_spTime)} → ${fmtT(_minToTime(baseEnd))}</span>
+      <span class="sp-block-sep">·</span>
+      <span>${sessionsLabel}</span>
+      <span class="sp-block-sep">·</span>
+      <span>${totalLabel} total</span>
+    </div>`;
+  }
+
+  // Preview rows
+  if(!rows.length){
+    previewEl.innerHTML='';
+  } else {
+    previewEl.innerHTML=rows.map((r,i)=>{
+      const d=fromDk(r.dateKey);
+      const dayLabel=DLONG[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate();
+      const ov=_spOverrides[r.dateKey]||{};
+      const isOverridden=!!(ov.time);
+      const skipped=r.status==='skipped';
+
+      let statusHtml='';
+      let altsHtml='';
+      if(skipped){
+        statusHtml=`<span class="sp-row-status sp-stat-skipped">Skipped</span>`;
+        statusHtml+=`<span class="sp-row-restore" onclick="spOverrideRow(${i},'unskip')">Restore</span>`;
+      } else if(r.status==='open'){
+        statusHtml=`<span class="sp-row-status sp-stat-open">✓ ${fmtT(r.time)}${isOverridden?' (adjusted)':''}</span>`;
+      } else if(r.status==='duplicate'){
+        statusHtml=`<span class="sp-row-status sp-stat-dup">Already booked</span>`;
+        statusHtml+=`<span class="sp-row-skip" onclick="spOverrideRow(${i},'skip')">Skip</span>`;
+      } else if(r.status==='conflict'){
+        statusHtml=`<span class="sp-row-status sp-stat-conflict" title="${esc(r.conflictMsg||'')}">⚠ ${fmtT(r.time)} conflict</span>`;
+        if(r.alternatives&&r.alternatives.length){
+          altsHtml='<div class="sp-row-alts">'+r.alternatives.map(a=>
+            `<button class="sp-alt-chip" onclick="spOverrideRow(${i},'time','${a.time}')">${esc(a.label)}</button>`
+          ).join('')+`<button class="sp-alt-chip sp-alt-skip" onclick="spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
+        } else {
+          altsHtml=`<div class="sp-row-alts"><button class="sp-alt-chip sp-alt-skip" onclick="spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
+        }
+      }
+      return `<div class="sp-preview-row${skipped?' sp-row-dim':''}" data-idx="${i}">
+        <div class="sp-row-main">
+          <span class="sp-row-day">${dayLabel}</span>
+          ${statusHtml}
+        </div>
+        ${altsHtml}
+      </div>`;
+    }).join('');
+  }
+
+  // Action button label
+  const willAdd=rows.filter(r=>r.status==='open').length;
+  if(!rows.length){
+    addBtn.disabled=true;
+    addBtn.textContent=_spMode==='recurring'?'Pick days':'Pick a day';
+  } else if(willAdd===0){
+    addBtn.disabled=true;
+    addBtn.textContent='No sessions to add';
+  } else {
+    addBtn.disabled=false;
+    addBtn.textContent='Add '+willAdd+' session'+(willAdd!==1?'s':'');
+  }
+}
+
+// User clicks a chip in the preview to override a row's time, skip it, or restore.
+function spOverrideRow(idx,action,newTime){
+  const rows=previewSessions();
+  const row=rows[idx];if(!row)return;
+  if(!_spOverrides[row.dateKey])_spOverrides[row.dateKey]={};
+  if(action==='skip')_spOverrides[row.dateKey].skip=true;
+  else if(action==='unskip')delete _spOverrides[row.dateKey].skip;
+  else if(action==='time'&&newTime){
+    _spOverrides[row.dateKey].time=newTime;
+    delete _spOverrides[row.dateKey].skip;
+  }
+  refreshSpPreview();
+}
+
+// ── Day picker popover (Phase B1) ────────────────────────────────────────
+function openSpDayPicker(){
+  const pop=document.getElementById('spDayPickerPop');if(!pop)return;
+  if(pop.style.display==='block'){pop.style.display='none';return;}
+  if(!_spDpCursor)_spDpCursor=new Date();
+  renderSpDayPicker();
+  pop.style.display='block';
+  // Close popover on outside click
+  setTimeout(()=>{
+    document.addEventListener('click',_spDpOutsideClick,{once:true});
+  },50);
+}
+
+function _spDpOutsideClick(e){
+  const pop=document.getElementById('spDayPickerPop');
+  const btn=document.getElementById('spDayBtn');
+  if(!pop)return;
+  if(!pop.contains(e.target)&&!btn.contains(e.target)){
+    pop.style.display='none';
+  } else {
+    document.addEventListener('click',_spDpOutsideClick,{once:true});
+  }
+}
+
+function spDayPickerNav(delta){
+  if(!_spDpCursor)_spDpCursor=new Date();
+  _spDpCursor=new Date(_spDpCursor.getFullYear(),_spDpCursor.getMonth()+delta,1);
+  renderSpDayPicker();
+}
+
+function renderSpDayPicker(){
+  const t=brainDump.find(t=>t.id===_sessionPickerBdId);
+  const cur=_spDpCursor||new Date();
+  const monthLbl=document.getElementById('spDpMonth');
+  if(monthLbl)monthLbl.textContent=MONTHS_LONG[cur.getMonth()]+' '+cur.getFullYear();
+
+  const grid=document.getElementById('spDpGrid');if(!grid)return;
+  const today=dk(new Date());
+  const dueKey=t?.dueDate||'';
+  const sessionDates=new Set((t?.sessions||[]).map(s=>s.date));
+  const wkstart=parseInt(localStorage.getItem('clarity_wkstart')||'0');
+
+  // Build day-of-week labels
+  const dayLbls=['S','M','T','W','T','F','S'];
+  const orderedLbls=[...dayLbls.slice(wkstart),...dayLbls.slice(0,wkstart)];
+  let html='<div class="sp-dp-dow">'+orderedLbls.map(l=>`<span>${l}</span>`).join('')+'</div>';
+
+  // Build the calendar grid
+  const firstOfMonth=new Date(cur.getFullYear(),cur.getMonth(),1);
+  const firstDayOfWeek=(firstOfMonth.getDay()-wkstart+7)%7;
+  const daysInMonth=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
+  let cells=[];
+  for(let i=0;i<firstDayOfWeek;i++)cells.push('');
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(cur.getFullYear(),cur.getMonth(),d);
+    const key=dk(date);
+    const isToday=key===today;
+    const isPast=key<today;
+    const isDue=key===dueKey;
+    const hasSession=sessionDates.has(key);
+    const isPastDue=dueKey&&key>dueKey;
+    const isSelected=key===_spSingleDate;
+    const cls=['sp-dp-cell',
+      isToday?'is-today':'',
+      isPast?'is-past':'',
+      isDue?'is-due':'',
+      hasSession?'has-session':'',
+      isPastDue?'past-due':'',
+      isSelected?'is-sel':''
+    ].filter(Boolean).join(' ');
+    cells.push(`<button class="${cls}" onclick="selectSpDpDate('${key}')">${d}</button>`);
+  }
+  html+='<div class="sp-dp-cells">'+cells.map(c=>c||'<span></span>').join('')+'</div>';
+  grid.innerHTML=html;
+}
+
+function selectSpDpDate(dateKey){
+  const t=brainDump.find(t=>t.id===_sessionPickerBdId);
+  const today=dk(new Date());
+  if(dateKey<today){
+    if(!confirm("That's in the past. Pick it anyway?"))return;
+  }
+  if(t&&t.dueDate&&dateKey>t.dueDate){
+    if(!confirm("That's after the due date. Pick it anyway?"))return;
+  }
+  _spSingleDate=dateKey;
+  _spOverrides={}; // base date changed
+  document.getElementById('spDayPickerPop').style.display='none';
+  refreshSpPreview();
+}
+
+// ── Commit: replaces v1 addSessionFromPicker ─────────────────────────────
+function commitSessions(){
+  const t=brainDump.find(t=>t.id===_sessionPickerBdId);if(!t)return;
+  const rows=previewSessions().filter(r=>r.status==='open');
+  if(!rows.length)return;
+  if(!t.sessions)t.sessions=[];
+  const added=[];
+  rows.forEach(r=>{
+    t.sessions.push({date:r.dateKey,time:r.time,duration:r.dur});
+    // Create the calendar task (same shape as v1 addSessionFromPicker)
+    const sessId=genId();
+    tasks.push({
+      id:sessId,name:t.name,type:'task',
+      priority:t.priority||'none',category:t.category||'none',
+      notes:'Session for: '+t.name,
+      date:r.dateKey,time:r.time,duration:r.dur,
+      scheduled:true,done:false,recur:false,
+      subtasks:[],attachments:[],doneOverrides:[],deletedOccurrences:[],
+      _parentBdId:t.id
+    });
+    added.push(sessId);
+  });
+  t.sessions.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  save();renderSessionList(t);renderDeadlines();renderAll();
+  // Reset overrides + recur days for the next add cycle, keep mode/time/dur
+  _spOverrides={};
+  if(_spMode==='recurring')_spRecurDays=[];
+  document.querySelectorAll('#spDayChips .sp-day-chip').forEach(el=>el.classList.remove('active'));
+  if(_spMode==='single'){_spSingleDate='';}
+  refreshSpPreview();
+  showToast('Added '+rows.length+' session'+(rows.length!==1?'s':''));
+}
+
+// Conflict checker (Bug 9 fix is preserved)
 function checkSessionConflicts(dateKey,time,dur){
   const startMin=toMins(time);
   const endMin=startMin+dur;
-  // Check existing tasks
   const dayTasks=tasks.filter(t=>t.date===dateKey&&t.time&&t.scheduled&&!t.done);
   for(const t of dayTasks){
     const ts=toMins(t.time),te=ts+(t.duration||30);
-    if(startMin<te&&endMin>ts)return`Conflicts with "${t.name}" at ${fmtT(t.time)}. Try ${fmtT(fromMins(te))} instead.`;
+    if(startMin<te&&endMin>ts)return`Conflicts with "${t.name}" at ${fmtT(t.time)}`;
   }
-  // Phase A step 2 hotfix: isBlockedByRoutine returns an object {blocked, ...}, not a
-  // boolean. Treating the object as truthy made this branch fire on EVERY call (the
-  // false case still returns {blocked:false}, which is truthy). Read .blocked properly.
   const rb=isBlockedByRoutine(dateKey,time);
-  if(rb.blocked)return`Blocked by ${rb.routineName} (${fmtT(rb.routineStart)} – ${fmtT(rb.routineEnd)}). Try a different time.`;
+  if(rb.blocked)return`Blocked by ${rb.routineName}`;
   return null;
 }
 
 function removeSession(bdId,idx){
   const t=brainDump.find(t=>t.id===bdId);if(!t||!t.sessions)return;
   const sess=t.sessions[idx];
-  // Remove corresponding calendar task
   if(sess)tasks=tasks.filter(tk=>!(tk._parentBdId===bdId&&tk.date===sess.date&&tk.time===sess.time));
   t.sessions.splice(idx,1);
   save();renderSessionList(t);renderDeadlines();renderAll();
-}
-
-function closeSessionPicker(){
-  const el=document.getElementById('sessionPickerOverlay');if(!el)return;
-  el.classList.remove('show');
-  // Hide after the opacity transition completes (200ms) so it animates out.
-  setTimeout(()=>{el.style.display='none';},200);
+  refreshSpPreview();
 }
 
 // ══ PARSE DUE DATE FROM TEXT ══════════════════
@@ -6050,7 +6555,28 @@ function onDropSlot(e,dateKey,time){
       showWarnToast('That slot already has 3 tasks — pick a different time');dragBdId=null;return;
     }
     const newTaskId=t.dueDate?genId():t.id; // deadline tasks get new IDs for sessions
-    tasks.push({...t,id:newTaskId,type:t.type||'task',date:dateKey,time:smartTime,allday:false,duration:t._pendingDuration||30,scheduled:true,done:false,recur:false,recurN:1,recurU:'day',recurDays:[],attachments:t.attachments||[],location:t._pendingLocation||t.location||'',doneOverrides:[],deletedOccurrences:[],multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,_parentBdId:t.dueDate?t.id:undefined});
+    // Phase A audit Bug 21 fix: was hardcoding recur:false, allday:false, dropping any
+    // _pending* recur/allday fields that parseQuickEvent set (e.g., birthdays default to
+    // yearly recurring + all-day). The Step 4 algorithmic placer already preserves these
+    // fields; the drag path now does too.
+    const isAlldayBd=!!t._pendingAllday;
+    tasks.push({...t,
+      id:newTaskId,type:t.type||'task',
+      date:dateKey,
+      time:isAlldayBd?null:smartTime,
+      allday:isAlldayBd,
+      duration:isAlldayBd?null:(t._pendingDuration||30),
+      scheduled:true,done:false,
+      recur:!!t._pendingRecur,
+      recurN:t._pendingRecurN||1,
+      recurU:t._pendingRecurU||'day',
+      recurDays:[],
+      attachments:t.attachments||[],
+      location:t._pendingLocation||t.location||'',
+      doneOverrides:[],deletedOccurrences:[],
+      multiDay:false,endDate:'',eventColor:'',suppressRoutines:false,
+      _parentBdId:t.dueDate?t.id:undefined
+    });
     recordPattern(t.name,t._pendingDuration||30,t.category||'none',smartTime);
     if(t.dueDate){
       // Deadline task: stays in BD, creates a session
@@ -6063,7 +6589,7 @@ function onDropSlot(e,dateKey,time){
       // Phase A step 2 hotfix: register in Just Scheduled before removing from BD,
       // so the count pill in the panel updates and the user has an Undo affordance.
       const jsD=fromDk(dateKey);
-      _justScheduled.unshift({id:newTaskId,name:t.name,dest:DAYS_S[jsD.getDay()]+' '+fmtT(smartTime),type:t.type||'task',date:dateKey,time:smartTime});
+      _justScheduled.unshift({id:newTaskId,name:t.name,dest:DAYS_S[jsD.getDay()]+' '+(isAlldayBd?'all day':fmtT(smartTime)),type:t.type||'task',date:dateKey,time:isAlldayBd?null:smartTime});
       // Regular task: remove from BD
       brainDump=brainDump.filter(t=>t.id!==dragBdId);dragBdId=null;save();renderAll();
     }
@@ -6108,6 +6634,21 @@ function rescheduleTask(taskId,instanceDate,newDate,newTime,snapEl){
   }
 
   // Non-recurring — just move it
+  // Phase A audit Bug 17 fix: if this is a session task (has _parentBdId), sync the
+  // matching session entry in the parent's sessions[] array. Without this, the deadline
+  // card's session count + dates desync from calendar reality after a drag.
+  if(t._parentBdId){
+    const parent=brainDump.find(b=>b.id===t._parentBdId);
+    if(parent&&parent.sessions){
+      const oldDate=t.date,oldTime=t.time;
+      const sess=parent.sessions.find(s=>s.date===oldDate&&s.time===oldTime);
+      if(sess){
+        sess.date=resolvedDate;
+        if(newTime)sess.time=newTime;
+        parent.sessions.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+      }
+    }
+  }
   t.date=resolvedDate;
   if(newTime)t.time=newTime;
   save();renderAll();
@@ -7192,7 +7733,34 @@ function closeModal(){
 }
 function handleMBg(e){if(e.target===e.currentTarget)closeModal()}
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(_searchOpen)toggleSearch();closeModal();closeDelModal();closeAddCatModal();closeDrawer();closeBDDetail();closeRecurReschedule();closeClearModal();closeClearConfirm();closeSuggAlready();closeWrapup();closeWeekPlan();closeAISchedule();closeReflow();}
+  if(e.key==='Escape'){
+    if(_searchOpen)toggleSearch();
+    // Phase A audit Bug 12 fix: was an explicit list missing 8 modals (proPrompt, sessionPicker,
+    // subPopup, routine, analytics, help, focusEnd, yearMonthPopup). Now: query the DOM for any
+    // .modal-overlay with .open or .show, look up its dedicated close fn if known, otherwise just
+    // strip the class. Single source of truth — adding a new modal won't bypass Escape any more.
+    const closeFns={
+      mOverlay:closeModal,delOverlay:closeDelModal,addCatOverlay:closeAddCatModal,
+      bdDetailOverlay:closeBDDetail,recurRescheduleOverlay:closeRecurReschedule,
+      clearScopeOverlay:closeClearModal,clearConfirmOverlay:closeClearConfirm,
+      suggAlreadyOverlay:closeSuggAlready,wrapupOverlay:closeWrapup,
+      weekPlanOverlay:closeWeekPlan,aiScheduleOverlay:closeAISchedule,
+      reflowOverlay:closeReflow,proPromptOverlay:closeProPrompt,
+      sessionPickerOverlay:closeSessionPicker,subPopupOverlay:closeSubtaskPopup,
+      ideaModalOverlay:typeof closeIdeaModal==='function'?closeIdeaModal:null,
+      yearMonthPopup:closeYearMonthPopup,focusEndOverlay:cancelEndFocus,
+      analyticsOverlay:closeAnalytics,helpOverlay:typeof closeHelp==='function'?closeHelp:null,
+      routineModalOverlay:typeof closeRoutineModal==='function'?closeRoutineModal:null,
+      overduePopupOverlay:typeof closeOverduePopup==='function'?closeOverduePopup:null
+    };
+    document.querySelectorAll('.modal-overlay.open,.modal-overlay.show').forEach(el=>{
+      const fn=closeFns[el.id];
+      if(fn)fn();
+      else{el.classList.remove('open','show');setTimeout(()=>{el.style.display='none';},200);}
+    });
+    // Drawer is sidebar-style, not .modal-overlay — close separately.
+    closeDrawer();
+  }
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&document.getElementById('mOverlay').classList.contains('open')){e.preventDefault();saveTask();}
 });
 // ── Modal Done Checkbox ──────────────────────────────
@@ -7297,10 +7865,33 @@ function doDelete(mode){
     });
   } else {
     const removed=JSON.parse(JSON.stringify(t));
+    // Phase A audit Bug 17 fix: if this is a session task, also remove the matching
+    // entry from the parent BD item's sessions[]. Without this the deadline card shows
+    // a stale session count after deletion. Undo restores both the calendar task AND
+    // the sessions[] entry so the deadline card remains consistent.
+    let removedSess=null;
+    if(t._parentBdId){
+      const parent=brainDump.find(b=>b.id===t._parentBdId);
+      if(parent&&parent.sessions){
+        const idx=parent.sessions.findIndex(s=>s.date===t.date&&s.time===t.time);
+        if(idx>=0){
+          removedSess={parentId:t._parentBdId,index:idx,session:parent.sessions[idx]};
+          parent.sessions.splice(idx,1);
+        }
+      }
+    }
     tasks=tasks.filter(t=>t.id!==mId);
     save();closeDelModal();closeModal();renderAll();
     showUndoToast(`"${removed.name}" deleted`,()=>{
-      tasks.push(removed);save();renderAll();
+      tasks.push(removed);
+      if(removedSess){
+        const parent=brainDump.find(b=>b.id===removedSess.parentId);
+        if(parent){
+          if(!parent.sessions)parent.sessions=[];
+          parent.sessions.splice(removedSess.index,0,removedSess.session);
+        }
+      }
+      save();renderAll();
     });
   }
 }
@@ -7311,7 +7902,9 @@ function showUndoToast(msg,undoFn){
   let el=document.getElementById('undoToast');
   if(!el){
     el=document.createElement('div');el.id='undoToast';
-    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:99px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)';
+    // Phase A audit v3: same as showToast — bottom:24px puts the toast below the mobile
+    // sidebar's bottom rail. v2's 80px was over-corrected (placed it INSIDE sidebar span).
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 14px 9px 18px;border-radius:14px;font-size:12px;font-weight:500;z-index:9100;opacity:0;transition:opacity .2s,transform .2s;display:flex;align-items:center;gap:10px;max-width:min(420px,90vw);box-shadow:0 4px 20px rgba(0,0,0,.25);line-height:1.45';
     document.body.appendChild(el);
   }
   el.innerHTML=`<span>${msg}</span><button style="background:rgba(255,255,255,.2);border:none;color:inherit;padding:4px 10px;border-radius:99px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.3px" id="undoBtn">UNDO</button>`;
@@ -7594,7 +8187,7 @@ function initTooltips(){
       }
       let html=`<div class="task-tooltip-title">${esc(t.name)}</div>`;
       const meta=[];
-      if(t.category&&t.category!=='none'){const c=catById(t.category);if(c)meta.push(c.name);}
+      if(t.category&&t.category!=='none'){const c=catById(t.category);if(c)meta.push(esc(c.name));}
       if(t.priority&&t.priority!=='none')meta.push(t.priority+' priority');
       if(t.recur)meta.push(recurLbl(t));
       if(meta.length)html+=`<div style="font-size:10px;color:var(--text3);margin-bottom:3px">${meta.join(' · ')}</div>`;
@@ -7799,7 +8392,13 @@ function selectCatColor(c){
   });
 }
 function saveNewCat(){
-  const name=document.getElementById('catNameInput').value.trim();if(!name)return;
+  let name=document.getElementById('catNameInput').value.trim();
+  // Phase A audit Bug 22 fix: trim and cap to 30 chars; reject empty/whitespace-only.
+  // Defense in depth — render sites also escape, but limiting at save time prevents
+  // the data from getting weird in the first place (and keeps the UI from breaking
+  // on a 5000-char category name).
+  if(!name)return;
+  if(name.length>30){name=name.slice(0,30);showToast('Category name trimmed to 30 chars');}
   if(categories.length>=12){showToast('Maximum 12 categories');return;}
   categories.push({id:'cat_'+genId(),name,color:selectedCatColor,locked:false});
   save();closeAddCatModal();renderAll();
@@ -7807,13 +8406,58 @@ function saveNewCat(){
 function delCat(id,e){
   e.stopPropagation();
   if(!confirm('Delete category? Tasks keep their data but lose the color label.'))return;
+  // Phase A audit Bug 23 fix: was leaving t.category=deletedId on every linked task/BD
+  // item, which caused renderers to display literal "cat_xyz" strings as category badges.
+  // Now: cascade-reset to 'none' on all references (tasks AND brainDump). Confirm wording
+  // already promised this behavior ("Tasks keep their data but lose the color label").
+  let touched=0;
+  tasks.forEach(t=>{if(t.category===id){t.category='none';touched++;}});
+  brainDump.forEach(b=>{if(b.category===id){b.category='none';touched++;}});
   categories=categories.filter(c=>c.id!==id);
   if(catFilter===id)catFilter='all';
   save();renderAll();
+  if(touched)showToast(`Category removed · ${touched} item${touched!==1?'s':''} updated`);
 }
 
 // ══ BRAIN DUMP DETAIL MODAL ═══════════════════
 let bdDetailId=null;
+// ── Phase A step 5: BD detail modal type toggle (task ↔ event) ──
+let _bdDetailType='task';
+let _bdDetailAllday=false;
+
+function setBdDetailType(type){
+  _bdDetailType=type;
+  document.getElementById('bdTypeTabTask').classList.toggle('active',type==='task');
+  document.getElementById('bdTypeTabEvent').classList.toggle('active',type==='event');
+  // Label change — Task vs Event matches edit-modal pattern
+  document.getElementById('bdDetailNameLabel').textContent=type==='event'?'Event':'Task';
+  document.getElementById('bdDetailName').placeholder=type==='event'?"What's happening?":'What needs to get done?';
+  document.getElementById('bdDetailTitle').textContent='Edit '+(type==='event'?'Event':'Brain Dump');
+  document.getElementById('bdDetailScheduleLabel').innerHTML=type==='event'
+    ?'Date & time <span style="font-weight:400;color:var(--accent);text-transform:none;letter-spacing:0;font-size:10px">required</span>'
+    :'Schedule it now <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span>';
+  // Show/hide event-only fields
+  document.getElementById('bdDetailLocationWrap').style.display=type==='event'?'':'none';
+  document.getElementById('bdDetailAlldayWrap').style.display=type==='event'?'':'none';
+  document.getElementById('bdDetailPriWrap').style.display=type==='event'?'none':'';
+  // If switching away from event, clear allday flag
+  if(type!=='event'&&_bdDetailAllday){
+    _bdDetailAllday=false;
+    const cb=document.getElementById('bdDetailAllday');if(cb)cb.checked=false;
+    const tEl=document.getElementById('bdDetailTime');if(tEl)tEl.disabled=false;
+  }
+}
+
+function toggleBdDetailAllday(){
+  const cb=document.getElementById('bdDetailAllday');
+  _bdDetailAllday=cb.checked;
+  const tEl=document.getElementById('bdDetailTime');
+  if(tEl){
+    tEl.disabled=_bdDetailAllday;
+    tEl.style.opacity=_bdDetailAllday?'.4':'';
+  }
+}
+
 function openBDDetail(id){
   const t=brainDump.find(t=>t.id===id);if(!t)return;
   bdDetailId=id;
@@ -7821,18 +8465,106 @@ function openBDDetail(id){
   document.getElementById('bdDetailPri').value=t.priority||'none';
   buildCatOptions('bdDetailCat',t.category||'none');
   document.getElementById('bdDetailNotes').value=t.notes||'';
-  // Phase A step 2 hotfix: data lives in _pendingDate / _pendingTime (set by addQuickEvent
-  // for incomplete events). The old code read scheduledDate / scheduledTime which were
-  // never populated, so the time always rendered empty. Read _pending* first, fall back
-  // to scheduled* (in case any old data shape exists), then empty.
-  document.getElementById('bdDetailDate').value=t._pendingDate||t.scheduledDate||'';
-  document.getElementById('bdDetailTime').value=t._pendingTime||t.scheduledTime||'';
+  // Phase A audit cleanup: was reading scheduledDate/scheduledTime fallbacks but those
+  // fields are never written anywhere in the codebase. Just read _pendingDate/_pendingTime.
+  document.getElementById('bdDetailDate').value=t._pendingDate||'';
+  document.getElementById('bdDetailTime').value=t._pendingTime||'';
+  // Phase A step 5: location, allday, type
+  document.getElementById('bdDetailLocation').value=t._pendingLocation||t.location||'';
+  _bdDetailAllday=!!t._pendingAllday;
+  const allCb=document.getElementById('bdDetailAllday');
+  if(allCb)allCb.checked=_bdDetailAllday;
+  // Determine initial type: explicit type='event' OR has any _pending* fields → event
+  const isEv=isBdEvent(t);
+  setBdDetailType(isEv?'event':'task');
+  // Apply allday state after setBdDetailType so disabled time field is visible
+  toggleBdDetailAllday();
+  // Subtitle context — tells user what this BD item knows about itself
+  const subEl=document.getElementById('bdDetailSub');
+  if(subEl){
+    if(t.dueDate){subEl.textContent='Deadline · Due '+fmtDueBadge(t.dueDate);}
+    else if(isEv){subEl.textContent='Unscheduled event';}
+    else{subEl.textContent='Unscheduled · Brain Dump';}
+  }
   document.getElementById('bdDetailOverlay').classList.add('open');
   setTimeout(()=>{
     const nameEl=document.getElementById('bdDetailName');
     nameEl.focus();autoExpand(nameEl);
     autoExpand(document.getElementById('bdDetailNotes'));
   },150);
+}
+
+function saveBDDetail(){
+  if(!bdDetailId)return;
+  const t=brainDump.find(t=>t.id===bdDetailId);if(!t)return;
+  const name=document.getElementById('bdDetailName').value.trim();
+  if(!name){document.getElementById('bdDetailName').focus();return}
+  const priority=document.getElementById('bdDetailPri').value;
+  const category=document.getElementById('bdDetailCat').value;
+  const notes=document.getElementById('bdDetailNotes').value.trim();
+  const dateVal=document.getElementById('bdDetailDate').value;
+  const timeValRaw=document.getElementById('bdDetailTime').value;
+  const location=document.getElementById('bdDetailLocation').value.trim();
+  const isEvent=_bdDetailType==='event';
+  const allday=isEvent&&_bdDetailAllday;
+  const timeVal=(allday||!timeValRaw)?'':snapTo15(timeValRaw);
+
+  // Phase A step 5: events require date (and time, unless all-day) before scheduling.
+  // If user picked Event but didn't fill required fields, we still SAVE the item back
+  // to BD with type='event' and pending fields, but DON'T move it to the calendar.
+  // The Events accordion will show it with "needs date/time" pills.
+  const wantsToSchedule=!!dateVal&&(allday||!!timeVal);
+
+  if(isEvent&&dateVal&&!allday&&!timeVal){
+    // Date but no time + not all-day → invalid for an event being scheduled.
+    // Keep in BD as a pending event so user can fix it later.
+    showWarnToast('Event needs a time, or check All day');
+    // fall through — saves to BD with whatever fields are filled
+  }
+
+  if(wantsToSchedule){
+    const dur=t._pendingDuration||(allday?null:30);
+    const newId=genId();
+    tasks.push({
+      id:newId,name,
+      type:isEvent?'event':'task',
+      priority:isEvent?'none':priority,
+      category,notes,attachments:[],location:isEvent?location:'',
+      date:dateVal,
+      time:allday?null:(timeVal||'09:00'),
+      allday,
+      duration:allday?null:(dur||30),
+      scheduled:true,done:false,
+      recur:!!t._pendingRecur,
+      recurN:t._pendingRecurN||1,
+      recurU:t._pendingRecurU||'day',
+      recurDays:[],subtasks:t.subtasks||[],doneOverrides:[],deletedOccurrences:[],
+      multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
+    });
+    const jsD=fromDk(dateVal);
+    _justScheduled.unshift({
+      id:newId,name,
+      dest:DAYS_S[jsD.getDay()]+' '+(allday?'all day':fmtT(timeVal||'09:00')),
+      type:isEvent?'event':'task',
+      date:dateVal,time:allday?null:(timeVal||'09:00')
+    });
+    brainDump=brainDump.filter(t=>t.id!==bdDetailId);
+  } else {
+    // Keep in BD; persist all updated fields including type and pending event data
+    Object.assign(t,{name,priority,category,notes,type:isEvent?'event':'task'});
+    if(isEvent){
+      t._pendingDate=dateVal||'';
+      t._pendingTime=timeVal||'';
+      t._pendingLocation=location;
+      t._pendingAllday=allday;
+    } else {
+      // Switched from event back to task — clean up pending event fields
+      delete t._pendingDate;delete t._pendingTime;
+      delete t._pendingLocation;delete t._pendingAllday;
+      delete t._pendingRecur;delete t._pendingRecurN;delete t._pendingRecurU;delete t._pendingDuration;
+    }
+  }
+  save();closeBDDetail();renderAll();
 }
 function closeBDDetail(){document.getElementById('bdDetailOverlay').classList.remove('open');bdDetailId=null}
 function deleteBDFromModal(){
@@ -7845,47 +8577,6 @@ function deleteBDFromModal(){
   brainDump=brainDump.filter(t=>t.id!==bdDetailId);
   save();closeBDDetail();renderAll();
 }
-function saveBDDetail(){
-  if(!bdDetailId)return;
-  const t=brainDump.find(t=>t.id===bdDetailId);if(!t)return;
-  const name=document.getElementById('bdDetailName').value.trim();
-  if(!name){document.getElementById('bdDetailName').focus();return}
-  const priority=document.getElementById('bdDetailPri').value;
-  const category=document.getElementById('bdDetailCat').value;
-  const notes=document.getElementById('bdDetailNotes').value.trim();
-  const dateVal=document.getElementById('bdDetailDate').value;
-  const timeValRaw=document.getElementById('bdDetailTime').value;
-
-  // Phase A step 2 hotfix: snap to 15-min so times like 6:43 PM don't break the slot grid.
-  const timeVal=timeValRaw?snapTo15(timeValRaw):'';
-
-  // If a date was provided, schedule it directly
-  if(dateVal){
-    // If user didn't fill the time field, fall back to any _pendingTime they had,
-    // then to a sensible default. (Old code dropped _pendingTime on the floor.)
-    const time=timeVal||snapTo15(t._pendingTime||'')||'09:00';
-    const dur=t._pendingDuration||30;
-    const newId=genId();
-    tasks.push({
-      id:newId,name,type:'task',priority,category,notes,attachments:[],location:t._pendingLocation||'',
-      date:dateVal,time,allday:false,duration:dur,scheduled:true,done:false,
-      recur:false,recurN:1,recurU:'day',recurDays:[],subtasks:[],doneOverrides:[],deletedOccurrences:[],
-      multiDay:false,endDate:'',eventColor:'',suppressRoutines:false
-    });
-    // Phase A step 2 hotfix: register in Just Scheduled so user can undo, and so the
-    // count pill in the BD panel actually moves when they schedule from the modal.
-    const jsD=fromDk(dateVal);
-    _justScheduled.unshift({id:newId,name,dest:DAYS_S[jsD.getDay()]+' '+fmtT(time),type:'task',date:dateVal,time});
-    brainDump=brainDump.filter(t=>t.id!==bdDetailId);
-  } else {
-    // Keep in Brain Dump but update details. Preserve any _pendingTime so the
-    // info the user typed in the time field doesn't vanish.
-    Object.assign(t,{name,priority,category,notes});
-    if(timeVal)t._pendingTime=timeVal;
-  }
-  save();closeBDDetail();renderAll();
-}
-
 // ══ AUTO-EXPAND TEXTAREAS ═════════════════════
 function autoExpand(el){
   el.style.height='auto';
@@ -8061,13 +8752,17 @@ function showToast(msg){
   let t=document.getElementById('clarityToast');
   if(!t){
     t=document.createElement('div');t.id='clarityToast';
-    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap';
+    // Phase A audit v3: bottom:24px is below the mobile sidebar's 56px-bottom rail, so the
+    // toast renders OUTSIDE the sidebar's vertical span. v2 set this to 80px which placed
+    // it INSIDE the sidebar (sidebar occupies [56px, 56+55vh]) — z-index 9000 kept it
+    // visible but visually overlapping the sidebar content was jarring. 24px is correct.
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:14px;font-size:12px;font-weight:500;z-index:9000;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;max-width:min(420px,90vw);text-align:center;line-height:1.45';
     document.body.appendChild(t);
   }
   t.textContent=msg;
   t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
   clearTimeout(t._hide);
-  t._hide=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(8px)'},2000);
+  t._hide=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(8px)'},2400);
 }
 
 function onSuggDragStart(e,ci,ii){
