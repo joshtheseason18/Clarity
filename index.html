@@ -618,6 +618,14 @@
       <button class="bd-type-tab" id="bdTypeTabEvent" onclick="setBdDetailType('event')">Event</button>
     </div>
     <div class="fg"><label class="flbl" id="bdDetailNameLabel">Task</label><textarea class="fi auto-expand" id="bdDetailName" placeholder="What needs to get done?" rows="1" oninput="autoExpand(this)" style="line-height:1.5"></textarea></div>
+    <!-- Due date field — visible when task has a deadline or user wants to add one -->
+    <div class="fg" id="bdDetailDueWrap">
+      <label class="flbl">Due date <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(deadline)</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fi" type="date" id="bdDetailDueDate" style="flex:1;font-size:12px;padding:6px 9px">
+        <span style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline" id="bdDetailDueClear" onclick="clearBdDetailDueDate()">Clear</span>
+      </div>
+    </div>
     <div class="fg">
       <label class="flbl" id="bdDetailScheduleLabel">Schedule it now <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span></label>
       <div style="display:flex;gap:8px;align-items:center">

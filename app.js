@@ -8443,6 +8443,8 @@ function setBdDetailType(type){
   document.getElementById('bdDetailLocationWrap').style.display=type==='event'?'':'none';
   document.getElementById('bdDetailAlldayWrap').style.display=type==='event'?'':'none';
   document.getElementById('bdDetailPriWrap').style.display=type==='event'?'none':'';
+  // Due date is for tasks only — events don't have deadlines
+  document.getElementById('bdDetailDueWrap').style.display=type==='event'?'none':'';
   // If switching away from event, clear allday flag
   if(type!=='event'&&_bdDetailAllday){
     _bdDetailAllday=false;
@@ -8472,6 +8474,11 @@ function openBDDetail(id){
   // fields are never written anywhere in the codebase. Just read _pendingDate/_pendingTime.
   document.getElementById('bdDetailDate').value=t._pendingDate||'';
   document.getElementById('bdDetailTime').value=t._pendingTime||'';
+  // Due date field — populate if this is a deadline task, show for all tasks so users can add deadlines
+  const dueDateEl=document.getElementById('bdDetailDueDate');
+  if(dueDateEl)dueDateEl.value=t.dueDate||'';
+  const dueClearEl=document.getElementById('bdDetailDueClear');
+  if(dueClearEl)dueClearEl.style.display=t.dueDate?'':'none';
   // Phase A step 5: location, allday, type
   document.getElementById('bdDetailLocation').value=t._pendingLocation||t.location||'';
   _bdDetailAllday=!!t._pendingAllday;
@@ -8511,6 +8518,33 @@ function saveBDDetail(){
   const isEvent=_bdDetailType==='event';
   const allday=isEvent&&_bdDetailAllday;
   const timeVal=(allday||!timeValRaw)?'':snapTo15(timeValRaw);
+
+  // Due date handling — separate from scheduling. The due date is "when is this task
+  // ultimately due?" while Schedule-it-now is "put it on the calendar right now."
+  const newDueDate=document.getElementById('bdDetailDueDate').value||'';
+  const oldDueDate=t.dueDate||'';
+
+  // If due date was added (empty → filled), initialize deadline task fields
+  if(newDueDate&&!oldDueDate){
+    t.dueDate=newDueDate;
+    if(!t.sessions)t.sessions=[];
+    t.done=false;
+  }
+  // If due date was changed (filled → different filled), update + warn if sessions exist past new date
+  else if(newDueDate&&newDueDate!==oldDueDate){
+    const pastDueSessions=(t.sessions||[]).filter(s=>s.date>newDueDate);
+    if(pastDueSessions.length){
+      showWarnToast(pastDueSessions.length+' session'+(pastDueSessions.length!==1?'s':'')+' past the new due date');
+    }
+    t.dueDate=newDueDate;
+  }
+  // If due date was cleared (filled → empty), remove deadline status
+  else if(!newDueDate&&oldDueDate){
+    delete t.dueDate;
+    // Keep sessions on calendar (they're already scheduled), but detach from deadline tracking
+    delete t.sessions;
+    delete t.done;
+  }
 
   // Phase A step 5: events require date (and time, unless all-day) before scheduling.
   // If user picked Event but didn't fill required fields, we still SAVE the item back
@@ -8570,6 +8604,12 @@ function saveBDDetail(){
   save();closeBDDetail();renderAll();
 }
 function closeBDDetail(){document.getElementById('bdDetailOverlay').classList.remove('open');bdDetailId=null}
+function clearBdDetailDueDate(){
+  const el=document.getElementById('bdDetailDueDate');
+  if(el)el.value='';
+  const clearEl=document.getElementById('bdDetailDueClear');
+  if(clearEl)clearEl.style.display='none';
+}
 function deleteBDFromModal(){
   if(!bdDetailId)return;
   // Phase A step 2 hotfix: same as delBD — clean up linked calendar sessions.
