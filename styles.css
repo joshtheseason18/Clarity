@@ -27,6 +27,9 @@
   --shadow-color:rgba(0,0,0,.06);
   --red:#ef4444;--red-pale:#fef2f2;
   --amber-warn:#f59e0b;
+  /* Phase B1 audit: deadline card stripes referenced --amber, --blue, --green
+     but they were never defined. Transparent stripes on 3 of 4 deadline states. */
+  --amber:#f59e0b;--blue:#378ADD;--green:#639922;
 }
 
 /* DARK MODE */
@@ -38,6 +41,7 @@
   --shadow-color:rgba(0,0,0,.3);
   --red:#f87171;--red-pale:#2d1a1a;
   --amber-warn:#fbbf24;
+  --amber:#fbbf24;--blue:#60a5fa;--green:#84cc16;
   --accent-pale:rgba(var(--accent-rgb),.08);
   --accent-light:rgba(var(--accent-rgb),.18);
 }

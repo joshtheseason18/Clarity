@@ -5956,7 +5956,10 @@ function refreshSpPreview(){
 
   // Block strip — quick summary at the top of preview
   const baseEnd=_timeToMin(_spTime)+_spDur;
-  const placeable=rows.filter(r=>r.status!=='skipped'&&r.status!=='duplicate');
+  // Only count rows that will actually be added (status==='open'), matching the Add
+  // button's count. Previously included conflict rows, which made the strip disagree
+  // with the button — "3 sessions · 3h total" while Add said "Add 2 sessions".
+  const placeable=rows.filter(r=>r.status==='open');
   const totalMins=placeable.length*_spDur;
   const totalLabel=durLabel(totalMins);
   const sessionsLabel=placeable.length+' session'+(placeable.length!==1?'s':'');
