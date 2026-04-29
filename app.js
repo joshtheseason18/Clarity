@@ -5647,7 +5647,7 @@ function renderDeadlines(){
             <div class="dl-card-name${t.done?' done-text':''}">${esc(t.name)}</div>
             <div class="dl-card-meta">
               <span class="bd-badge ${dueClass}">${dueBadge}</span>
-              <span class="bd-badge bd-badge-sess">${sessCnt} session${sessCnt!==1?'s':''}</span>
+              <span class="bd-badge bd-badge-sess bd-badge-click" onclick="event.stopPropagation();openSessionPicker('${t.id}')" title="View & add sessions">${sessCnt} session${sessCnt!==1?'s':''}</span>
             </div>
           </div>
           <div class="dl-plus" onclick="event.stopPropagation();openSessionPicker('${t.id}')" title="Add session">+</div>
@@ -5890,9 +5890,22 @@ function previewSessions(){
       return {dateKey,time:ov.time||baseTime,dur,status:'skipped'};
     }
     const time=ov.time||baseTime;
-    // Check duplicate (this BD already has a session at this date+time)
-    if(t.sessions&&t.sessions.find(s=>s.date===dateKey&&s.time===time)){
-      return {dateKey,time,dur,status:'duplicate'};
+    const newStart=_timeToMin(time);
+    const newEnd=newStart+dur;
+    // Check for existing sessions on same day with overlapping times (not just exact duplicates).
+    // A 2-3 PM session and a 4-7 PM session on the same day are fine. But a 2-3 PM and
+    // 2:30-4:30 PM overlap and warrant a warning.
+    if(t.sessions){
+      const overlap=t.sessions.find(s=>{
+        if(s.date!==dateKey)return false;
+        const sStart=_timeToMin(s.time);
+        const sEnd=sStart+(s.duration||60);
+        return newStart<sEnd&&newEnd>sStart;
+      });
+      if(overlap){
+        const overlapTime=fmtT(overlap.time);
+        return {dateKey,time,dur,status:'duplicate',duplicateMsg:'Overlaps with existing '+overlapTime+' session'};
+      }
     }
     const conflictMsg=checkSessionConflicts(dateKey,time,dur);
     if(conflictMsg){
@@ -5996,7 +6009,7 @@ function refreshSpPreview(){
       } else if(r.status==='open'){
         statusHtml=`<span class="sp-row-status sp-stat-open">✓ ${fmtT(r.time)}${isOverridden?' (adjusted)':''}</span>`;
       } else if(r.status==='duplicate'){
-        statusHtml=`<span class="sp-row-status sp-stat-dup">Already booked</span>`;
+        statusHtml=`<span class="sp-row-status sp-stat-dup">${r.duplicateMsg||'Already booked'}</span>`;
         statusHtml+=`<span class="sp-row-skip" onclick="spOverrideRow(${i},'skip')">Skip</span>`;
       } else if(r.status==='conflict'){
         statusHtml=`<span class="sp-row-status sp-stat-conflict" title="${esc(r.conflictMsg||'')}">⚠ ${fmtT(r.time)} conflict</span>`;
@@ -8524,6 +8537,11 @@ function saveBDDetail(){
   const newDueDate=document.getElementById('bdDetailDueDate').value||'';
   const oldDueDate=t.dueDate||'';
 
+  // Past due date warning — allow but inform
+  if(newDueDate&&newDueDate<dk(new Date())){
+    showWarnToast('Due date is in the past — task will appear as overdue');
+  }
+
   // If due date was added (empty → filled), initialize deadline task fields
   if(newDueDate&&!oldDueDate){
     t.dueDate=newDueDate;
@@ -8609,6 +8627,9 @@ function clearBdDetailDueDate(){
   if(el)el.value='';
   const clearEl=document.getElementById('bdDetailDueClear');
   if(clearEl)clearEl.style.display='none';
+  // Update subtitle immediately so user sees the change before hitting Save
+  const subEl=document.getElementById('bdDetailSub');
+  if(subEl)subEl.textContent='Unscheduled · Brain Dump';
 }
 function deleteBDFromModal(){
   if(!bdDetailId)return;

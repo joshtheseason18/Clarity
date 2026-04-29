@@ -1545,7 +1545,7 @@ header{
 .side-tab.active{color:var(--accent);background:var(--accent-pale)}
 [data-dark="true"] .side-tab.active{background:rgba(var(--accent-rgb),.15)}
 .side-tab:hover:not(.active){color:var(--text);background:var(--surface2)}
-.side-panel{display:none;flex-direction:column;flex:1;overflow:hidden}
+.side-panel{display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0}
 .side-panel.active{display:flex}
 
 .bd-wrap{padding:10px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -1558,7 +1558,7 @@ header{
 .bd-ctrls{display:flex;gap:4px;margin-top:6px;align-items:center;flex-wrap:wrap}
 .bd-add{padding:5px 11px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s}
 .bd-add:hover{background:var(--accent-dim)}
-.bd-list{flex:1;overflow-y:auto;padding:7px 10px;display:flex;flex-direction:column;gap:4px}
+.bd-list{flex:1;overflow-y:auto;padding:7px 10px;display:flex;flex-direction:column;gap:4px;min-height:0}
 .bd-card{padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;border-left:3px solid var(--accent);cursor:grab;transition:box-shadow .15s,opacity .2s;display:flex;flex-direction:column;gap:3px;user-select:none}
 .bd-card:hover{box-shadow:0 4px 14px var(--shadow-color);border-color:var(--accent)}
 .bd-card:active{cursor:grabbing;opacity:.7}
@@ -3077,6 +3077,8 @@ header{
 .bd-badge-due-soon{background:#FAEEDA;color:#854F0B}
 .bd-badge-due-later{background:#E6F1FB;color:#0C447C}
 .bd-badge-sess{background:var(--surface2);color:var(--text3)}
+.bd-badge-click{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+.bd-badge-click:hover{opacity:.7}
 .bd-badge-miss{background:#FCEBEB;color:#791F1F}
 .bd-hint-bottom{padding:8px 10px;font-size:10px;color:var(--text3);text-align:center;line-height:1.5}
 .bd-batch-btn{width:100%;padding:8px;margin:6px 0 0;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;border:1px dashed var(--border);background:var(--surface);color:var(--text3);transition:all .15s}
