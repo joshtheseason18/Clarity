@@ -5879,12 +5879,16 @@ function previewSessions(){
   if(_spMode==='single'){
     if(_spSingleDates.size)dates=[..._spSingleDates].sort();
   } else {
-    // Recurring: from tomorrow until due date (or 12 weeks if no due date)
+    // Recurring: from tomorrow until due date (or 12 weeks if no due date).
+    // Phase B1 audit Apr 29: comparing Date objects with `cur<=end` was buggy because
+    // addDays preserves time-of-day. Picker opened at 7pm meant cur was always 7pm,
+    // but end (from fromDk) was midnight — so the due date itself was always skipped
+    // when it landed on a selected weekday. Switched to dk() string comparison which
+    // is purely date-based and immune to time-of-day drift.
     if(!_spRecurDays.length)return [];
-    const start=addDays(new Date(),1);
-    const end=t.dueDate?fromDk(t.dueDate):addDays(new Date(),84);
-    let cur=new Date(start);
-    while(cur<=end){
+    const endKey=t.dueDate||dk(addDays(new Date(),84));
+    let cur=addDays(new Date(),1);
+    while(dk(cur)<=endKey){
       if(_spRecurDays.includes(cur.getDay()))dates.push(dk(cur));
       cur=addDays(cur,1);
     }

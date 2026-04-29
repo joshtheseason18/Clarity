@@ -3136,7 +3136,12 @@ header{
 .bd-card .bd-name{font-size:12px}
 .bd-card .bd-meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 
-.bd-acc{border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;margin:0}
+/* flex-shrink:0 is critical — .bd-list is a flex column, and bd-acc has overflow:hidden
+   for rounded-corner clipping. Without flex-shrink:0, flex layout would silently shrink
+   the accordion below its content size and the overflow:hidden would clip items invisibly,
+   defeating .bd-list's overflow-y:auto. The accordion must stay at content height so the
+   parent has something to scroll. (Phase B1 audit, Apr 29 — bug surfaced at 30+ items.) */
+.bd-acc{border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;margin:0;flex-shrink:0}
 .bd-acc-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;user-select:none;background:var(--surface2);border-bottom:1px solid transparent;transition:background .12s}
 .bd-acc-hdr:hover{background:var(--surface3)}
 .bd-acc.open .bd-acc-hdr{border-bottom-color:var(--border)}
