@@ -1188,7 +1188,7 @@
         <div class="sp-day-field-wrap">
           <label class="sp-field-lbl">Day</label>
           <button class="sp-day-btn" id="spDayBtn" onclick="openSpDayPicker()">
-            <span id="spDayBtnText">Pick a day</span>
+            <span id="spDayBtnText">Pick dates</span>
             <span class="sp-day-btn-icon">▾</span>
           </button>
         </div>
@@ -1241,6 +1241,7 @@
         <button class="sp-dp-nav" onclick="spDayPickerNav(-1)">‹</button>
         <span class="sp-dp-month" id="spDpMonth"></span>
         <button class="sp-dp-nav" onclick="spDayPickerNav(1)">›</button>
+        <button class="sp-dp-close" onclick="document.getElementById('spDayPickerPop').style.display='none'" title="Close">&times;</button>
       </div>
       <div class="sp-dp-grid" id="spDpGrid"></div>
       <div class="sp-dp-legend">

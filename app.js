@@ -4775,7 +4775,7 @@ function renderAiBdChips(){
   el.innerHTML=brainDump.map(t=>{
     const sel=_aiBdSelected.has(t.id);
     const cc=catColor(t.category);
-    return`<button class="ai-bd-chip${sel?' selected':''}" style="${sel?`background:${cc};border-color:${cc};color:#fff`:`border-color:var(--border)`}" onclick="toggleAiBdChip('${t.id}')">
+    return`<button class="ai-bd-chip${sel?' selected':''}" style="${sel?`background:${cc==='var(--border2)'?'var(--accent)':cc};border-color:${cc==='var(--border2)'?'var(--accent)':cc};color:#fff`:`border-color:var(--border)`}" onclick="toggleAiBdChip('${t.id}')">
       ${sel?'✓ ':''}${esc(t.name)}${t.priority&&t.priority!=='none'?` · ${t.priority}`:''}
     </button>`;
   }).join('');
@@ -5264,6 +5264,13 @@ function renderBdCard(t,mid){
   if(!ready){
     if(!hasDate)badges+=`<span class="bd-badge bd-badge-miss">needs date</span>`;
     if(!hasTime)badges+=`<span class="bd-badge bd-badge-miss">needs time</span>`;
+  } else if(isEvent){
+    // Show the parsed date + time so the card reflects what the user typed
+    const dateStr=t._pendingDate?(() => {const d=fromDk(t._pendingDate);return DAYS_S[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate();})():'';
+    const timeStr=t._pendingAllday?'All day':(t._pendingTime?fmtT(t._pendingTime):'');
+    if(dateStr)badges+=`<span class="bd-badge bd-badge-date">${dateStr}</span>`;
+    if(timeStr)badges+=`<span class="bd-badge bd-badge-time">${timeStr}</span>`;
+    badges+=`<span class="bd-badge bd-badge-ready">ready to schedule</span>`;
   }
   if(t.category&&t.category!=='none'){const cat=catById(t.category);badges+=`<span class="bd-badge" style="background:${cc}1a;color:${cc}">${esc(cat?cat.name:t.category)}</span>`;}
 
@@ -5448,7 +5455,7 @@ function undoJustScheduled(i){
   tasks=tasks.filter(t=>t.id!==js.id);
   brainDump.push({id:js.id,name:js.name,type:js.type||'task',category:'none',priority:'none',notes:'',subtasks:[]});
   _justScheduled.splice(i,1);
-  save();renderAll();
+  save();renderAll();renderBD();
 }
 function editJustScheduled(i){
   const js=_justScheduled[i];if(!js)return;
@@ -5750,7 +5757,7 @@ function addDeadlineTask(){
 // ══════════════════════════════════════════════════════════════════════════
 let _sessionPickerBdId='';
 let _spMode='single';                    // 'single' | 'recurring'
-let _spSingleDate='';                    // YYYY-MM-DD; '' = nothing picked
+let _spSingleDates=new Set();             // Set of YYYY-MM-DD; multi-select in single mode
 let _spRecurDays=[];                     // [0..6] for Sun..Sat
 let _spTime='14:00';
 let _spDur=60;                           // minutes; multiples of 15
@@ -5768,12 +5775,12 @@ function openSessionPicker(bdId){
   // Default single-mode date: tomorrow (or today if before 6 PM, since the past-time
   // guard from Bug 24 will skip past slots anyway)
   const def=addDays(new Date(),1);
-  _spSingleDate=dk(def);
+  _spSingleDates=new Set();
   _spRecurDays=[];
   _spTime='14:00';
   _spDur=60;
   _spOverrides={};
-  _spDpCursor=fromDk(_spSingleDate);
+  _spDpCursor=addDays(new Date(),1);
   // Sync UI
   renderSessionList(t);
   setSpMode('single');
@@ -5870,7 +5877,7 @@ function previewSessions(){
   // Step 1: figure out which dates the user wants sessions on
   let dates=[];
   if(_spMode==='single'){
-    if(_spSingleDate)dates=[_spSingleDate];
+    if(_spSingleDates.size)dates=[..._spSingleDates].sort();
   } else {
     // Recurring: from tomorrow until due date (or 12 weeks if no due date)
     if(!_spRecurDays.length)return [];
@@ -5943,11 +5950,14 @@ function refreshSpPreview(){
   // Update single-mode day button label
   const dayBtnText=document.getElementById('spDayBtnText');
   if(dayBtnText){
-    if(_spSingleDate){
-      const d=fromDk(_spSingleDate);
+    if(_spSingleDates.size===0){
+      dayBtnText.textContent='Pick dates';
+    } else if(_spSingleDates.size===1){
+      const key=[..._spSingleDates][0];
+      const d=fromDk(key);
       dayBtnText.textContent=DLONG[d.getDay()]+', '+MONTHS_S[d.getMonth()]+' '+d.getDate();
     } else {
-      dayBtnText.textContent='Pick a day';
+      dayBtnText.textContent=_spSingleDates.size+' dates selected';
     }
   }
 
@@ -5979,7 +5989,7 @@ function refreshSpPreview(){
   if(rows.length===0){
     blockEl.innerHTML=_spMode==='recurring'
       ?'<div class="sp-block-empty">Pick days to see the preview</div>'
-      :'<div class="sp-block-empty">Pick a day to see the preview</div>';
+      :'<div class="sp-block-empty">Pick dates from the calendar above</div>';
   } else {
     blockEl.innerHTML=`<div class="sp-block-strip">
       <span>${fmtT(_spTime)} → ${fmtT(_minToTime(baseEnd))}</span>
@@ -6035,7 +6045,7 @@ function refreshSpPreview(){
   const willAdd=rows.filter(r=>r.status==='open').length;
   if(!rows.length){
     addBtn.disabled=true;
-    addBtn.textContent=_spMode==='recurring'?'Pick days':'Pick a day';
+    addBtn.textContent=_spMode==='recurring'?'Pick days':'Pick dates';
   } else if(willAdd===0){
     addBtn.disabled=true;
     addBtn.textContent='No sessions to add';
@@ -6053,8 +6063,18 @@ function spOverrideRow(idx,action,newTime){
   if(action==='skip')_spOverrides[row.dateKey].skip=true;
   else if(action==='unskip')delete _spOverrides[row.dateKey].skip;
   else if(action==='time'&&newTime){
-    _spOverrides[row.dateKey].time=newTime;
-    delete _spOverrides[row.dateKey].skip;
+    // In single mode, update the base time too since there's only one row —
+    // the distinction between "base config" and "per-row override" is meaningless.
+    // Keeps the time input field in sync with what the user just chose.
+    if(_spMode==='single'){
+      _spTime=newTime;
+      const tEl=document.getElementById('spTime');
+      if(tEl)tEl.value=newTime;
+      delete _spOverrides[row.dateKey]; // no override needed, base is now correct
+    } else {
+      _spOverrides[row.dateKey].time=newTime;
+      delete _spOverrides[row.dateKey].skip;
+    }
   }
   refreshSpPreview();
 }
@@ -6066,21 +6086,18 @@ function openSpDayPicker(){
   if(!_spDpCursor)_spDpCursor=new Date();
   renderSpDayPicker();
   pop.style.display='block';
-  // Close popover on outside click
+  // Close popover on any click outside of it — use mousedown for reliability
   setTimeout(()=>{
-    document.addEventListener('click',_spDpOutsideClick,{once:true});
-  },50);
-}
-
-function _spDpOutsideClick(e){
-  const pop=document.getElementById('spDayPickerPop');
-  const btn=document.getElementById('spDayBtn');
-  if(!pop)return;
-  if(!pop.contains(e.target)&&!btn.contains(e.target)){
-    pop.style.display='none';
-  } else {
-    document.addEventListener('click',_spDpOutsideClick,{once:true});
-  }
+    function handler(e){
+      const pop2=document.getElementById('spDayPickerPop');
+      const btn=document.getElementById('spDayBtn');
+      if(!pop2||pop2.style.display==='none'){document.removeEventListener('mousedown',handler);return;}
+      if(pop2.contains(e.target)||btn.contains(e.target))return;
+      pop2.style.display='none';
+      document.removeEventListener('mousedown',handler);
+    }
+    document.addEventListener('mousedown',handler);
+  },100);
 }
 
 function spDayPickerNav(delta){
@@ -6120,7 +6137,7 @@ function renderSpDayPicker(){
     const isDue=key===dueKey;
     const hasSession=sessionDates.has(key);
     const isPastDue=dueKey&&key>dueKey;
-    const isSelected=key===_spSingleDate;
+    const isSelected=_spSingleDates.has(key);
     const cls=['sp-dp-cell',
       isToday?'is-today':'',
       isPast?'is-past':'',
@@ -6144,9 +6161,14 @@ function selectSpDpDate(dateKey){
   if(t&&t.dueDate&&dateKey>t.dueDate){
     if(!confirm("That's after the due date. Pick it anyway?"))return;
   }
-  _spSingleDate=dateKey;
-  _spOverrides={}; // base date changed
-  document.getElementById('spDayPickerPop').style.display='none';
+  // Toggle: click to add, click again to deselect
+  if(_spSingleDates.has(dateKey)){
+    _spSingleDates.delete(dateKey);
+  } else {
+    _spSingleDates.add(dateKey);
+  }
+  _spOverrides={}; // dates changed, reset per-row overrides
+  renderSpDayPicker(); // re-render to update selection highlights
   refreshSpPreview();
 }
 
@@ -6178,7 +6200,7 @@ function commitSessions(){
   _spOverrides={};
   if(_spMode==='recurring')_spRecurDays=[];
   document.querySelectorAll('#spDayChips .sp-day-chip').forEach(el=>el.classList.remove('active'));
-  if(_spMode==='single'){_spSingleDate='';}
+  if(_spMode==='single'){_spSingleDates=new Set();}
   refreshSpPreview();
   showToast('Added '+rows.length+' session'+(rows.length!==1?'s':''));
 }
@@ -7898,6 +7920,8 @@ function doDelete(mode){
     }
     tasks=tasks.filter(t=>t.id!==mId);
     save();closeDelModal();closeModal();renderAll();
+    // Force deadline panel update if we just deleted a session task
+    if(removedSess)renderDeadlines();
     showUndoToast(`"${removed.name}" deleted`,()=>{
       tasks.push(removed);
       if(removedSess){
@@ -7907,7 +7931,7 @@ function doDelete(mode){
           parent.sessions.splice(removedSess.index,0,removedSess.session);
         }
       }
-      save();renderAll();
+      save();renderAll();renderDeadlines();
     });
   }
 }
