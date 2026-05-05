@@ -5798,6 +5798,12 @@ function closeSessionPicker(){
   el.classList.remove('show');
   document.getElementById('spDayPickerPop').style.display='none';
   setTimeout(()=>{el.style.display='none';},200);
+  // Phase B2: if the BD modal is open underneath, refresh its sessions block
+  // so any committed/removed sessions are reflected without the user reopening.
+  const bdOv=document.getElementById('bdDetailOverlay');
+  if(bdOv&&bdOv.classList.contains('open')){
+    renderBdSessionsBlock();
+  }
 }
 
 // ── Mode toggle ────────────────────────────────────────────────────────────
@@ -6008,7 +6014,15 @@ function refreshSpPreview(){
   if(!rows.length){
     previewEl.innerHTML='';
   } else {
-    previewEl.innerHTML=rows.map((r,i)=>{
+    // Phase B2: hint text above recurring previews — appears when 2+ rows
+    // exist so it's clearly relevant. Fades to muted gray after the user has
+    // skipped at least one row (discovery served, no longer needs attention).
+    let hintHtml='';
+    if(_spMode==='recurring'&&rows.length>=2){
+      const hasFaded=Object.values(_spOverrides).some(o=>o&&o.skip);
+      hintHtml=`<div class="sp-skip-hint${hasFaded?' sp-hint-faded':''}">Tap a row to skip it · tap again to re-include</div>`;
+    }
+    previewEl.innerHTML=hintHtml+rows.map((r,i)=>{
       const d=fromDk(r.dateKey);
       const dayLabel=DLONG[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate();
       const ov=_spOverrides[r.dateKey]||{};
@@ -6017,25 +6031,35 @@ function refreshSpPreview(){
 
       let statusHtml='';
       let altsHtml='';
+      let rowExtraClass='';
+      let rowOnclick='';
       if(skipped){
         statusHtml=`<span class="sp-row-status sp-stat-skipped">Skipped</span>`;
-        statusHtml+=`<span class="sp-row-restore" onclick="spOverrideRow(${i},'unskip')">Restore</span>`;
+        statusHtml+=`<span class="sp-row-restore" onclick="event.stopPropagation();spOverrideRow(${i},'unskip')">Restore</span>`;
+        // Phase B2: tapping anywhere on a skipped row also restores it (consistent
+        // with "tap to toggle" mental model). Recurring mode only.
+        if(_spMode==='recurring'){rowExtraClass=' sp-row-clickable';rowOnclick=`onclick="spOverrideRow(${i},'unskip')"`;}
       } else if(r.status==='open'){
         statusHtml=`<span class="sp-row-status sp-stat-open">✓ ${fmtT(r.time)}${isOverridden?' (adjusted)':''}</span>`;
+        // Phase B2: tap-to-skip on open rows in recurring mode. Lets users
+        // exclude a specific recurrence without canceling the whole pattern.
+        // Single mode skipped — there's only ever one row, so tap-to-skip is
+        // equivalent to "remove the row I just picked," which is confusing.
+        if(_spMode==='recurring'){rowExtraClass=' sp-row-clickable';rowOnclick=`onclick="spOverrideRow(${i},'skip')"`;}
       } else if(r.status==='duplicate'){
         statusHtml=`<span class="sp-row-status sp-stat-dup">${r.duplicateMsg||'Already booked'}</span>`;
-        statusHtml+=`<span class="sp-row-skip" onclick="spOverrideRow(${i},'skip')">Skip</span>`;
+        statusHtml+=`<span class="sp-row-skip" onclick="event.stopPropagation();spOverrideRow(${i},'skip')">Skip</span>`;
       } else if(r.status==='conflict'){
         statusHtml=`<span class="sp-row-status sp-stat-conflict" title="${esc(r.conflictMsg||'')}">⚠ ${fmtT(r.time)} conflict</span>`;
         if(r.alternatives&&r.alternatives.length){
           altsHtml='<div class="sp-row-alts">'+r.alternatives.map(a=>
-            `<button class="sp-alt-chip" onclick="spOverrideRow(${i},'time','${a.time}')">${esc(a.label)}</button>`
-          ).join('')+`<button class="sp-alt-chip sp-alt-skip" onclick="spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
+            `<button class="sp-alt-chip" onclick="event.stopPropagation();spOverrideRow(${i},'time','${a.time}')">${esc(a.label)}</button>`
+          ).join('')+`<button class="sp-alt-chip sp-alt-skip" onclick="event.stopPropagation();spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
         } else {
-          altsHtml=`<div class="sp-row-alts"><button class="sp-alt-chip sp-alt-skip" onclick="spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
+          altsHtml=`<div class="sp-row-alts"><button class="sp-alt-chip sp-alt-skip" onclick="event.stopPropagation();spOverrideRow(${i},'skip')">Skip ${DAYS_S[d.getDay()]}</button></div>`;
         }
       }
-      return `<div class="sp-preview-row${skipped?' sp-row-dim':''}" data-idx="${i}">
+      return `<div class="sp-preview-row${skipped?' sp-row-dim':''}${rowExtraClass}" data-idx="${i}" ${rowOnclick}>
         <div class="sp-row-main">
           <span class="sp-row-day">${dayLabel}</span>
           ${statusHtml}
@@ -6200,6 +6224,9 @@ function commitSessions(){
   });
   t.sessions.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   save();renderSessionList(t);renderDeadlines();renderAll();
+  // Phase B2: also refresh BD modal's sessions block if it's open underneath
+  const bdOv=document.getElementById('bdDetailOverlay');
+  if(bdOv&&bdOv.classList.contains('open'))renderBdSessionsBlock();
   // Reset overrides + recur days for the next add cycle, keep mode/time/dur
   _spOverrides={};
   if(_spMode==='recurring')_spRecurDays=[];
@@ -6230,6 +6257,9 @@ function removeSession(bdId,idx){
   t.sessions.splice(idx,1);
   save();renderSessionList(t);renderDeadlines();renderAll();
   refreshSpPreview();
+  // Phase B2: also refresh BD modal's sessions block if open underneath
+  const bdOv=document.getElementById('bdDetailOverlay');
+  if(bdOv&&bdOv.classList.contains('open'))renderBdSessionsBlock();
 }
 
 // ══ PARSE DUE DATE FROM TEXT ══════════════════
@@ -8538,6 +8568,8 @@ function openBDDetail(id){
     else{subEl.textContent='Unscheduled · Brain Dump';}
   }
   document.getElementById('bdDetailOverlay').classList.add('open');
+  // Phase B2: Populate sessions block. Hidden when no due date.
+  renderBdSessionsBlock();
   setTimeout(()=>{
     const nameEl=document.getElementById('bdDetailName');
     nameEl.focus();autoExpand(nameEl);
@@ -8651,6 +8683,34 @@ function saveBDDetail(){
 }
 function closeBDDetail(){document.getElementById('bdDetailOverlay').classList.remove('open');bdDetailId=null}
 function clearBdDetailDueDate(){
+  // Phase B2: if the task has active sessions on the calendar, clearing the due
+  // date is destructive — those sessions get deleted as part of the cascade. Show
+  // the State E confirmation before doing anything.
+  if(bdDetailId){
+    const t=brainDump.find(b=>b.id===bdDetailId);
+    if(t){
+      const linkedSessions=tasks.filter(tk=>tk._parentBdId===bdDetailId);
+      const sessionCount=linkedSessions.length;
+      if(sessionCount>0){
+        // Show cascade confirm — actual clearing happens in confirmBdCascadeRemove
+        const msgEl=document.getElementById('bdCascadeMsg');
+        if(msgEl){
+          const noun='session'+(sessionCount!==1?'s':'');
+          msgEl.textContent=`This task has ${sessionCount} ${noun} on your calendar. Removing the deadline will also delete ${sessionCount===1?'that':'those'} scheduled ${noun}.`;
+        }
+        const ov=document.getElementById('bdCascadeOverlay');
+        if(ov){ov.style.display='flex';void ov.offsetWidth;ov.classList.add('show');}
+        return; // bail — don't clear yet
+      }
+    }
+  }
+  // No sessions, or no bdDetailId — safe to clear immediately
+  bdDoClearDueDate();
+}
+
+// Phase B2: Actually clear the due date field UI. Called both from the safe path
+// (no sessions) and from the cascade-confirmed path.
+function bdDoClearDueDate(){
   const el=document.getElementById('bdDetailDueDate');
   if(el)el.value='';
   const clearEl=document.getElementById('bdDetailDueClear');
@@ -8658,6 +8718,9 @@ function clearBdDetailDueDate(){
   // Update subtitle immediately so user sees the change before hitting Save
   const subEl=document.getElementById('bdDetailSub');
   if(subEl)subEl.textContent='Unscheduled · Brain Dump';
+  // Hide the sessions block since there's no longer a deadline
+  const block=document.getElementById('bdSessionsBlock');
+  if(block)block.style.display='none';
 }
 function deleteBDFromModal(){
   if(!bdDetailId)return;
@@ -8669,6 +8732,157 @@ function deleteBDFromModal(){
   brainDump=brainDump.filter(t=>t.id!==bdDetailId);
   save();closeBDDetail();renderAll();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PHASE B2 — Deadline-aware additions to BD modal
+// Adds an inline sessions block that appears below Due Date when a deadline is
+// set. The "+ Add sessions" button delegates to the existing standalone session
+// picker (B1) — proven, tested, no need to duplicate. Clearing the due date with
+// active sessions triggers the State E cascade confirmation.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Render the sessions block based on the current bdDetailId's task. Hides the
+// block entirely when there's no due date. Shows empty state, populated list,
+// or appropriate header copy depending on session count.
+function renderBdSessionsBlock(){
+  const block=document.getElementById('bdSessionsBlock');
+  if(!block)return;
+  if(!bdDetailId){block.style.display='none';return;}
+  const t=brainDump.find(b=>b.id===bdDetailId);
+  if(!t||!t.dueDate){block.style.display='none';return;}
+  // Active sessions = calendar tasks with this BD task as parent
+  const sessions=tasks.filter(tk=>tk._parentBdId===bdDetailId).slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  const count=sessions.length;
+  block.style.display='';
+  // Header
+  const labelEl=document.getElementById('bdSessionsLabel');
+  const metaEl=document.getElementById('bdSessionsMeta');
+  if(labelEl){
+    if(count===0){
+      labelEl.textContent='Sessions';
+    } else {
+      const totalMins=sessions.reduce((sum,s)=>sum+(s.duration||30),0);
+      labelEl.textContent=`Sessions · ${durLabel(totalMins)}`;
+    }
+  }
+  if(metaEl){
+    metaEl.textContent=count===0?'':(count+' scheduled');
+  }
+  // List
+  const listEl=document.getElementById('bdSessionsList');
+  if(listEl){
+    if(count===0){
+      listEl.innerHTML='<div class="bd-sessions-empty">No sessions yet — tap below to schedule them</div>';
+    } else {
+      listEl.innerHTML=sessions.map(s=>{
+        const d=fromDk(s.date);
+        const dayLabel=DAYS_S[d.getDay()]+' '+MONTHS_S[d.getMonth()]+' '+d.getDate();
+        return `<div class="bd-session-row">
+          <span class="bd-session-row-day">${dayLabel}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="bd-session-row-time">${fmtT(s.time)} · ${durLabel(s.duration||30)}</span>
+            <span class="bd-session-row-del" onclick="removeBdSessionByTaskId('${s.id}')" title="Remove this session">×</span>
+          </span>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// Remove an individual session by its calendar-task id. Used from the sessions
+// list × button. Refreshes the block, deadline panel, and full app render.
+function removeBdSessionByTaskId(sessTaskId){
+  if(!bdDetailId)return;
+  const sessTask=tasks.find(tk=>tk.id===sessTaskId);
+  if(!sessTask)return;
+  // Remove from calendar
+  tasks=tasks.filter(tk=>tk.id!==sessTaskId);
+  // Also remove from BD task's sessions[] if it tracks them (B1 stores both)
+  const t=brainDump.find(b=>b.id===bdDetailId);
+  if(t&&t.sessions){
+    t.sessions=t.sessions.filter(s=>!(s.date===sessTask.date&&s.time===sessTask.time));
+  }
+  save();
+  renderBdSessionsBlock();
+  renderDeadlines();
+  renderAll();
+}
+
+// Wired to onchange of the due date input. Updates the Clear button visibility
+// (it was inline before) and shows/hides the sessions block immediately.
+function onBdDueDateChange(){
+  const el=document.getElementById('bdDetailDueDate');
+  if(!el)return;
+  const clearEl=document.getElementById('bdDetailDueClear');
+  if(clearEl)clearEl.style.display=el.value?'':'none';
+  // Show or hide the sessions block based on whether a date is now set
+  if(bdDetailId){
+    const t=brainDump.find(b=>b.id===bdDetailId);
+    if(t){
+      // Temporarily reflect the new value so renderBdSessionsBlock sees it
+      const prevDue=t.dueDate;
+      if(el.value)t.dueDate=el.value;
+      else delete t.dueDate;
+      renderBdSessionsBlock();
+      // Restore so we don't accidentally persist before Save is hit
+      if(prevDue)t.dueDate=prevDue;
+      else delete t.dueDate;
+      // But if user JUST entered a date (was empty, now set), keep it visible —
+      // saveBDDetail will persist on Save. Re-apply for the live render.
+      if(el.value)t.dueDate=el.value;
+    }
+  }
+}
+
+// Open the standalone session picker from inside the BD modal. The picker is the
+// same one used from the deadline panel — proven UX, single source of truth.
+// When the picker closes, refresh the sessions block to reflect any changes.
+function openSessionPickerFromBd(){
+  if(!bdDetailId)return;
+  const t=brainDump.find(b=>b.id===bdDetailId);
+  if(!t||!t.dueDate){
+    showWarnToast('Set a due date first');
+    return;
+  }
+  // The picker reads from brainDump by id. Make sure the in-memory record has
+  // the most current dueDate (in case user just typed it but hasn't saved yet).
+  const dueInput=document.getElementById('bdDetailDueDate');
+  if(dueInput&&dueInput.value)t.dueDate=dueInput.value;
+  openSessionPicker(bdDetailId);
+}
+
+// State E cascade confirmation handlers
+function closeBdCascadeConfirm(){
+  const ov=document.getElementById('bdCascadeOverlay');
+  if(!ov)return;
+  ov.classList.remove('show');
+  setTimeout(()=>{ov.style.display='none';},150);
+}
+function confirmBdCascadeRemove(){
+  if(!bdDetailId){closeBdCascadeConfirm();return;}
+  const t=brainDump.find(b=>b.id===bdDetailId);
+  if(!t){closeBdCascadeConfirm();return;}
+  // Remove all linked calendar sessions
+  const sessionIds=tasks.filter(tk=>tk._parentBdId===bdDetailId).map(tk=>tk.id);
+  tasks=tasks.filter(tk=>tk._parentBdId!==bdDetailId);
+  // Clear the BD task's deadline state
+  delete t.dueDate;
+  delete t.sessions;
+  delete t.done;
+  save();
+  // Update modal UI
+  bdDoClearDueDate();
+  renderBdSessionsBlock();
+  closeBdCascadeConfirm();
+  renderDeadlines();
+  renderAll();
+  // Toast feedback (no undo for now — matches the bigger destructive convention)
+  const noun='session'+(sessionIds.length!==1?'s':'');
+  showToast(`Deadline removed · ${sessionIds.length} ${noun} deleted`);
+}
+// ══════════════════════════════════════════════════════════════════════════════
+// END PHASE B2 ADDITIONS
+// ══════════════════════════════════════════════════════════════════════════════
 // ══ AUTO-EXPAND TEXTAREAS ═════════════════════
 function autoExpand(el){
   el.style.height='auto';

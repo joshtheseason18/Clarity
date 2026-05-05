@@ -622,9 +622,19 @@
     <div class="fg" id="bdDetailDueWrap">
       <label class="flbl">Due date <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(deadline)</span></label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input class="fi" type="date" id="bdDetailDueDate" style="flex:1;font-size:12px;padding:6px 9px" onchange="document.getElementById('bdDetailDueClear').style.display=this.value?'':'none'">
+        <input class="fi" type="date" id="bdDetailDueDate" style="flex:1;font-size:12px;padding:6px 9px" onchange="onBdDueDateChange()">
         <span style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline" id="bdDetailDueClear" onclick="clearBdDetailDueDate()">Clear</span>
       </div>
+    </div>
+    <!-- Phase B2: Sessions block — appears below Due Date when a deadline is set.
+         Hidden when no due date. Populated by renderBdSessionsBlock(). -->
+    <div class="bd-sessions-block" id="bdSessionsBlock" style="display:none">
+      <div class="bd-sessions-hdr">
+        <span class="bd-sessions-label" id="bdSessionsLabel">No sessions yet</span>
+        <span class="bd-sessions-meta" id="bdSessionsMeta"></span>
+      </div>
+      <div class="bd-sessions-list" id="bdSessionsList"></div>
+      <button class="bd-add-sessions-btn" id="bdAddSessionsBtn" onclick="openSessionPickerFromBd()">+ Add sessions</button>
     </div>
     <div class="fg">
       <label class="flbl" id="bdDetailScheduleLabel">Schedule it now <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span></label>
@@ -657,6 +667,19 @@
       <button class="btn-d" onclick="deleteBDFromModal()">Remove</button>
       <button class="btn-c" onclick="closeBDDetail()">Cancel</button>
       <button class="btn-s" onclick="saveBDDetail()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phase B2: Cascade confirmation when clearing a due date with active sessions.
+     Dark red action follows destructive convention. -->
+<div class="modal-overlay" id="bdCascadeOverlay" style="display:none" onclick="if(event.target===this)closeBdCascadeConfirm()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+    <div class="modal-title">Remove deadline?</div>
+    <div class="modal-sub" id="bdCascadeMsg" style="margin-top:6px;line-height:1.5">This task has sessions on your calendar. Removing the deadline will also delete those scheduled sessions.</div>
+    <div class="modal-acts" style="margin-top:14px">
+      <button class="btn-c" onclick="closeBdCascadeConfirm()">Cancel</button>
+      <button class="btn-cascade" onclick="confirmBdCascadeRemove()">Remove sessions</button>
     </div>
   </div>
 </div>

@@ -3374,3 +3374,140 @@ header{
 
 /* ══ Theme Lock Indicator ═══════════════════ */
 .theme-swatch-lock{position:absolute;top:2px;right:2px;font-size:8px;color:var(--text3);opacity:.6}
+
+/* ══ Phase B2: Sessions Block in BD Modal ═══════════════════════════════════ */
+/* Appears below Due Date when a deadline is set on a task. */
+.bd-sessions-block{
+  background:var(--accent-pale);
+  border:0.5px solid var(--accent-light);
+  border-left:2px solid var(--accent);
+  border-radius:8px;
+  padding:10px 11px;
+  margin:0 0 12px 0;
+}
+.bd-sessions-hdr{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:7px;
+}
+.bd-sessions-label{
+  font-size:10px;
+  color:var(--accent-dim);
+  font-weight:600;
+  letter-spacing:0.4px;
+  text-transform:uppercase;
+}
+.bd-sessions-meta{
+  font-size:10px;
+  color:var(--text3);
+}
+.bd-sessions-list{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-bottom:8px;
+}
+.bd-sessions-list:empty{
+  display:none;
+}
+.bd-session-row{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:5px;
+  padding:6px 9px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:12px;
+  color:var(--text);
+}
+.bd-session-row-day{
+  font-weight:500;
+}
+.bd-session-row-time{
+  color:var(--text2);
+  font-size:11px;
+}
+.bd-session-row-del{
+  color:var(--text3);
+  cursor:pointer;
+  padding:2px 6px;
+  font-size:14px;
+  line-height:1;
+  margin-left:6px;
+  user-select:none;
+}
+.bd-session-row-del:hover{
+  color:#A32D2D;
+}
+.bd-add-sessions-btn{
+  width:100%;
+  border:0.5px solid var(--accent);
+  color:var(--accent);
+  background:transparent;
+  border-radius:5px;
+  padding:7px;
+  font-size:12px;
+  font-weight:500;
+  cursor:pointer;
+  font-family:inherit;
+  transition:background .12s;
+}
+.bd-add-sessions-btn:hover{
+  background:var(--accent-pale);
+}
+.bd-sessions-empty{
+  font-size:11px;
+  color:var(--text3);
+  font-style:italic;
+  padding:4px 0 6px 0;
+}
+
+/* ══ Phase B2: Dark-red destructive button (cascade confirm) ════════════════ */
+.btn-cascade{
+  background:#A32D2D;
+  color:#FFFFFF;
+  border:none;
+  border-radius:6px;
+  padding:7px 14px;
+  font-size:12px;
+  font-weight:500;
+  cursor:pointer;
+  font-family:inherit;
+  transition:background .12s;
+}
+.btn-cascade:hover{
+  background:#8A2424;
+}
+
+/* ══ Phase B2: Tap-to-skip on open preview rows + rose hint ═════════════════ */
+/* Open rows are now clickable to toggle skip. Hint text shows above the
+   first preview row so users discover the interaction. */
+.sp-preview-row.sp-row-clickable{
+  cursor:pointer;
+  transition:background .12s;
+}
+.sp-preview-row.sp-row-clickable:hover{
+  background:var(--surface2);
+}
+.sp-skip-hint{
+  font-size:11px;
+  color:var(--accent);
+  text-align:center;
+  margin:6px 0 4px 0;
+  font-weight:500;
+  transition:color .25s, opacity .25s;
+}
+.sp-skip-hint.sp-hint-faded{
+  color:var(--text3);
+  opacity:0.7;
+}
+
+/* Dark-mode tweaks for sessions block */
+[data-dark="true"] .bd-sessions-block{
+  background:rgba(var(--accent-rgb), 0.08);
+}
+[data-dark="true"] .bd-session-row{
+  background:var(--surface2);
+}
