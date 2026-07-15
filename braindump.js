@@ -12,27 +12,21 @@
   var dumpDraft = '';      // preserves typed text across re-render (e.g. switching type pill)
   var completedOpen = false; // Completed projects section expanded
   var dumpSort = 'oldest';   // brain-dump sort: 'oldest' | 'newest'
+  var histOpen = false;      // History (scheduled captures) expanded
+  var dumpIdSeq = 0;         // same-millisecond id collision guard (same pattern as tasks)
 
-  function loadDump() { return LC.loadData(KEY) || []; }
+  function loadDump() { var v = LC.loadData(KEY); return Array.isArray(v) ? v : []; }
   function saveDump(arr) { LC.saveData(KEY, arr); }
-  function loadProjects() { return LC.loadData(KEY_PROJ) || []; }
+  function loadProjects() { var v = LC.loadData(KEY_PROJ); return Array.isArray(v) ? v : []; }
   function saveProjects(arr) { LC.saveData(KEY_PROJ, arr); }
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
   function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
   function two(n) { return String(n).padStart(2, '0'); }
-  function clockParts(min) {
-    var h = Math.floor(min / 60) % 24, m = ((min % 60) + 60) % 60;
-    var ap = h >= 12 ? 'PM' : 'AM', h12 = h % 12 === 0 ? 12 : h % 12;
-    return { h12: h12, m: m, ap: ap };
-  }
-  function fmtClock(min) { var p = clockParts(min); return p.h12 + ':' + two(p.m) + ' ' + p.ap; }
-  function fmtRange(start, dur) {
-    var a = clockParts(start), b = clockParts(start + dur);
-    var aStr = a.h12 + ':' + two(a.m) + (a.ap !== b.ap ? ' ' + a.ap : '');
-    return aStr + ' – ' + b.h12 + ':' + two(b.m) + ' ' + b.ap;
-  }
+  // Respect the 12/24-hour setting everywhere (was a local AM/PM-only formatter).
+  function fmtClock(min) { return LC.fmtTime(min); }
+  function fmtRange(start, dur) { return LC.fmtTime(start) + ' – ' + LC.fmtTime(start + dur); }
   function fmtDurShort(min) {
     var h = Math.floor(min / 60), m = min % 60;
     return (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '') || '0m';
@@ -136,6 +130,156 @@
     }
   }
 
+  /* ══════════════════════════════════════════
+     Smart capture — parse date/time/duration/type out of free text.
+     "7/15 dr appt 3pm" → {title:'Dr appt', dateISO:'2026-07-15', startMin:900, type:'event'}
+     ══════════════════════════════════════════ */
+  var MO_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  var DOW_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  var EVENT_WORDS = /\b(appt|appointment|dr\.?|doctor|dentist|meeting|call|interview|visit|checkup|church|service)\b/i;
+
+  function isoOf(d) { return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()); }
+
+  function parseCapture(text) {
+    var out = { title: text, dateISO: null, startMin: null, durationMin: null, type: null };
+    var s = ' ' + text + ' ';
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    var m;
+
+    // 7/15 (optional /2026). Slash ONLY — hyphens would eat ranges like "9-5 planning" as dates.
+    m = s.match(/\s(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?=[\s,.!?])/);
+    if (m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) {
+      var yr = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : now.getFullYear();
+      var cand = new Date(yr, +m[1] - 1, +m[2]);
+      if (!m[3] && cand < now) cand.setFullYear(cand.getFullYear() + 1);   // 1/5 typed in July → next Jan
+      out.dateISO = isoOf(cand);
+      s = s.replace(m[0], ' ');
+    }
+    // "jul 15" / "july 15"
+    if (!out.dateISO) {
+      m = s.match(/\s(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?=[\s,.!?])/i);
+      if (m && +m[2] >= 1 && +m[2] <= 31) {
+        var mi2 = MO_NAMES.indexOf(m[1].toLowerCase());
+        var cand2 = new Date(now.getFullYear(), mi2, +m[2]);
+        if (cand2 < now) cand2.setFullYear(cand2.getFullYear() + 1);
+        out.dateISO = isoOf(cand2);
+        s = s.replace(m[0], ' ');
+      }
+    }
+    // today / tomorrow / weekday name → soonest occurrence
+    if (!out.dateISO) {
+      m = s.match(/\s(today|tonight|tomorrow|tmrw|tmr)(?=[\s,.!?])/i);
+      if (m) {
+        var d3 = new Date(now);
+        if (!/today|tonight/i.test(m[1])) d3.setDate(d3.getDate() + 1);
+        out.dateISO = isoOf(d3);
+        s = s.replace(m[0], ' ');
+      }
+    }
+    if (!out.dateISO) {
+      m = s.match(/\s(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:[a-z]*day)?(?=[\s,.!?])/i);
+      if (m) {
+        var want = -1;
+        DOW_NAMES.forEach(function (n, i) { if (n.indexOf(m[1].toLowerCase().slice(0, 3)) === 0) want = i; });
+        if (want >= 0) {
+          var d4 = new Date(now);
+          d4.setDate(d4.getDate() + ((want - d4.getDay() + 7) % 7));   // soonest, today counts
+          out.dateISO = isoOf(d4);
+          s = s.replace(m[0], ' ');
+        }
+      }
+    }
+    // duration BEFORE time (so "1h" isn't eaten as an hour) — "for 1h", "30m", "1.5 hours"
+    m = s.match(/\s(?:for\s+)?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)(?=[\s,.!?])/i);
+    if (m) { out.durationMin = Math.max(15, Math.round(parseFloat(m[1]) * 60)); s = s.replace(m[0], ' '); }
+    if (!out.durationMin) {
+      m = s.match(/\s(?:for\s+)?(\d+)\s*(m|min|mins|minutes)(?=[\s,.!?])/i);
+      if (m) { out.durationMin = Math.max(15, +m[1]); s = s.replace(m[0], ' '); }
+    }
+    // time — "3pm", "3:30 pm", "15:00", "at 3"
+    m = s.match(/\s(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=[\s,.!?])/i);
+    if (m) {
+      var hh = +m[1] % 12; if (m[3].toLowerCase() === 'pm') hh += 12;
+      out.startMin = hh * 60 + (+m[2] || 0);
+      s = s.replace(m[0], ' ');
+    } else {
+      m = s.match(/\s(?:at\s+)?(\d{1,2}):(\d{2})(?=[\s,.!?])/);
+      if (m && +m[1] <= 23 && +m[2] <= 59) { out.startMin = +m[1] * 60 + +m[2]; s = s.replace(m[0], ' '); }
+    }
+    // type inference (word stays in the title — "Dr. appt" should still read "Dr. appt")
+    if (EVENT_WORDS.test(text)) out.type = 'event';
+
+    out.title = s.replace(/\s+/g, ' ').replace(/^[\s,.\-–·]+|[\s,.\-–·]+$/g, '').trim();
+    if (!out.title) {
+      // tokens consumed everything ("3pm") → don't resurrect the token as the title
+      var strippedAny = out.dateISO || out.startMin != null || out.durationMin != null;
+      out.title = strippedAny ? 'Untitled' : text.trim();
+    }
+    return out;
+  }
+
+  /* Auto-schedule an item once date+time+duration are all known. Silent, with an Undo toast. */
+  function maybeAutoSchedule(item, items) {
+    if (item.date || !item.pDate || item.pStart == null || item.pDur == null) return false;
+    if (!window.LC_Today || !LC_Today.createTaskOn) return false;
+    // Clamp to the grid HERE and write back, so the chips and the toast always show the
+    // time that is actually scheduled (never a silently-moved one).
+    var cDur = Math.max(15, item.pDur);
+    var cStart = Math.max(7 * 60, Math.min(19 * 60 - cDur, Math.round(item.pStart / 15) * 15));
+    if (cStart !== item.pStart) item.pStart = cStart;
+    if (cDur !== item.pDur) item.pDur = cDur;
+    var id = LC_Today.createTaskOn(item.pDate, item.pStart, item.pDur, item.title, item.type);
+    if (!id) { item.pBlocked = true; return false; }   // hard-blocked slot → chip shows "pick another time"
+    delete item.pBlocked;
+    item.taskId = id;
+    item.date = item.pDate;
+    item.scheduledAt = Date.now();
+    saveDump(items);
+    showDumpUndo(item.id, item.title, item.pDate, item.pStart);
+    return true;
+  }
+
+  var dumpUndoTimer = null;
+  function showDumpUndo(itemId, title, dateISO, startMin) {
+    if (dumpUndoTimer) { clearTimeout(dumpUndoTimer); dumpUndoTimer = null; }
+    var old = document.getElementById('bd-undo-toast');
+    if (old) old.remove();
+    var p = dateISO.split('-');
+    var lbl = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+p[1] - 1] + ' ' + (+p[2]);
+    var t = document.createElement('div');
+    t.id = 'bd-undo-toast';
+    t.className = 'notes-undo-toast';   // reuse the notes toast styling
+    t.setAttribute('role', 'status');
+    t.innerHTML = '<span>✓ Scheduled ' + esc(lbl) + ' · ' + LC.fmtTime(startMin) + '</span><button data-action="dump-undo" data-dump-id="' + escAttr(itemId) + '">Undo</button>';
+    document.body.appendChild(t);
+    dumpUndoTimer = setTimeout(function () { if (t.parentNode) t.remove(); dumpUndoTimer = null; }, 10000);
+  }
+
+  /* Unschedule a captured item: remove its calendar entry, return it to Unplanned with chips intact. */
+  function unscheduleDumpItem(itemId) {
+    var items = loadDump();
+    var item = items.find(function (i) { return i.id === itemId; });
+    if (!item) return;
+    if (item.taskId) {
+      var tasks = LC.loadData('tasks') || [];
+      var live = tasks.find(function (t) { return t.id === item.taskId; });
+      if (live) {
+        // keep any edits made in the Day editor — the chips resume from where the task really was
+        if (live.date) item.pDate = live.date;
+        if (live.startMin != null) item.pStart = live.startMin;
+        if (live.duration != null) item.pDur = live.duration;
+        if (live.title && live.title.trim()) item.title = live.title.trim();
+      }
+      if (LC.get('editor') === item.taskId) LC.set({ editor: null });   // don't leave the editor on a deleted task
+      LC.saveData('tasks', tasks.filter(function (t) { return t.id !== item.taskId; }));
+    }
+    delete item.taskId; item.date = null; delete item.scheduledAt;
+    saveDump(items);
+    var toast = document.getElementById('bd-undo-toast');
+    if (toast) toast.remove();
+    render();
+  }
+
   function addDumpFromInput() {
     var inp = document.getElementById('bd-input-field');
     var val = (inp ? inp.value : dumpDraft).trim();
@@ -143,14 +287,23 @@
     dumpDraft = '';
     if (dumpType === 'project') {
       var projects = loadProjects();
-      var np = { id: 'p' + Date.now(), title: val, total: 4, done: 0, daysToGo: 7, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
+      var np = { id: 'p' + Date.now(), title: val, total: 4, done: 0, daysToGo: 999, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
       projects.push(np);
       saveProjects(projects);
       LC.set({ lens: 'projects', projOpen: np.id });   // jump into the new project to add details
       return;
     }
+    // Smart capture: pull date/time/duration/type out of the text
+    var parsed = parseCapture(val);
     var items = loadDump();
-    items.push({ id: Date.now().toString(), title: val, type: dumpType === 'event' ? 'event' : 'task', created: Date.now(), date: null });
+    var item = {
+      id: 'd' + Date.now() + '_' + (++dumpIdSeq), title: parsed.title,
+      type: parsed.type || (dumpType === 'event' ? 'event' : 'task'),
+      created: Date.now(), date: null,
+      pDate: parsed.dateISO, pStart: parsed.startMin, pDur: parsed.durationMin
+    };
+    items.push(item);
+    maybeAutoSchedule(item, items);   // schedules silently if everything was parsed
     saveDump(items);
     render();
     var again = document.getElementById('bd-input-field');
@@ -228,11 +381,39 @@
       }
       html += '</div>';
       html += '<div class="bd-item-meta">' + relTime(item.created) + '</div>';
+
+      /* Smart-capture chips: show what was parsed; missing pieces ask inline. */
+      if (!hasDate && (item.pDate || item.pStart != null || item.pDur != null)) {
+        html += '<div class="bd-chips">';
+        if (item.pDate) {
+          var pp = item.pDate.split('-');
+          var pLbl = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+pp[1] - 1] + ' ' + (+pp[2]);
+          html += '<span class="bd-chip"><i class="ti ti-calendar"></i><button class="bd-chip-btn" data-action="chip-date" data-dir="-1" data-dump-id="' + item.id + '">‹</button>' + pLbl + '<button class="bd-chip-btn" data-action="chip-date" data-dir="1" data-dump-id="' + item.id + '">›</button></span>';
+        } else {
+          html += '<span class="bd-chip ask" data-action="chip-date-set" data-dump-id="' + item.id + '"><i class="ti ti-calendar-plus"></i> Add date</span>';
+        }
+        if (item.pStart != null) {
+          html += '<span class="bd-chip"><i class="ti ti-clock"></i><button class="bd-chip-btn" data-action="chip-time" data-dir="-1" data-dump-id="' + item.id + '">−</button>' + LC.fmtTime(item.pStart) + '<button class="bd-chip-btn" data-action="chip-time" data-dir="1" data-dump-id="' + item.id + '">+</button></span>';
+        } else {
+          html += '<span class="bd-chip ask" data-action="chip-time-set" data-dump-id="' + item.id + '"><i class="ti ti-clock-plus"></i> Add time</span>';
+        }
+        if (item.pDur != null) {
+          html += '<span class="bd-chip"><i class="ti ti-hourglass"></i><button class="bd-chip-btn" data-action="chip-dur" data-dir="-1" data-dump-id="' + item.id + '">−</button>' + LC.fmtDur(item.pDur) + '<button class="bd-chip-btn" data-action="chip-dur" data-dir="1" data-dump-id="' + item.id + '">+</button></span>';
+        } else {
+          html += '<span class="bd-chip ask"><i class="ti ti-hourglass"></i> How long? ';
+          [15, 30, 60, 120].forEach(function (mm) {
+            html += '<button class="bd-chip-pick" data-action="chip-dur-set" data-min="' + mm + '" data-dump-id="' + item.id + '">' + LC.fmtDur(mm) + '</button>';
+          });
+          html += '</span>';
+        }
+        if (item.pBlocked) html += '<span class="bd-chip blocked"><i class="ti ti-alert-triangle"></i> That slot is blocked — adjust the time</span>';
+        html += '</div>';
+      }
       html += '</div>';
 
       if (hasDate) {
         html += '<span class="bd-item-check done" title="Scheduled"><i class="ti ti-check"></i></span>';
-      } else {
+      } else if (!(item.pDate || item.pStart != null || item.pDur != null)) {
         html += '<span class="bd-item-date-btn" data-action="schedule-dump" data-dump-id="' + item.id + '"><i class="ti ti-calendar-plus"></i> Schedule</span>';
       }
       html += '<button class="bd-item-del" data-action="delete-dump" data-dump-id="' + item.id + '" aria-label="Delete" title="Delete"><i class="ti ti-x"></i></button>';
@@ -244,15 +425,49 @@
     /* ── Right column ── */
     html += '<div class="bd-right">';
 
-    // Carried over panel
+    // Carried over — past-day unfinished tasks, one tap to bring onto today
+    var todayI = todayISO();
+    var carried = (LC.loadData('tasks') || []).filter(function (t) { return t.date && t.date < todayI && !t.done; });
     html += '<div class="bd-carried">';
-    html += '<div class="bd-carried-header"><div class="bd-carried-label"><i class="ti ti-history"></i><span>Carried over · 0</span></div></div>';
-    html += '<div class="bd-carried-empty">Nothing carried over. Nice work!</div>';
+    html += '<div class="bd-carried-header"><div class="bd-carried-label"><i class="ti ti-history"></i><span>Carried over · ' + carried.length + '</span></div></div>';
+    if (carried.length === 0) {
+      html += '<div class="bd-carried-empty">Nothing carried over. Nice work!</div>';
+    } else {
+      carried.slice(0, 8).forEach(function (t) {
+        var cp = t.date.split('-');
+        var cLbl = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+cp[1] - 1] + ' ' + (+cp[2]);
+        html += '<div class="bd-carried-row">';
+        html += '<div class="bd-carried-main"><div class="bd-carried-title">' + esc(t.title && t.title.trim() ? t.title : 'Untitled') + '</div><div class="bd-carried-sub">from ' + cLbl + (t.startMin != null ? ' · ' + LC.fmtTime(t.startMin) : '') + '</div></div>';
+        html += '<button class="bd-carried-move" data-action="carry-to-today" data-task-id="' + escAttr(t.id) + '">→ Today</button>';
+        html += '</div>';
+      });
+      if (carried.length > 8) html += '<div class="bd-carried-more">+' + (carried.length - 8) + ' more on past days</div>';
+    }
     html += '</div>';
 
-    // History (honest count of items already turned into scheduled tasks)
-    var scheduledN = items.filter(function (i) { return i.date; }).length;
-    html += '<div class="bd-history"><i class="ti ti-history"></i><span>History</span><span class="bd-history-count">· ' + scheduledN + ' scheduled</span></div>';
+    // History — auto/manually scheduled captures, with Edit / Unschedule
+    var scheduled = items.filter(function (i) { return i.date; }).sort(function (a, b) { return (b.scheduledAt || 0) - (a.scheduledAt || 0); });
+    html += '<div class="bd-history" data-action="toggle-history"><i class="ti ti-chevron-' + (histOpen ? 'down' : 'right') + '"></i><span>History</span><span class="bd-history-count">· ' + scheduled.length + ' scheduled</span></div>';
+    if (histOpen && scheduled.length > 0) {
+      var allTasks = LC.loadData('tasks') || [];
+      html += '<div class="bd-hist-list">';
+      scheduled.forEach(function (it) {
+        var lt = allTasks.find(function (t) { return t.id === it.taskId; });
+        var when = '';
+        if (lt && lt.date) {
+          var hp = lt.date.split('-');
+          when = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+hp[1] - 1] + ' ' + (+hp[2]) + (lt.startMin != null ? ' · ' + LC.fmtTime(lt.startMin) : '');
+        }
+        html += '<div class="bd-hist-row">';
+        html += '<div class="bd-hist-main"><div class="bd-hist-title">' + esc(it.title) + '</div><div class="bd-hist-sub">' + (when || 'scheduled') + '</div></div>';
+        if (it.taskId) {
+          html += '<button class="bd-hist-btn" data-action="hist-edit" data-task-id="' + escAttr(it.taskId) + '">Edit</button>';
+          html += '<button class="bd-hist-btn" data-action="hist-unschedule" data-dump-id="' + escAttr(it.id) + '">Unschedule</button>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    }
 
     html += '</div>';
     html += '</div>'; // bd-grid
@@ -264,7 +479,13 @@
   /* ══════════════════════════════════════════
      Projects View
      ══════════════════════════════════════════ */
-  function daysToGo(p) { return typeof p.daysToGo === 'number' ? p.daysToGo : 999; }
+  // Live countdown: derive from the stored due date at render time so it decays as real
+  // days pass (the stored p.daysToGo was a frozen snapshot from when the date was set).
+  function daysToGo(p) {
+    if (p.dueISO) return daysUntil(p.dueISO);
+    return typeof p.daysToGo === 'number' ? p.daysToGo : 999;
+  }
+  function isUrgent(p) { return !!p.dueISO && daysToGo(p) <= 7; }
   function byDays(a, b) { return daysToGo(a) - daysToGo(b); }
 
   function renderProjectsView() {
@@ -352,13 +573,14 @@
     var left = Math.max(0, total - done);
     var d = daysToGo(p);
 
-    var html = '<button class="pj-urow' + (p.urgent ? ' urgent' : '') + '" data-action="open-project" data-project-id="' + esc(p.id) + '">';
+    var urgent = isUrgent(p);
+    var html = '<button class="pj-urow' + (urgent ? ' urgent' : '') + '" data-action="open-project" data-project-id="' + esc(p.id) + '">';
     html += '<div class="pj-urow-main">';
     html += '<div class="pj-urow-title">' + esc(p.title) + '</div>';
-    if (p.urgent) {
+    if (urgent) {
       html += '<div class="pj-urow-sub urgent"><i class="ti ti-alert-triangle"></i> ' + left + ' session' + (left !== 1 ? 's' : '') + ' left · ' + d + ' day' + (d !== 1 ? 's' : '') + ' to go</div>';
     } else {
-      html += '<div class="pj-urow-sub">' + esc(p.sub || ('due ' + (p.due || ''))) + '</div>';
+      html += '<div class="pj-urow-sub">' + esc(p.sub || (p.dueFull ? 'due ' + p.dueFull : 'no due date')) + '</div>';
     }
     html += '</div>';
     html += '<div class="pj-urow-prog">';
@@ -385,18 +607,19 @@
     var left = Math.max(0, total - done);
     var d = daysToGo(p);
 
+    var urgent = isUrgent(p);
     var html = '<div class="pj-spine-row">';
-    html += '<div class="pj-spine-badge' + (p.urgent ? ' urgent' : '') + '">';
+    html += '<div class="pj-spine-badge' + (urgent ? ' urgent' : '') + '">';
     html += '<span class="pj-spine-days">' + d + '</span>';
     html += '<span class="pj-spine-dayslabel">days</span>';
     html += '</div>';
-    html += '<button class="pj-spine-card' + (p.urgent ? ' urgent' : '') + '" data-action="open-project" data-project-id="' + esc(p.id) + '">';
+    html += '<button class="pj-spine-card' + (urgent ? ' urgent' : '') + '" data-action="open-project" data-project-id="' + esc(p.id) + '">';
     html += '<div class="pj-spine-main">';
     html += '<div class="pj-spine-title">' + esc(p.title) + '</div>';
-    if (p.urgent) {
+    if (urgent) {
       html += '<div class="pj-spine-sub urgent">' + left + ' session' + (left !== 1 ? 's' : '') + ' left to finish in time</div>';
     } else {
-      html += '<div class="pj-spine-sub">' + esc(p.subSpine || p.sub || ('due ' + (p.due || ''))) + '</div>';
+      html += '<div class="pj-spine-sub">' + esc(p.subSpine || p.sub || (p.dueFull ? 'due ' + p.dueFull : 'no due date')) + '</div>';
     }
     html += '</div>';
     html += '<div class="pj-spine-dots">';
@@ -437,6 +660,67 @@
   function planWeekdays(plan) {
     var out = [];
     (plan.dayFlags || []).forEach(function (on, i) { if (on) out.push((i + 1) % 7); }); // Mon-first idx → getDay()
+    return out;
+  }
+
+  /* Date-aware placement gate for SESSIONS (tasks have their own in today.js, today-only).
+     Returns a message when [start,start+dur) on dateISO hits a locked routine or would
+     exceed 3 overlapping items; null when the slot is fine. `exceptProjId/exceptIdx`
+     exclude the session being moved from counting against itself. */
+  function sessionBlock(dateISO, start, dur, exceptProjId, exceptIdx) {
+    if (!dateISO) return null;
+    var end = start + dur;
+    var p = dateISO.split('-');
+    var dow = new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+    var routines = (window.LC_Routines ? LC_Routines.loadRoutines() : []);
+    var locked = routines.filter(function (r) {
+      return r.protected && r.days && r.days.indexOf(dow) >= 0 && start < r.endMin && end > r.startMin;
+    })[0];
+    if (locked) return '“' + locked.name + '” is locked — nothing can be scheduled then';
+
+    var spans = [];
+    (LC.loadData('tasks') || []).forEach(function (t) {
+      if (t.date === dateISO && t.startMin != null) spans.push({ s: t.startMin, e: t.startMin + (t.duration || 30) });
+    });
+    loadProjects().forEach(function (pr) {
+      (pr.sessions || []).forEach(function (s, i) {
+        if (pr.id === exceptProjId && i === exceptIdx) return;
+        if (s.date === dateISO && s.startMin != null) spans.push({ s: s.startMin, e: s.startMin + (s.durationMin || 60) });
+      });
+    });
+    spans.push({ s: start, e: end });
+    var points = [start];
+    spans.forEach(function (it) { if (it.s > start && it.s < end) points.push(it.s); });
+    var peak = 0;
+    points.forEach(function (pt) {
+      var c = 0;
+      spans.forEach(function (it) { if (it.s <= pt && pt < it.e) c++; });
+      if (c > peak) peak = c;
+    });
+    if (peak > 3) return 'Only 3 items can overlap in one slot';
+    return null;
+  }
+  function sessToast(msg) { if (window.LC_Today && LC_Today.showToast) LC_Today.showToast(msg); }
+
+  /* Everything that shares [start,start+dur) on dateISO — for the drawer's conflict warning.
+     Overlaps under the 3-item cap are ALLOWED but surfaced, so the user schedules with eyes open. */
+  function sessionOverlaps(dateISO, start, dur, exceptProjId, exceptIdx) {
+    if (!dateISO || start == null) return [];
+    var end = start + dur;
+    var out = [];
+    (LC.loadData('tasks') || []).forEach(function (t) {
+      if (t.date === dateISO && t.startMin != null && start < t.startMin + (t.duration || 30) && end > t.startMin) {
+        out.push((t.type === 'event' ? 'Event · ' : 'Task · ') + (t.title && t.title.trim() ? t.title : 'Untitled') + ' (' + fmtRange(t.startMin, t.duration || 30) + ')');
+      }
+    });
+    loadProjects().forEach(function (pr) {
+      (pr.sessions || []).forEach(function (s, i) {
+        if (pr.id === exceptProjId && i === exceptIdx) return;
+        if (s.date === dateISO && s.startMin != null && start < s.startMin + (s.durationMin || 60) && end > s.startMin) {
+          out.push('Session · ' + pr.title + (s.label ? ' — ' + s.label : '') + ' (' + fmtRange(s.startMin, s.durationMin || 60) + ')');
+        }
+      });
+    });
     return out;
   }
 
@@ -481,16 +765,27 @@
 
     /* Status row */
     html += '<div class="pd-status">';
-    if (p.urgent) {
+    if (isUrgent(p)) {
       html += '<div class="pd-alert"><i class="ti ti-alert-triangle"></i><span>' + left + ' session' + (left !== 1 ? 's' : '') + ' left, ' + d + ' day' + (d !== 1 ? 's' : '') + ' to go.</span></div>';
-    } else {
+    } else if (p.dueISO) {
       html += '<div class="pd-alert calm"><i class="ti ti-clock"></i><span>' + left + ' session' + (left !== 1 ? 's' : '') + ' left · due in ' + d + ' day' + (d !== 1 ? 's' : '') + '.</span></div>';
+    } else {
+      html += '<div class="pd-alert calm"><i class="ti ti-clock"></i><span>' + left + ' session' + (left !== 1 ? 's' : '') + ' left · no due date yet.</span></div>';
     }
     html += '<div class="pd-overall">';
     html += '<div class="pd-overall-head"><span>Overall</span><span>' + done + ' of ' + total + ' done</span></div>';
     html += '<div class="pd-overall-bar"><span class="pd-overall-fill" style="width:' + pct + '%"></span></div>';
     html += '</div>';
     html += '</div>';
+
+    if (!p.dueISO) {
+      /* No due date yet → planning is gated. Sessions are planned backward from the deadline. */
+      html += '<div class="pd-nodue">';
+      html += '<i class="ti ti-calendar-question pd-nodue-icon"></i>';
+      html += '<div class="pd-nodue-text"><div class="pd-nodue-title">Set a due date to start planning</div>';
+      html += '<div class="pd-nodue-sub">Sessions are scheduled working back from your deadline — pick the due date at the top right first.</div></div>';
+      html += '</div>';
+    } else {
 
     /* Session plan */
     html += '<div class="pd-plan">';
@@ -524,6 +819,8 @@
       html += '<button class="pd-approve-btn" data-action="proj-approve">Approve ' + cleanPending + ' clean session' + (cleanPending !== 1 ? 's' : '') + ' <i class="ti ti-arrow-right"></i></button>';
       html += '</div>';
     }
+
+    }   // end due-date gate
 
     /* Mark complete */
     html += '<button class="pd-complete-btn" data-action="proj-complete"><i class="ti ti-circle-check"></i> Mark project complete</button>';
@@ -670,8 +967,18 @@
     h += '</div>';
     h += '<div class="ls-when-hint">Ends ' + fmtClock(startMin + durMin) + ' · ' + (s.date ? 'on your calendar' : 'set a date to schedule it') + '</div>';
 
+    /* Shares-this-slot warning (allowed under the 3-item cap, but shown so nothing lands blind) */
+    if (s.date && s.startMin != null) {
+      var clashes = sessionOverlaps(s.date, s.startMin, s.durationMin || 60, p.id, idx);
+      if (clashes.length) {
+        h += '<div class="ls-conflict-warn"><div class="ls-conflict-head"><i class="ti ti-alert-triangle"></i> Shares this time slot with:</div>';
+        clashes.forEach(function (c) { h += '<div class="ls-conflict-item">' + esc(c) + '</div>'; });
+        h += '</div>';
+      }
+    }
+
     /* Start focus */
-    h += '<button class="ls-focus-btn" data-action="session-start-focus"><i class="ti ti-player-play-filled"></i> Start focus · Sprint</button>';
+    h += '<button class="ls-focus-btn" data-action="session-start-focus"><i class="ti ti-player-play"></i> Start focus · Sprint</button>';
 
     /* Subtasks */
     h += '<div class="ls-section-label">Subtasks · ' + subDone + '/' + subtasks.length + '</div>';
@@ -757,7 +1064,7 @@
 
     if (a === 'new-project') {
       var projects = loadProjects();
-      var np = { id: 'p' + Date.now(), title: 'New project', total: 4, done: 0, daysToGo: 7, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
+      var np = { id: 'p' + Date.now(), title: 'New project', total: 4, done: 0, daysToGo: 999, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
       projects.push(np);
       saveProjects(projects);
       LC.set({ projOpen: np.id });
@@ -802,6 +1109,7 @@
       updateProject(LC.get('projOpen'), function (p) {
         var sessions = getSessions(p);
         p.sessions = sessions;
+        if (sessions.length >= 50) { sessToast('50 sessions is the limit for one project'); return; }
         sessions.push({ label: 'Session ' + (sessions.length + 1), dateLabel: '', timeLabel: '', done: false });
         p.total = sessions.length;
         p.done = sessions.filter(function (s) { return s.done; }).length;
@@ -865,7 +1173,9 @@
           for (var guard = 0; guard < 400; guard++) {
             cursor.setDate(cursor.getDate() + 1);      // start from tomorrow, step forward
             var ds = isoDate(cursor);
-            if ((!allowed.length || allowed.indexOf(cursor.getDay()) >= 0) && !used[ds]) {
+            if (p.dueISO && ds > p.dueISO) return null;   // never plan a session past the deadline
+            if ((!allowed.length || allowed.indexOf(cursor.getDay()) >= 0) && !used[ds]
+                && !sessionBlock(ds, startMin, durMin, null, null)) {   // honor locked routines + the 3-overlap rule
               used[ds] = true; return ds;
             }
           }
@@ -896,6 +1206,10 @@
 
     if (a === 'session-save' || a === 'close-session' || a === 'open-project-from-drawer') {
       saveSessionNotes();
+      // Save with a date but no time → keep the displayed defaults so it lands on the calendar.
+      updateSession(function (s) {
+        if (s.date && s.startMin == null) { s.startMin = 960; s.durationMin = s.durationMin || 60; }
+      });
       subAdding = false;
       LC.set({ sessionOpen: null });
       return;
@@ -912,25 +1226,42 @@
 
     if (a === 'session-dur-minus' || a === 'session-dur-plus') {
       var dd = a === 'session-dur-plus' ? 15 : -15;
-      updateSession(function (s) {
+      updateSession(function (s, p) {
         var start = s.startMin != null ? s.startMin : 960;
-        s.durationMin = Math.max(15, Math.min(19 * 60 - start, (s.durationMin || 60) + dd));  // keep end within the grid
+        var nd = Math.max(15, Math.min(19 * 60 - start, (s.durationMin || 60) + dd));  // keep end within the grid
+        var err = dd > 0 ? sessionBlock(s.date, start, nd, p.id, LC.get('sessionOpen')) : null;  // growing can collide; shrinking can't
+        if (err) { sessToast(err); return; }
+        s.durationMin = nd;
       });
       return;
     }
 
     if (a === 'session-start-minus' || a === 'session-start-plus') {
       var st = a === 'session-start-plus' ? 15 : -15;
-      updateSession(function (s) {
+      updateSession(function (s, p) {
         var d = s.durationMin || 60;
-        s.startMin = Math.max(7 * 60, Math.min(19 * 60 - d, (s.startMin != null ? s.startMin : 960) + st));  // keep within the 7–19 grid so it stays visible
+        var ns = Math.max(7 * 60, Math.min(19 * 60 - d, (s.startMin != null ? s.startMin : 960) + st));  // keep within the 7–19 grid so it stays visible
+        var err = sessionBlock(s.date, ns, d, p.id, LC.get('sessionOpen'));
+        if (err) { sessToast(err); return; }
+        s.startMin = ns;
       });
       return;
     }
 
     if (a === 'session-date-prev' || a === 'session-date-next') {
       var dir = a === 'session-date-next' ? 1 : -1;
-      updateSession(function (s) { s.date = shiftISO(s.date, dir); s.dateLabel = fmtSessionDate(s.date); });
+      updateSession(function (s, p) {
+        var nd2 = shiftISO(s.date, dir);
+        // Materialize the drawer's displayed defaults (4:00 PM · 1h) the moment a date is
+        // chosen — otherwise the session has a date but no time and never shows anywhere.
+        var effStart = s.startMin != null ? s.startMin : 960;
+        var effDur = s.durationMin || 60;
+        var err = sessionBlock(nd2, effStart, effDur, p.id, LC.get('sessionOpen'));
+        if (err) { sessToast(err); return; }
+        s.date = nd2; s.dateLabel = fmtSessionDate(nd2);
+        if (s.startMin == null) s.startMin = effStart;
+        if (s.durationMin == null) s.durationMin = effDur;
+      });
       return;
     }
 
@@ -1000,6 +1331,81 @@
       dumpSort = dumpSort === 'newest' ? 'oldest' : 'newest';
       render();
       return;
+    }
+
+    /* ── Smart-capture chips ── */
+    function chipItem() {
+      var items2 = loadDump();
+      var it2 = items2.find(function (i) { return i.id === action.dataset.dumpId; });
+      return it2 ? { items: items2, it: it2 } : null;
+    }
+    if (a === 'chip-date' || a === 'chip-date-set') {
+      var cd = chipItem(); if (!cd) return;
+      if (a === 'chip-date-set') {
+        var tm = new Date(); tm.setDate(tm.getDate() + 1);
+        cd.it.pDate = isoOf(tm);                        // "Add date" starts at tomorrow
+      } else {
+        cd.it.pDate = shiftISO(cd.it.pDate, parseInt(action.dataset.dir, 10));
+      }
+      delete cd.it.pBlocked;
+      maybeAutoSchedule(cd.it, cd.items);
+      saveDump(cd.items); render();
+      return;
+    }
+    if (a === 'chip-time' || a === 'chip-time-set') {
+      var ct = chipItem(); if (!ct) return;
+      if (a === 'chip-time-set') ct.it.pStart = 9 * 60;   // "Add time" starts at 9 AM
+      else ct.it.pStart = Math.max(7 * 60, Math.min(19 * 60 - 15, ct.it.pStart + 15 * parseInt(action.dataset.dir, 10)));
+      delete ct.it.pBlocked;
+      maybeAutoSchedule(ct.it, ct.items);
+      saveDump(ct.items); render();
+      return;
+    }
+    if (a === 'chip-dur' || a === 'chip-dur-set') {
+      var cu = chipItem(); if (!cu) return;
+      if (a === 'chip-dur-set') cu.it.pDur = parseInt(action.dataset.min, 10);
+      else cu.it.pDur = Math.max(15, Math.min(480, cu.it.pDur + 15 * parseInt(action.dataset.dir, 10)));
+      delete cu.it.pBlocked;
+      maybeAutoSchedule(cu.it, cu.items);
+      saveDump(cu.items); render();
+      return;
+    }
+
+    /* ── Undo / History / Carried over ── */
+    if (a === 'dump-undo') { unscheduleDumpItem(action.dataset.dumpId); return; }
+    if (a === 'toggle-history') { histOpen = !histOpen; render(); return; }
+    if (a === 'hist-unschedule') { unscheduleDumpItem(action.dataset.dumpId); return; }
+    if (a === 'hist-edit') {
+      var het = (LC.loadData('tasks') || []).find(function (t) { return t.id === action.dataset.taskId; });
+      if (!het) return;
+      var hToday = todayISO();
+      LC.set({ screen: 'today', dayAnchor: (het.date && het.date !== hToday) ? het.date : null, editor: het.id, sessionOpen: null, projOpen: null });
+      return;
+    }
+    if (a === 'carry-to-today') {
+      var tasks3 = LC.loadData('tasks') || [];
+      var ct3 = tasks3.find(function (t) { return t.id === action.dataset.taskId; });
+      if (!ct3) return;
+      // keep its old time if the slot is free today; otherwise the toast explains
+      var startC = ct3.startMin != null ? ct3.startMin : 540;
+      var blockedC = sessionBlock(todayISO(), startC, ct3.duration || 60, null, null);
+      if (blockedC) { sessToast(blockedC); return; }
+      ct3.date = todayISO();
+      LC.saveData('tasks', tasks3);
+      render();
+      return;
+    }
+  });
+
+  /* Esc closes the session drawer (same save path as the X button). Skips the subtask
+     input, whose own Esc handler just cancels the inline add. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (e.target.closest && e.target.closest('.ls-sub-input')) return;
+    if (LC.get('projOpen') && LC.get('sessionOpen') != null) {
+      saveSessionNotes();
+      subAdding = false;
+      LC.set({ sessionOpen: null });
     }
   });
 

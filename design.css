@@ -605,6 +605,7 @@ button { cursor: pointer; font-family: inherit; }
   position: relative;
   flex: 1;
   min-width: 0;
+  overflow: hidden;   /* out-of-range items (e.g. from a synced blob) clip instead of bleeding over the page */
 }
 
 .tg-label {
@@ -1709,6 +1710,26 @@ body.tg-dragging .tg-card { cursor: grabbing; }
 .pd-complete-btn:hover { filter: brightness(1.06); }
 .pd-complete-btn i { font-size: 16px; }
 .pd-complete-hint { margin-top: 8px; font-size: 11.5px; color: var(--haze); }
+
+/* Project detail — due-date gate */
+.pd-nodue {
+  display: flex; align-items: flex-start; gap: 13px;
+  margin-top: 20px; padding: 18px 18px;
+  border: .5px dashed var(--line2); border-radius: 13px; background: var(--nest);
+}
+.pd-nodue-icon { font-size: 22px; color: var(--amber); flex: none; margin-top: 1px; }
+.pd-nodue-title { font-size: 14px; color: var(--text); }
+.pd-nodue-sub { font-size: 12px; color: var(--mist); margin-top: 4px; line-height: 1.55; }
+
+/* Session drawer — shares-this-slot warning */
+.ls-conflict-warn {
+  margin-top: 10px; padding: 11px 13px;
+  border: .5px solid rgba(224,162,74,.35); border-radius: 10px;
+  background: rgba(224,162,74,.08);
+}
+.ls-conflict-head { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--amber); font-weight: 500; }
+.ls-conflict-head i { font-size: 13px; }
+.ls-conflict-item { margin-top: 6px; font-size: 11.5px; color: var(--mist); padding-left: 20px; }
 
 .bd-item-del {
   flex: none; width: 26px; height: 26px; border: none; background: transparent;
@@ -3206,3 +3227,151 @@ body.tg-dragging .tg-card { cursor: grabbing; }
 .search-row-title { font-size: 13.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-row-sub { font-size: 11.5px; color: var(--mist); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-row-type { flex: none; font-size: 10px; color: var(--haze); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ══════════════════════════════════════════
+   Day navigation / editor date row / verse
+   ══════════════════════════════════════════ */
+.header-today-btn {
+  margin-left: 6px; height: 28px; padding: 0 12px; border-radius: 999px;
+  border: .5px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
+  font-family: inherit; font-size: 11.5px; cursor: pointer;
+}
+.header-today-btn:hover { filter: brightness(1.08); }
+
+.ep-daterow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ep-date-val { flex: 1; text-align: center; font-size: 13px; color: var(--text); }
+
+.verse-edit-btn {
+  margin-left: auto; width: 22px; height: 22px; border: none; background: transparent;
+  color: var(--haze); border-radius: 6px; cursor: pointer; font-size: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s;
+}
+.today-card-verse:hover .verse-edit-btn { opacity: 1; }
+@media (hover: none) { .verse-edit-btn { opacity: 1; } }
+.verse-edit-btn:hover { background: var(--wash); color: var(--text); }
+.verse-input {
+  width: 100%; min-height: 64px; margin-top: 4px; padding: 9px 11px; resize: vertical;
+  border: .5px solid var(--line2); border-radius: 9px; background: var(--bg); color: var(--text);
+  font-family: 'DM Serif Display', Georgia, serif; font-size: 14.5px; line-height: 1.5; outline: none;
+}
+.verse-ref-input {
+  width: 100%; height: 32px; margin-top: 7px; padding: 0 11px;
+  border: .5px solid var(--line2); border-radius: 8px; background: var(--bg); color: var(--mist);
+  font-family: inherit; font-size: 11.5px; outline: none;
+}
+.verse-input:focus, .verse-ref-input:focus { border-color: var(--accent-line); }
+.verse-edit-row { display: flex; gap: 7px; margin-top: 9px; }
+.verse-save-btn { height: 28px; padding: 0 13px; border: none; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: 11.5px; cursor: pointer; }
+.verse-reset-btn, .verse-cancel-btn { height: 28px; padding: 0 10px; border: none; border-radius: 8px; background: transparent; color: var(--haze); font-family: inherit; font-size: 11.5px; cursor: pointer; }
+.verse-reset-btn:hover, .verse-cancel-btn:hover { background: var(--wash); color: var(--text); }
+
+/* ══════════════════════════════════════════
+   Month view — hover / selection / day preview
+   ══════════════════════════════════════════ */
+.mo-cell.clickable { cursor: pointer; transition: background .15s, border-color .15s; }
+.mo-cell.clickable:hover { background: var(--wash); }
+.mo-cell.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent-line); border-radius: 8px; }
+
+.mo-daypreview {
+  max-width: 900px; margin: 16px auto 0; padding: 16px 18px;
+  border: .5px solid var(--accent-line); border-radius: 14px; background: var(--nest);
+  animation: lucfade .18s ease;
+}
+.mo-daypreview-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.mo-daypreview-title { font-size: 17px; }
+.mo-daypreview-open {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 13px;
+  border: .5px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
+  border-radius: 9px; font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.mo-daypreview-hol { font-size: 12px; color: var(--amber); display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mo-daypreview-empty { font-size: 12.5px; color: var(--haze); padding: 6px 0; }
+.mo-daypreview-item { display: flex; align-items: center; gap: 10px; padding: 7px 2px; cursor: pointer; border-radius: 8px; }
+.mo-daypreview-item:hover { background: var(--wash); }
+.mo-daypreview-chip { flex: none; min-width: 58px; text-align: center; padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 500; }
+.mo-daypreview-name { flex: 1; min-width: 0; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mo-daypreview-name.done { text-decoration: line-through; color: var(--haze); }
+.mo-daypreview-name i { color: var(--accent); font-size: 12px; }
+.mo-daypreview-type { flex: none; font-size: 10px; color: var(--haze); text-transform: uppercase; letter-spacing: .07em; }
+.mo-daypreview-hint { margin-top: 10px; font-size: 11px; color: var(--haze); }
+
+/* ══════════════════════════════════════════
+   Smart capture — chips, history, carried over
+   ══════════════════════════════════════════ */
+.bd-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.bd-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 9px; border-radius: 999px;
+  border: .5px solid var(--line2); background: var(--nest);
+  font-size: 11px; color: var(--text);
+}
+.bd-chip > i { font-size: 12px; color: var(--accent); }
+.bd-chip.ask { border-style: dashed; border-color: rgba(224,162,74,.5); color: var(--amber); cursor: pointer; background: rgba(224,162,74,.06); }
+.bd-chip.ask > i { color: var(--amber); }
+.bd-chip.blocked { border-color: rgba(224,162,74,.5); color: var(--amber); background: rgba(224,162,74,.08); }
+.bd-chip-btn {
+  width: 18px; height: 18px; border: none; border-radius: 5px; background: transparent;
+  color: var(--haze); font-family: inherit; font-size: 12px; cursor: pointer; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.bd-chip-btn:hover { background: var(--wash); color: var(--text); }
+.bd-chip-pick {
+  height: 20px; padding: 0 7px; border: .5px solid rgba(224,162,74,.4); border-radius: 999px;
+  background: transparent; color: var(--amber); font-family: inherit; font-size: 10.5px; cursor: pointer;
+}
+.bd-chip-pick:hover { background: rgba(224,162,74,.12); }
+
+.bd-carried-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: .5px solid var(--line); }
+.bd-carried-row:first-of-type { border-top: none; }
+.bd-carried-main { flex: 1; min-width: 0; }
+.bd-carried-title { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-carried-sub { font-size: 10.5px; color: var(--haze); margin-top: 2px; }
+.bd-carried-move {
+  flex: none; height: 26px; padding: 0 10px; border-radius: 8px;
+  border: .5px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
+  font-family: inherit; font-size: 11px; cursor: pointer;
+}
+.bd-carried-more { font-size: 10.5px; color: var(--haze); padding-top: 8px; }
+
+.bd-history { cursor: pointer; }
+.bd-hist-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.bd-hist-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: .5px solid var(--line); border-radius: 11px; }
+.bd-hist-main { flex: 1; min-width: 0; }
+.bd-hist-title { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-hist-sub { font-size: 10.5px; color: var(--mist); margin-top: 2px; }
+.bd-hist-btn {
+  flex: none; height: 25px; padding: 0 9px; border-radius: 7px;
+  border: .5px solid var(--line2); background: transparent; color: var(--mist);
+  font-family: inherit; font-size: 10.5px; cursor: pointer;
+}
+.bd-hist-btn:hover { background: var(--wash); color: var(--text); }
+
+/* ══════════════════════════════════════════
+   Touch & small screens
+   ══════════════════════════════════════════ */
+
+/* Hover-revealed delete buttons are invisible-but-tappable on touch — show them. */
+@media (hover: none) {
+  .bd-item-del, .notes-item-del { opacity: 1; }
+}
+
+/* Long unbroken words (URLs etc.) must wrap instead of escaping their rows. */
+.wk-item-name, .bd-item-title, .notes-item-snippet, .agenda-title, .pj-urow-title, .pj-spine-title { overflow-wrap: anywhere; }
+
+/* Minimal phone layout: stack the two-column screens so nothing is clipped off-screen. */
+@media (max-width: 700px) {
+  #content { overflow-y: auto; }
+  .today-body { flex-direction: column; }
+  .today-sidebar { width: 100%; }
+  .bd-grid { grid-template-columns: 1fr; }
+  .focus-wrap { grid-template-columns: 1fr; }
+  .notes-wrap { grid-template-columns: 1fr; }
+  .notes-list { border-right: none; border-bottom: .5px solid var(--line); max-height: 220px; }
+  .mo-goals-grid { grid-template-columns: 1fr; }
+  .yr-goals-grid { grid-template-columns: 1fr; }
+  .yr-months { grid-template-columns: repeat(2, 1fr); gap: 22px; }
+  .wk-board { flex-wrap: wrap; }
+  .search-modal { top: 40px; }
+  .notes-search span:not(.notes-search-key) { display: none; }
+}

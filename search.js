@@ -12,7 +12,12 @@
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
   function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
-  function stripHtml(s) { var d = document.createElement('div'); d.innerHTML = s || ''; return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
+  // DOMParser = inert document; markup in stored notes can never execute during search.
+  function stripHtml(s) {
+    if (!s) return '';
+    var doc = new DOMParser().parseFromString(s, 'text/html');
+    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  }
 
   var MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -130,10 +135,17 @@
   function openSearch() { open = true; query = ''; render(); }
   function closeSearch() { open = false; render(); }
 
+  function todayISO() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
   function go(el) {
     var g = el.dataset.go;
     closeSearch();
-    if (g === 'task' || g === 'event') LC.set({ screen: 'today', editor: el.dataset.id, sessionOpen: null, projOpen: null });
+    if (g === 'task' || g === 'event') {
+      // anchor the Day view to the task's own date so it's visible next to its editor
+      var t = (LC.loadData('tasks') || []).find(function (x) { return x.id === el.dataset.id; });
+      var dAnchor = (t && t.date && t.date !== todayISO()) ? t.date : null;
+      LC.set({ screen: 'today', dayAnchor: dAnchor, editor: el.dataset.id, sessionOpen: null, projOpen: null });
+    }
     else if (g === 'project') LC.set({ screen: 'braindump', lens: 'projects', projOpen: el.dataset.id, editor: null });
     else if (g === 'note' && window.LC_Notes) LC_Notes.openKey(el.dataset.key);
   }

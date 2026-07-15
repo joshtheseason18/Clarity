@@ -230,6 +230,14 @@
     }
   });
 
+  /* Esc closes the routine editor by SAVING the draft (backdrop click discards; Esc
+     shouldn't silently throw away a fully-typed routine). */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !rtEditId) return;
+    var saveBtn = document.querySelector('[data-action="routine-save"]');
+    if (saveBtn) saveBtn.click();
+  });
+
   LC.on(render);
   window.LC_Routines = { render: render, loadRoutines: loadRoutines };
 })();

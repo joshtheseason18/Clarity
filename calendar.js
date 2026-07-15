@@ -69,7 +69,7 @@
   }
 
   /* Project sessions scheduled on a date, normalized for calendar rendering. */
-  function loadProjects() { return LC.loadData('projects') || []; }
+  function loadProjects() { var v = LC.loadData('projects'); return Array.isArray(v) ? v : []; }
   function sessionsForDate(date) {
     var out = [];
     loadProjects().forEach(function (p) {
@@ -83,7 +83,7 @@
   }
 
   /* ── Holidays (custom + optional US federal presets) ── */
-  function loadHolidays() { return LC.loadData('holidays') || []; }
+  function loadHolidays() { var v = LC.loadData('holidays'); return Array.isArray(v) ? v : []; }
   function saveHolidays(a) { LC.saveData('holidays', a); }
   function iso(y, m, d) { return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
   function nthWeekday(y, m, wd, n) { var first = new Date(y, m, 1).getDay(); var day = 1 + ((wd - first + 7) % 7) + (n - 1) * 7; return iso(y, m, day); }
@@ -355,6 +355,35 @@
     cells.forEach(function (c) { html += renderMonthCell(c, tasks, hmap); });
     html += '</div>';
 
+    /* Selected-day preview (click a cell; double-click opens the day) */
+    var selDay = LC.get('monthSelDay');
+    if (selDay) {
+      var sp = selDay.split('-');
+      if (+sp[0] === year && +sp[1] === month + 1) {
+        var sdt = new Date(+sp[0], +sp[1] - 1, +sp[2]);
+        var items = dayItems(sdt, tasks);
+        var dHols = hmap[selDay] || [];
+        html += '<div class="mo-daypreview">';
+        html += '<div class="mo-daypreview-head"><span class="mo-daypreview-title serif">' + DOW[sdt.getDay()] + ', ' + MONTHS[month] + ' ' + sdt.getDate() + '</span>';
+        html += '<button class="mo-daypreview-open" data-action="open-month-day" data-day-iso="' + selDay + '">Open day <i class="ti ti-arrow-right"></i></button></div>';
+        dHols.forEach(function (ho) { html += '<div class="mo-daypreview-hol"><i class="ti ti-confetti"></i> ' + esc(ho.name) + '</div>'; });
+        if (items.length === 0 && dHols.length === 0) {
+          html += '<div class="mo-daypreview-empty">Nothing scheduled — a clear day.</div>';
+        }
+        items.forEach(function (t) {
+          var c2 = t.kind === 'event' ? 'blue' : 'accent';
+          var typeLbl = t.kind === 'event' ? 'Event' : (t.kind === 'session' ? 'Session' : 'Task');
+          html += '<div class="mo-daypreview-item"' + itemAttrs(t) + '>';
+          html += '<span class="mo-daypreview-chip" style="background:var(--' + c2 + '-soft);color:var(--' + c2 + ')">' + LC.fmtTime(t.startMin) + '</span>';
+          html += '<span class="mo-daypreview-name' + (t.done ? ' done' : '') + '">' + (t.kind === 'session' ? '<i class="ti ti-target"></i> ' : '') + esc(t.title) + '</span>';
+          html += '<span class="mo-daypreview-type">' + typeLbl + '</span>';
+          html += '</div>';
+        });
+        html += '<div class="mo-daypreview-hint">Double-click a day to open it in the Day view.</div>';
+        html += '</div>';
+      }
+    }
+
     /* Legend */
     html += '<div class="mo-legend">';
     html += '<span class="mo-leg"><span class="mo-dot" style="background:var(--accent)"></span> Task / focus</span>';
@@ -374,13 +403,15 @@
 
   function renderMonthCell(c, tasks, hmap) {
     var dt = c.date;
-    var isToday = !c.muted && dstr(dt) === dstr(new Date());
-    var hols = (hmap && hmap[dstr(dt)]) || [];
+    var ds = dstr(dt);
+    var isToday = !c.muted && ds === dstr(new Date());
+    var isSel = !c.muted && LC.get('monthSelDay') === ds;
+    var hols = (hmap && hmap[ds]) || [];
     var dayTasks = dayItems(dt, tasks);
     var shown = dayTasks.slice(0, hols.length ? 1 : 2);
     var more = dayTasks.length - shown.length;
 
-    var html = '<div class="mo-cell' + (isToday ? ' today' : '') + (hols.length ? ' has-holiday' : '') + '">';
+    var html = '<div class="mo-cell' + (isToday ? ' today' : '') + (isSel ? ' sel' : '') + (hols.length ? ' has-holiday' : '') + (c.muted ? '' : ' clickable') + '"' + (c.muted ? '' : ' data-action="select-month-day" data-day-iso="' + ds + '"') + '>';
     html += '<div class="mo-cell-top"><span class="mo-num' + (isToday ? ' today' : (c.muted ? ' muted' : '')) + '">' + dt.getDate() + '</span></div>';
     if (hols.length || shown.length || more > 0) {
       html += '<div class="mo-previews">';
@@ -443,7 +474,9 @@
      Year view — 12 mini-month grids
      ══════════════════════════════════════════ */
   function buildYearMonths(year) {
-    var HEADS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    var ws = LC.get('weekStart');   // honor the week-start pref (was hardcoded Monday-first)
+    var HEADS = [];
+    for (var hi = 0; hi < 7; hi++) HEADS.push(DOW[(ws + hi) % 7].charAt(0));
     var tasks = loadTasks();
     var taskDays = {};
     tasks.forEach(function (t) { if (t.date) taskDays[t.date] = true; });
@@ -455,17 +488,17 @@
     var months = [];
     for (var mi = 0; mi < 12; mi++) {
       var first = new Date(year, mi, 1);
-      var firstDowMon = (first.getDay() + 6) % 7;
+      var lead = (first.getDay() - ws + 7) % 7;
       var dim = new Date(year, mi + 1, 0).getDate();
       var cells = [];
-      for (var i = 0; i < firstDowMon; i++) cells.push({ empty: true });
+      for (var i = 0; i < lead; i++) cells.push({ empty: true });
       for (var dd = 1; dd <= dim; dd++) {
         var ds = year + '-' + String(mi + 1).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
-        var dow = (firstDowMon + dd - 1) % 7;
+        var realDow = (ws + ((lead + dd - 1) % 7)) % 7;   // actual weekday (getDay values)
         cells.push({
           day: dd,
           isToday: now.getFullYear() === year && now.getMonth() === mi && now.getDate() === dd,
-          weekend: dow >= 5,
+          weekend: realDow === 0 || realDow === 6,
           hasTask: !!taskDays[ds],
           holiday: !!hmap[ds]
         });
@@ -569,6 +602,7 @@
       h += '</div>';
     }
     h += '<button class="yr-preview-open" data-action="open-year-month" data-month="' + mi + '">Open ' + MONTHS[mi] + ' <i class="ti ti-arrow-right"></i></button>';
+    h += '</div>';   // close .yr-preview — without this every later month nests inside the selected one
     return h;
   }
 
@@ -664,10 +698,17 @@
     // a .wk-col that carries select-week-day, so this must win over day selection.
     var open = e.target.closest('[data-cal-open]');
     if (open) {
+      var todayISO2 = dstr(new Date());
       if (open.dataset.calOpen === 'task') {
-        LC.set({ screen: 'today', calAnchor: null, editor: open.dataset.taskId, sessionOpen: null });
+        // anchor the Day view to the task's own date so the card is visible next to its editor
+        var opTask = loadTasks().find(function (t) { return t.id === open.dataset.taskId; });
+        var opDate = opTask && opTask.date ? opTask.date : todayISO2;
+        LC.set({ screen: 'today', calAnchor: null, dayAnchor: opDate === todayISO2 ? null : opDate, editor: open.dataset.taskId, sessionOpen: null });
       } else if (open.dataset.calOpen === 'session') {
-        LC.set({ screen: 'today', calAnchor: null, projOpen: open.dataset.projectId, sessionOpen: parseInt(open.dataset.sessionIdx, 10) });
+        var opProj = loadProjects().find(function (pp) { return pp.id === open.dataset.projectId; });
+        var opSess = opProj && opProj.sessions ? opProj.sessions[parseInt(open.dataset.sessionIdx, 10)] : null;
+        var sDate = opSess && opSess.date ? opSess.date : todayISO2;
+        LC.set({ screen: 'today', calAnchor: null, dayAnchor: sDate === todayISO2 ? null : sDate, projOpen: open.dataset.projectId, sessionOpen: parseInt(open.dataset.sessionIdx, 10), editor: null });
       }
       return;
     }
@@ -760,6 +801,18 @@
       return;
     }
 
+    /* Month view: day select / drill-in */
+    if (a === 'select-month-day') {
+      var mds = action.dataset.dayIso;
+      LC.set({ monthSelDay: LC.get('monthSelDay') === mds ? null : mds });
+      return;
+    }
+    if (a === 'open-month-day') {
+      var ods = action.dataset.dayIso;
+      LC.set({ screen: 'today', dayAnchor: ods === dstr(new Date()) ? null : ods, editor: null, monthSelDay: null, calAnchor: null });
+      return;
+    }
+
     /* Year view: month select / drill-in / holidays */
     if (a === 'select-year-month') {
       var smi = parseInt(action.dataset.month, 10);
@@ -769,7 +822,7 @@
     if (a === 'open-year-month') {
       var omi = parseInt(action.dataset.month, 10);
       var y = anchorDate().getFullYear();
-      LC.set({ cal: 'month', calAnchor: iso(y, omi, 1), yearSelMonth: null, weekSel: null });
+      LC.set({ cal: 'month', calAnchor: iso(y, omi, 1), yearSelMonth: null, weekSel: null, monthSelDay: null });
       return;
     }
     if (a === 'add-holiday') { hAdding = true; render(); return; }
@@ -796,11 +849,20 @@
 
   /* Double-click a mini-month → drill into its Month view. */
   document.addEventListener('dblclick', function (e) {
+    if (LC.get('screen') !== 'calendar') return;
     var mo = e.target.closest('[data-action="select-year-month"]');
-    if (!mo || LC.get('screen') !== 'calendar' || LC.get('cal') !== 'year') return;
-    var mi = parseInt(mo.dataset.month, 10);
-    var y = anchorDate().getFullYear();
-    LC.set({ cal: 'month', calAnchor: iso(y, mi, 1), yearSelMonth: null, weekSel: null });
+    if (mo && LC.get('cal') === 'year') {
+      var mi = parseInt(mo.dataset.month, 10);
+      var y = anchorDate().getFullYear();
+      LC.set({ cal: 'month', calAnchor: iso(y, mi, 1), yearSelMonth: null, weekSel: null, monthSelDay: null });
+      return;
+    }
+    /* Double-click a month day → open that exact date in the Day view. */
+    var mc = e.target.closest('[data-action="select-month-day"]');
+    if (mc && LC.get('cal') === 'month') {
+      var ods2 = mc.dataset.dayIso;
+      LC.set({ screen: 'today', dayAnchor: ods2 === dstr(new Date()) ? null : ods2, editor: null, monthSelDay: null, calAnchor: null });
+    }
   });
 
   /* One-time migration: fold old calendar-only month/year note storage into clarity_notes. */

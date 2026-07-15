@@ -19,7 +19,7 @@
   var activeRich = null;   // last-focused rich contenteditable (for toolbar commands)
   var undoTimer = null;
   var trashSeq = 0;
-  function loadTrash() { return LC.loadData(TKEY) || []; }
+  function loadTrash() { var v = LC.loadData(TKEY); return Array.isArray(v) ? v : []; }
   function saveTrash(a) { LC.saveData(TKEY, a); }
   function purgeTrash() {
     var now = Date.now();
@@ -81,7 +81,12 @@
     return period;
   }
 
-  function stripHtml(s) { var d = document.createElement('div'); d.innerHTML = s || ''; return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
+  // Parse via DOMParser (inert document) — markup in stored notes can never execute here.
+  function stripHtml(s) {
+    if (!s) return '';
+    var doc = new DOMParser().parseFromString(s, 'text/html');
+    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  }
   function snippet(note) {
     if (!note) return '';
     var order = ['morning', 'free', 'theme', 'intentions', 'lookingForward', 'wentWell', 'toImprove', 'evening', 'milestones', 'reflections', 'todaysNotes'];
@@ -270,6 +275,14 @@
     [].forEach.call(document.querySelectorAll('.notes-rich'), function (elm) {
       elm.addEventListener('input', function () { saveField(elm.dataset.field, elm.innerHTML); });
       elm.addEventListener('focus', function () { activeRich = elm; });
+      // Paste as plain text: pasted Word/web markup (fonts, colors, images, event handlers)
+      // would otherwise be stored verbatim and re-injected on every render.
+      elm.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var txt = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, txt);
+      });
+      elm.addEventListener('drop', function (e) { e.preventDefault(); });
     });
 
     if (focusField) {

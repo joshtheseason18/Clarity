@@ -68,7 +68,8 @@
     const cal = LC.get('cal');
 
     if (screen === 'today' || cal === 'day') {
-      const t = new Date();
+      const anchor = LC.get('dayAnchor');
+      const t = anchor ? new Date(anchor + 'T00:00:00') : new Date();
       return DAYS[t.getDay()] + ', ' + MONTHS[t.getMonth()] + ' ' + t.getDate();
     }
     const d = anchorDate();
@@ -107,10 +108,10 @@
       var isYear = !isToday && cal === 'year';
 
       html += '<div class="header-period">';
-      // Today is pinned to the current day → no period navigation, so omit the (inert) chevrons.
-      if (!isToday) html += '<button class="header-period-btn" data-period="prev"><i class="ti ti-chevron-left"></i></button>';
+      html += '<button class="header-period-btn" data-period="prev"><i class="ti ti-chevron-left"></i></button>';
       html += '<span class="header-period-label serif">' + periodLabel() + '</span>';
-      if (!isToday) html += '<button class="header-period-btn" data-period="next"><i class="ti ti-chevron-right"></i></button>';
+      html += '<button class="header-period-btn" data-period="next"><i class="ti ti-chevron-right"></i></button>';
+      if (isToday && LC.get('dayAnchor')) html += '<button class="header-today-btn" data-action="back-to-today">Today</button>';
       html += '</div>';
 
       html += '<div class="header-tabs">';
@@ -173,8 +174,23 @@
       return;
     }
 
+    var backToday = e.target.closest('[data-action="back-to-today"]');
+    if (backToday) {
+      LC.set({ dayAnchor: null, editor: null });
+      return;
+    }
+
     var periodBtn = e.target.closest('[data-period]');
     if (periodBtn) {
+      if (LC.get('screen') === 'today') {
+        // Day-to-day navigation: shift the viewed date ±1 (editor closes to avoid cross-day ghosts)
+        var ddir2 = periodBtn.dataset.period === 'next' ? 1 : -1;
+        var cur2 = LC.get('dayAnchor') || isoDate(new Date());
+        var nd2 = new Date(cur2 + 'T00:00:00'); nd2.setDate(nd2.getDate() + ddir2);
+        var next2 = isoDate(nd2);
+        LC.set({ dayAnchor: next2 === isoDate(new Date()) ? null : next2, editor: null });
+        return;
+      }
       if (LC.get('screen') === 'calendar') {
         var pdir = periodBtn.dataset.period === 'next' ? 1 : -1;
         var pcal = LC.get('cal');
@@ -183,7 +199,7 @@
         if (pcal === 'week') nd = new Date(ad.getFullYear(), ad.getMonth(), ad.getDate() + pdir * 7);
         else if (pcal === 'month') nd = new Date(ad.getFullYear(), ad.getMonth() + pdir, 1);
         else if (pcal === 'year') nd = new Date(ad.getFullYear() + pdir, 0, 1);
-        if (nd) LC.set({ calAnchor: isoDate(nd), weekSel: null, yearSelMonth: null });
+        if (nd) LC.set({ calAnchor: isoDate(nd), weekSel: null, yearSelMonth: null, monthSelDay: null });
       }
       return;
     }
@@ -193,9 +209,11 @@
       var id = railBtn.dataset.screen;
       if (id === 'calendar') {
         var cur = LC.get('cal');
-        LC.set({ screen: 'calendar', cal: cur === 'day' ? 'week' : cur, editor: null, sessionOpen: null, projOpen: null, calAnchor: null, weekSel: null, yearSelMonth: null });
+        LC.set({ screen: 'calendar', cal: cur === 'day' ? 'week' : cur, editor: null, sessionOpen: null, projOpen: null, calAnchor: null, weekSel: null, yearSelMonth: null, monthSelDay: null });
       } else if (id === 'braindump') {
         LC.set({ screen: 'braindump', projOpen: null, sessionOpen: null, editor: null });
+      } else if (id === 'today') {
+        LC.set({ screen: 'today', editor: null, sessionOpen: null, projOpen: null, dayAnchor: null });   // rail Today always returns to the real today
       } else {
         LC.set({ screen: id, editor: null, sessionOpen: null, projOpen: null });
       }
@@ -212,9 +230,9 @@
     if (calTab) {
       var tab = calTab.dataset.calTab;
       if (tab === 'day') {
-        LC.set({ screen: 'today', calAnchor: null, editor: null });
+        LC.set({ screen: 'today', calAnchor: null, editor: null, dayAnchor: null });
       } else {
-        LC.set({ screen: 'calendar', cal: tab, calAnchor: null, weekSel: null, yearSelMonth: null });
+        LC.set({ screen: 'calendar', cal: tab, calAnchor: null, weekSel: null, yearSelMonth: null, monthSelDay: null, editor: null });
       }
       return;
     }
@@ -238,5 +256,28 @@
   LC.init();
   LC.on(render);
   render();
+
+  /* ── Heartbeat: keep an always-open tab honest ──
+     At midnight the date/tasks/intention change; at 7:00/19:00 the "system" theme flips;
+     and the Day view's now-line should crawl. One 60s tick covers all three.
+     LC.reloadPrefs() reapplies theme/accent and re-renders every module. */
+  var hbDay = new Date().toDateString();
+  var hbTheme = LC.resolvedTheme();
+  setInterval(function () {
+    var day = new Date().toDateString();
+    var theme = LC.resolvedTheme();
+    if (day !== hbDay || theme !== hbTheme) {
+      hbDay = day; hbTheme = theme;
+      // if the view was anchored to what has just become today, unpin it so the
+      // Day view keeps following the real date (and the "Today" pill disappears)
+      if (LC.get('dayAnchor') === isoDate(new Date())) LC.set({ dayAnchor: null });
+      LC.reloadPrefs();
+      return;
+    }
+    // refresh the now-line/clock only when it can't disturb typing (no editor/drawer open)
+    if (LC.get('screen') === 'today' && LC.get('editor') == null && LC.get('sessionOpen') == null && window.LC_Today) {
+      LC_Today.render();
+    }
+  }, 60000);
 
 })();

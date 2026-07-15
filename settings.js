@@ -74,7 +74,7 @@
     html += section('Day view');
     html += '<div class="set-card">';
     html += '<div class="set-row-title" style="margin-bottom:3px">How your day appears</div>';
-    html += '<div class="set-row-sub" style="margin-bottom:14px">Both stay available — switch any time from the gear on your day.</div>';
+    html += '<div class="set-row-sub" style="margin-bottom:14px">Choose how your day is laid out.</div>';
     html += '<div class="set-layout-cards">';
     html += layoutCard('dayLayout', 'grid', 'Time grid', st.dayLayout === 'grid', gridThumb());
     html += layoutCard('dayLayout', 'agenda', 'Simple agenda', st.dayLayout === 'agenda', agendaThumb());

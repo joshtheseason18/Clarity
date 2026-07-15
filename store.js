@@ -51,6 +51,8 @@
     yearGoalsOpen: true,
     yearSelMonth: null,
     calAnchor: null,
+    dayAnchor: null,     // ISO date the Day view shows; null = today
+    monthSelDay: null,   // ISO date selected in Month view (preview)
     federalHolidays: false,
   };
 
@@ -79,6 +81,7 @@
       const v = load(k);
       if (v !== undefined) state[k] = v;
     });
+    coercePrefs();
     applyTheme();
     applyAccent();
     // notify synchronously: all feature modules register LC.on before main.js calls init(),
@@ -109,10 +112,17 @@
     notify();
   }
 
+  /* weekStart arriving as a string (e.g. from a synced blob) breaks the Month header math
+     ("1"+0 string-concats). Force numeric. */
+  function coercePrefs() {
+    state.weekStart = parseInt(state.weekStart, 10) || 0;
+  }
+
   /* Re-read persisted prefs into in-memory state and reapply theme/accent.
      Called after a cloud pull replaces localStorage wholesale (sync). */
   function reloadPrefs() {
     PREF_KEYS.forEach(k => { const v = load(k); if (v !== undefined) state[k] = v; });
+    coercePrefs();
     applyTheme();
     applyAccent();
     notify();
@@ -124,7 +134,9 @@
   }
 
   function notify() {
-    listeners.forEach(fn => fn(state));
+    // Isolate listeners: one module throwing on malformed data must not stop the others
+    // (or main.js's rail/header, registered last) from rendering.
+    listeners.forEach(fn => { try { fn(state); } catch (e) { console.error('Luclaro render error:', e); } });
   }
 
   /* ── Theme application ── */
