@@ -109,9 +109,23 @@
     html += '</div>';
     html += '<div class="set-card">';
     html += '<div class="set-row-sub" style="margin-bottom:14px">Recurring blocks your days are built around.</div>';
-    html += '<div class="set-routines-empty">No routines yet. Add one below.</div>';
+    var routines = (window.LC_Routines ? LC_Routines.loadRoutines() : []);
+    if (routines.length === 0) {
+      html += '<div class="set-routines-empty">No routines yet. Add one below.</div>';
+    } else {
+      var lockedN = routines.filter(function (r) { return r.protected; }).length;
+      html += '<div class="set-routines-summary">' + routines.length + ' routine' + (routines.length !== 1 ? 's' : '') + (lockedN ? ' · ' + lockedN + ' locked' : '') + '</div>';
+    }
     html += '</div>';
-    html += '<button class="set-add-routine" data-action="open-routines"><i class="ti ti-plus"></i> Add routine</button>';
+    html += '<button class="set-add-routine" data-action="open-routines"><i class="ti ti-plus"></i> ' + (routines.length ? 'Manage routines' : 'Add routine') + '</button>';
+
+    /* ── Calendar ── */
+    html += section('Calendar');
+    var fed = !!LC.get('federalHolidays');
+    html += '<div class="set-card set-card-inline">';
+    html += '<div class="set-row-text"><div class="set-row-title">US federal holidays</div><div class="set-row-sub">Show federal holidays on your calendar.</div></div>';
+    html += '<button class="rt-switch' + (fed ? ' on' : '') + '" data-action="toggle-federal" role="switch" aria-checked="' + fed + '"><span class="rt-switch-knob"></span></button>';
+    html += '</div>';
 
     /* ── Your data ── */
     html += section('Your data');
@@ -235,7 +249,8 @@
     }
 
     if (a === 'export-data') {
-      var blob = new Blob([JSON.stringify(localStorage, null, 2)], { type: 'application/json' });
+      // export only Luclaro's own data (not the whole localStorage, which could include the auth token once signed in)
+      var blob = new Blob([JSON.stringify(LC.allData(), null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var a2 = document.createElement('a');
       a2.href = url;
@@ -246,6 +261,10 @@
 
     if (a === 'open-routines') {
       LC.set({ screen: 'routineshub' });
+    }
+
+    if (a === 'toggle-federal') {
+      LC.set({ federalHolidays: !LC.get('federalHolidays') });
     }
   });
 

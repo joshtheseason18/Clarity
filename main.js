@@ -107,9 +107,10 @@
       var isYear = !isToday && cal === 'year';
 
       html += '<div class="header-period">';
-      html += '<button class="header-period-btn" data-period="prev"><i class="ti ti-chevron-left"></i></button>';
+      // Today is pinned to the current day → no period navigation, so omit the (inert) chevrons.
+      if (!isToday) html += '<button class="header-period-btn" data-period="prev"><i class="ti ti-chevron-left"></i></button>';
       html += '<span class="header-period-label serif">' + periodLabel() + '</span>';
-      html += '<button class="header-period-btn" data-period="next"><i class="ti ti-chevron-right"></i></button>';
+      if (!isToday) html += '<button class="header-period-btn" data-period="next"><i class="ti ti-chevron-right"></i></button>';
       html += '</div>';
 
       html += '<div class="header-tabs">';
@@ -182,7 +183,7 @@
         if (pcal === 'week') nd = new Date(ad.getFullYear(), ad.getMonth(), ad.getDate() + pdir * 7);
         else if (pcal === 'month') nd = new Date(ad.getFullYear(), ad.getMonth() + pdir, 1);
         else if (pcal === 'year') nd = new Date(ad.getFullYear() + pdir, 0, 1);
-        if (nd) LC.set({ calAnchor: isoDate(nd), weekSel: null });
+        if (nd) LC.set({ calAnchor: isoDate(nd), weekSel: null, yearSelMonth: null });
       }
       return;
     }
@@ -192,11 +193,11 @@
       var id = railBtn.dataset.screen;
       if (id === 'calendar') {
         var cur = LC.get('cal');
-        LC.set({ screen: 'calendar', cal: cur === 'day' ? 'week' : cur, editor: null, sessionOpen: null, calAnchor: null, weekSel: null });
+        LC.set({ screen: 'calendar', cal: cur === 'day' ? 'week' : cur, editor: null, sessionOpen: null, projOpen: null, calAnchor: null, weekSel: null, yearSelMonth: null });
       } else if (id === 'braindump') {
         LC.set({ screen: 'braindump', projOpen: null, sessionOpen: null, editor: null });
       } else {
-        LC.set({ screen: id, editor: null, sessionOpen: null });
+        LC.set({ screen: id, editor: null, sessionOpen: null, projOpen: null });
       }
       return;
     }
@@ -211,9 +212,9 @@
     if (calTab) {
       var tab = calTab.dataset.calTab;
       if (tab === 'day') {
-        LC.set({ screen: 'today', calAnchor: null });
+        LC.set({ screen: 'today', calAnchor: null, editor: null });
       } else {
-        LC.set({ screen: 'calendar', cal: tab, calAnchor: null, weekSel: null });
+        LC.set({ screen: 'calendar', cal: tab, calAnchor: null, weekSel: null, yearSelMonth: null });
       }
       return;
     }

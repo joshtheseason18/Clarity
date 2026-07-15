@@ -42,9 +42,10 @@
       if (row && row.data && Object.keys(row.data).length) {
         var cloudTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
         if (cloudTs >= localTs()) {
-          // cloud is newer (or first sign-in on this device) → adopt it
+          // cloud is newer than the last local change → adopt it
           LC.replaceAllData(row.data);
           bumpLocalTs();
+          if (LC.reloadPrefs) LC.reloadPrefs();   // refresh in-memory theme/accent/weekStart etc.
           reRenderAll();
           LC.set({ syncStatus: 'synced' });
           return;
@@ -63,8 +64,8 @@
 
   /* ── Debounced push on any data change ── */
   function onChange() {
+    bumpLocalTs();   // stamp EVERY local change (even as guest) so sign-in LWW can let genuinely-newer local data win
     if (!active) return;
-    bumpLocalTs();
     LC.set({ syncStatus: 'syncing' });
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(function () { push(false); }, DEBOUNCE);

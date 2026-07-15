@@ -10,16 +10,10 @@
   function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
   function loadRoutines() {
-    var r = LC.loadData(KEY);
-    if (r) return r;
-    return [
-      { id: 'gym', name: 'Gym', icon: 'ti-barbell', startMin: 360, endMin: 420, days: [1, 3, 5], protected: true },
-      { id: 'commute', name: 'Commute', icon: 'ti-car', startMin: 480, endMin: 540, days: [1, 2, 3, 4, 5], protected: true },
-      { id: 'work', name: 'Work', icon: 'ti-briefcase', startMin: 540, endMin: 1020, days: [1, 2, 3, 4, 5], protected: false },
-      { id: 'lunch', name: 'Lunch', icon: 'ti-bowl', startMin: 720, endMin: 780, days: [1, 2, 3, 4, 5], protected: true },
-      { id: 'reading', name: 'Reading', icon: 'ti-book', startMin: 1260, endMin: 1290, days: [0, 1, 2, 3, 4, 5, 6], protected: false },
-      { id: 'sleep', name: 'Sleep', icon: 'ti-moon', startMin: 1380, endMin: 1860, days: [0, 1, 2, 3, 4, 5, 6], protected: true }
-    ];
+    var r = LC.loadData(KEY) || [];
+    // defensive: never let a malformed/imported routine (missing days/icon) crash a render
+    r.forEach(function (x) { if (!Array.isArray(x.days)) x.days = []; if (!x.icon) x.icon = 'ti-circle'; });
+    return r;
   }
   function saveRoutines(arr) { LC.saveData(KEY, arr); }
 
@@ -60,7 +54,7 @@
     html += '<button class="rt-add-btn" data-action="routine-add"><i class="ti ti-plus"></i> Add routine</button>';
     html += '</div>';
 
-    html += '<div class="rt-legend"><span><i class="ti ti-lock"></i> protected — no tasks scheduled</span><span><i class="ti ti-arrow-down-to-arc"></i> open — tasks can fill it</span></div>';
+    html += '<div class="rt-legend"><span><i class="ti ti-lock"></i> locked — no tasks scheduled</span><span><i class="ti ti-arrow-down-to-arc"></i> open — tasks can fill it</span></div>';
 
     if (routines.length === 0) {
       html += '<div class="rt-empty">No routines yet. Add one to give your days a repeatable shape.</div>';
@@ -79,7 +73,7 @@
       html += '</div>';
       html += '<span class="rt-spacer"></span>';
       if (r.protected) {
-        html += '<span class="rt-mark protected"><i class="ti ti-lock"></i> protected</span>';
+        html += '<span class="rt-mark protected"><i class="ti ti-lock"></i> locked</span>';
       } else {
         html += '<span class="rt-mark open"><i class="ti ti-arrow-down-to-arc"></i> open</span>';
       }
@@ -125,7 +119,7 @@
     html += '</div>';
     html += '<div class="rt-days-label">' + daysLabel(d.days) + '</div>';
 
-    html += '<div class="rt-protect-row"><i class="ti ti-checkbox rt-protect-icon"></i><div class="rt-protect-text"><div>Can tasks be scheduled during this?</div><div class="rt-protect-sub">' + (d.protected ? 'Off — this block stays protected' : 'On — your to-dos can land inside it') + '</div></div><button class="rt-switch' + (!d.protected ? ' on' : '') + '" data-action="routine-protect"><span class="rt-switch-knob"></span></button></div>';
+    html += '<div class="rt-protect-row"><i class="ti ti-checkbox rt-protect-icon"></i><div class="rt-protect-text"><div>Can tasks be scheduled during this?</div><div class="rt-protect-sub">' + (d.protected ? 'Off — this block stays locked' : 'On — your to-dos can land inside it') + '</div></div><button class="rt-switch' + (!d.protected ? ' on' : '') + '" data-action="routine-protect"><span class="rt-switch-knob"></span></button></div>';
 
     html += '<div class="rt-editor-foot">';
     if (!isNew) html += '<button class="rt-editor-delete" data-action="routine-delete-editing"><i class="ti ti-trash"></i> Delete</button>';

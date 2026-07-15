@@ -111,6 +111,25 @@
     return peak <= MAX_OVERLAP;
   }
 
+  /* Protected routine active today that [start,start+dur) would overlap, if any. */
+  function protectedConflict(start, dur) {
+    var end = start + dur;
+    var dow = new Date().getDay();
+    var routines = (window.LC_Routines ? window.LC_Routines.loadRoutines() : []);
+    var hit = routines.filter(function (r) {
+      return r.protected && r.days && r.days.indexOf(dow) >= 0 && start < r.endMin && end > r.startMin;
+    })[0];
+    return hit ? hit.name : null;
+  }
+
+  /* Combined placement gate → message string if blocked, else null. */
+  function placementBlock(taskId, start, dur) {
+    var pc = protectedConflict(start, dur);
+    if (pc) return '“' + pc + '” is locked — nothing can be scheduled then';
+    if (!canPlace(taskId, start, dur)) return 'Only ' + MAX_OVERLAP + ' items can overlap in one slot';
+    return null;
+  }
+
   var toastTimer = null;
   function showToast(msg) {
     var el = document.querySelector('.lc-toast');
@@ -129,9 +148,10 @@
 
   function esc(s) {
     var d = document.createElement('div');
-    d.textContent = s;
+    d.textContent = s == null ? '' : s;
     return d.innerHTML;
   }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
   /* ── Typewriter intention ── */
   var INTN_PH = [
@@ -219,7 +239,7 @@
     var intention = loadIntention();
     var current = (intention.text && intention.date === todayStr()) ? intention.text : '';
 
-    wrap.innerHTML = '<input class="intn-input" type="text" value="' + esc(current) + '" placeholder="What matters most today?">';
+    wrap.innerHTML = '<input class="intn-input" type="text" value="' + escAttr(current) + '" placeholder="What matters most today?">';
 
     var input = wrap.querySelector('.intn-input');
     if (input) {
@@ -236,6 +256,14 @@
     if (!intnEditing) return;
     intnEditing = false;
     var text = (val || '').trim();
+    // The intention is a single-line input but shares the `morning` note field, which may be
+    // multi-line. If the user didn't actually change it (the input just stripped newlines),
+    // leave the original morning untouched so a multi-line note isn't collapsed.
+    var current = loadIntention().text;
+    // compare whitespace-insensitively: a single-line input can't represent newlines, so if the
+    // only difference is whitespace/newlines the user didn't really change it — keep the original.
+    var norm = function (s) { return (s || '').replace(/\s+/g, ''); };
+    if (norm(text) === norm(current)) { render(); return; }
     saveIntention(text ? { text: text, date: todayStr() } : { text: '', date: null });
     render();
     if (!text) intnTick();
@@ -372,7 +400,7 @@
       var rh = ((re - rs) / 60) * hourH;
       html += '<div class="tg-routine ' + (r.protected ? 'protected' : 'open') + '" style="top:' + rtop + 'px;height:' + rh + 'px">';
       if (r.protected) {
-        html += '<span class="tg-routine-tag"><i class="ti ti-lock"></i> ' + esc(r.name) + ' · protected</span>';
+        html += '<span class="tg-routine-tag"><i class="ti ti-lock"></i> ' + esc(r.name) + ' · locked</span>';
       } else {
         html += '<span class="tg-routine-tag"><i class="ti ' + r.icon + '"></i> ' + esc(r.name) + '</span>';
       }
@@ -531,6 +559,11 @@
   /* Called after each today render(): wires the subtask input / focuses the title. */
   function attachEditorInputs() {
     if (LC.get('editor') == null) { focusTitleNext = false; return; }
+    // Persist title/location on blur so navigating away (which clears `editor`) doesn't drop typed text.
+    var tInp = document.querySelector('.ep-aside .ep-title-input');
+    if (tInp) tInp.addEventListener('blur', persistEditorFields);
+    var lInp = document.querySelector('.ep-aside .ep-loc-input');
+    if (lInp) lInp.addEventListener('blur', persistEditorFields);
     var subInp = document.querySelector('.ep-aside .ls-sub-input');
     if (subInp) {
       subInp.focus();
@@ -561,7 +594,7 @@
     /* complete + editable title */
     h += '<div class="ls-titlerow">';
     h += '<button class="ls-complete' + (t.done ? ' done' : '') + '" data-action="editor-complete"><i class="ti ' + (t.done ? 'ti-circle-check-filled' : 'ti-circle') + '"></i></button>';
-    h += '<input class="ep-title-input serif' + (t.done ? ' done' : '') + '" value="' + esc(t.title || '') + '" placeholder="Untitled">';
+    h += '<input class="ep-title-input serif' + (t.done ? ' done' : '') + '" value="' + escAttr(t.title || '') + '" placeholder="Untitled">';
     h += '</div>';
 
     /* type toggle */
@@ -600,7 +633,7 @@
       }
     } else {
       h += '<div class="ls-section-label">Location</div>';
-      h += '<div class="ep-location"><i class="ti ti-map-pin"></i><input class="ep-loc-input" value="' + esc(t.location || '') + '" placeholder="Add location"></div>';
+      h += '<div class="ep-location"><i class="ti ti-map-pin"></i><input class="ep-loc-input" value="' + escAttr(t.location || '') + '" placeholder="Add location"></div>';
       h += '<div class="ep-allday"><i class="ti ti-sun"></i><span class="ep-allday-label">All-day event</span><button class="ep-switch' + (t.allDay ? ' on' : '') + '" data-action="editor-allday"><span class="ep-switch-knob"></span></button></div>';
     }
 
@@ -661,8 +694,8 @@
   /* Shared task creation: places at a snapped, clamped time and opens the editor. */
   function createTask(min, title, type) {
     min = Math.round(min / 15) * 15;
-    min = Math.max(7 * 60, Math.min(19 * 60 - 30, min));
-    if (!canPlace('__new__', min, 60)) { showToast('Only ' + MAX_OVERLAP + ' items can overlap in one slot'); return null; }
+    min = Math.max(7 * 60, Math.min(19 * 60 - 60, min));
+    var newErr = placementBlock('__new__', min, 60); if (newErr) { showToast(newErr); return null; }
     var task = { id: 't' + Date.now(), title: title || '', startMin: min, duration: 60, type: type === 'event' ? 'event' : 'task', done: false, date: todayStr(), priority: 'med' };
     var tasks = loadTasks();
     tasks.push(task);
@@ -683,6 +716,7 @@
   document.addEventListener('mousedown', function (e) {
     if (e.button !== 0) return;
     if (LC.get('screen') !== 'today' || LC.get('editor') != null) return;
+    if (e.target.closest('.tg-check, .tg-card-pill')) return;   // let the check/pill get a clean click
     var card = e.target.closest('.tg-card');
     if (!card) return;
     var t = loadTasks().find(function (x) { return x.id === card.dataset.taskId; });
@@ -701,7 +735,7 @@
     dragState.newMin = snapped;
     dragState.el.style.top = (((snapped / 60) - 7) * 56) + 'px';
     dragState.el.classList.add('tg-card-drag');
-    dragState.el.classList.toggle('tg-card-invalid', !canPlace(dragState.id, snapped, dragState.dur));
+    dragState.el.classList.toggle('tg-card-invalid', !!placementBlock(dragState.id, snapped, dragState.dur));
   });
 
   document.addEventListener('mouseup', function () {
@@ -712,7 +746,7 @@
     dragJustEnded = true;
     setTimeout(function () { dragJustEnded = false; }, 60);
     if (d.newMin === d.origMin) { render(); return; }
-    if (!canPlace(d.id, d.newMin, d.dur)) { showToast('Only ' + MAX_OVERLAP + ' items can overlap in one slot'); render(); return; }
+    var dropErr = placementBlock(d.id, d.newMin, d.dur); if (dropErr) { showToast(dropErr); render(); return; }
     var tasks = loadTasks();
     var t = tasks.find(function (x) { return x.id === d.id; });
     if (t) { t.startMin = d.newMin; saveTasks(tasks); }
@@ -795,8 +829,9 @@
       var stid = LC.get('editor');
       var st0 = loadTasks().find(function (x) { return x.id === stid; });
       if (!st0) return;
-      var proposedStart = Math.max(0, Math.min(1425, (st0.startMin != null ? st0.startMin : 540) + sd));
-      if (!canPlace(stid, proposedStart, st0.duration || 90)) { showToast('Only ' + MAX_OVERLAP + ' items can overlap in one slot'); return; }
+      var stDur = st0.duration || 90;
+      var proposedStart = Math.max(7 * 60, Math.min(19 * 60 - stDur, (st0.startMin != null ? st0.startMin : 540) + sd));
+      var stErr = placementBlock(stid, proposedStart, stDur); if (stErr) { showToast(stErr); return; }
       updateEditor(function (t) { t.startMin = proposedStart; });
       return;
     }
@@ -806,8 +841,9 @@
       var dtid = LC.get('editor');
       var dt0 = loadTasks().find(function (x) { return x.id === dtid; });
       if (!dt0) return;
-      var proposedDur = Math.max(15, Math.min(480, (dt0.duration || 90) + dd));
-      if (!canPlace(dtid, (dt0.startMin != null ? dt0.startMin : 540), proposedDur)) { showToast('Only ' + MAX_OVERLAP + ' items can overlap in one slot'); return; }
+      var dtStart = dt0.startMin != null ? dt0.startMin : 540;
+      var proposedDur = Math.max(15, Math.min(19 * 60 - dtStart, (dt0.duration || 90) + dd));
+      var dtErr = placementBlock(dtid, dtStart, proposedDur); if (dtErr) { showToast(dtErr); return; }
       updateEditor(function (t) { t.duration = proposedDur; });
       return;
     }

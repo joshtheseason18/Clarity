@@ -49,11 +49,13 @@
     weekGoalsOpen: true,
     monthGoalsOpen: true,
     yearGoalsOpen: true,
+    yearSelMonth: null,
     calAnchor: null,
+    federalHolidays: false,
   };
 
   /* ── Persisted keys (preferences) ── */
-  const PREF_KEYS = ['theme', 'accent', 'dayBg', 'nightBg', 'dayLayout', 'weekStart', 'clockFmt', 'projView'];
+  const PREF_KEYS = ['theme', 'accent', 'dayBg', 'nightBg', 'dayLayout', 'weekStart', 'clockFmt', 'projView', 'federalHolidays'];
 
   /* ── State ── */
   let state = {};
@@ -104,6 +106,15 @@
 
     if (themeChanged) applyTheme();
     if (accentChanged) applyAccent();
+    notify();
+  }
+
+  /* Re-read persisted prefs into in-memory state and reapply theme/accent.
+     Called after a cloud pull replaces localStorage wholesale (sync). */
+  function reloadPrefs() {
+    PREF_KEYS.forEach(k => { const v = load(k); if (v !== undefined) state[k] = v; });
+    applyTheme();
+    applyAccent();
     notify();
   }
 
@@ -218,6 +229,7 @@
     onData,
     allData,
     replaceAllData,
+    reloadPrefs,
     fmtTime,
     fmtDur,
     resolvedTheme,

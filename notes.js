@@ -16,6 +16,7 @@
   var THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   var UNDO_MS = 10000;
   var showTrash = false;
+  var activeRich = null;   // last-focused rich contenteditable (for toolbar commands)
   var undoTimer = null;
   var trashSeq = 0;
   function loadTrash() { return LC.loadData(TKEY) || []; }
@@ -40,21 +41,21 @@
   var BLOCKS = {
     daily: [
       { field: 'morning', variant: 'accent', icon: 'ti-sunrise', label: 'Morning', ph: 'What matters today? Write your intention here.' },
-      { field: 'free', variant: 'plain', ph: 'Free write — how the day is going…' },
-      { field: 'evening', variant: 'blue', icon: 'ti-moon', label: 'Evening', ph: 'How did it go? Wins, challenges, gratitude.' },
-      { field: 'todaysNotes', variant: 'muted', icon: 'ti-pencil', label: "Today's notes", ph: "Free space — anything that didn't fit the prompts." }
+      { field: 'free', variant: 'plain', rich: true, ph: 'Free write — how the day is going…' },
+      { field: 'evening', variant: 'blue', icon: 'ti-moon', label: 'Evening', rich: true, ph: 'How did it go? Wins, challenges, gratitude.' },
+      { field: 'todaysNotes', variant: 'muted', icon: 'ti-pencil', label: "Today's notes", rich: true, ph: "Free space — anything that didn't fit the prompts." }
     ],
     monthly: [
       { field: 'theme', variant: 'accent', icon: 'ti-compass', label: 'Theme of the month', optional: true, input: 'text', serif: true, ph: 'Set a theme for this month…' },
-      { field: 'lookingForward', variant: 'blue', icon: 'ti-eye', label: 'Looking forward to', ph: 'What are you looking forward to?' },
-      { field: 'wentWell', variant: 'blue', icon: 'ti-sparkles', label: 'What went well', ph: 'What went well this month?' },
-      { field: 'toImprove', variant: 'muted', icon: 'ti-bulb', label: 'To improve', ph: 'What could be better next month?' }
+      { field: 'lookingForward', variant: 'blue', icon: 'ti-eye', label: 'Looking forward to', rich: true, ph: 'What are you looking forward to?' },
+      { field: 'wentWell', variant: 'blue', icon: 'ti-sparkles', label: 'What went well', rich: true, ph: 'What went well this month?' },
+      { field: 'toImprove', variant: 'muted', icon: 'ti-bulb', label: 'To improve', rich: true, ph: 'What could be better next month?' }
     ],
     yearly: [
       { field: 'theme', variant: 'accent', icon: 'ti-compass', label: 'Theme', input: 'text', serif: true, ph: 'Your theme for the year…' },
-      { field: 'intentions', variant: 'accent', icon: 'ti-flag-3', label: 'Intentions for the year', ph: 'What do you intend this year?' },
-      { field: 'milestones', variant: 'blue', icon: 'ti-award', label: 'Milestones', ph: 'Mark the milestones as they happen…' },
-      { field: 'reflections', variant: 'muted', icon: 'ti-feather', label: 'Reflections', ph: 'Reflect on the arc of the year…' }
+      { field: 'intentions', variant: 'accent', icon: 'ti-flag-3', label: 'Intentions for the year', rich: true, ph: 'What do you intend this year?' },
+      { field: 'milestones', variant: 'blue', icon: 'ti-award', label: 'Milestones', rich: true, ph: 'Mark the milestones as they happen…' },
+      { field: 'reflections', variant: 'muted', icon: 'ti-feather', label: 'Reflections', rich: true, ph: 'Reflect on the arc of the year…' }
     ]
   };
 
@@ -80,10 +81,11 @@
     return period;
   }
 
+  function stripHtml(s) { var d = document.createElement('div'); d.innerHTML = s || ''; return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
   function snippet(note) {
     if (!note) return '';
-    var order = ['morning', 'free', 'theme', 'intentions', 'wentWell', 'evening', 'lessons', 'milestones', 'reflections', 'todaysNotes'];
-    for (var i = 0; i < order.length; i++) { if (note[order[i]]) return note[order[i]]; }
+    var order = ['morning', 'free', 'theme', 'intentions', 'lookingForward', 'wentWell', 'toImprove', 'evening', 'milestones', 'reflections', 'todaysNotes'];
+    for (var i = 0; i < order.length; i++) { if (note[order[i]]) return stripHtml(note[order[i]]); }
     return '';
   }
 
@@ -116,7 +118,7 @@
     });
     html += '</div>';
     html += '<div class="notes-topbar-right">';
-    html += '<div class="notes-search"><i class="ti ti-search"></i><span>Search notes, tasks, events…</span><span class="notes-search-key">⌘K</span></div>';
+    html += '<div class="notes-search" data-action="open-search"><i class="ti ti-search"></i><span>Search notes, tasks, events…</span><span class="notes-search-key">⌘K</span></div>';
     html += '<button class="notes-new-btn" data-action="notes-new"><i class="ti ti-plus"></i> New note</button>';
     html += '</div>';
     html += '</div>';
@@ -154,10 +156,15 @@
     /* Editor */
     html += '<div class="notes-editor">';
     html += '<div class="notes-toolbar">';
-    html += '<button class="notes-tb-btn"><i class="ti ti-bold"></i></button>';
-    html += '<button class="notes-tb-btn"><i class="ti ti-italic"></i></button>';
-    html += '<button class="notes-tb-btn"><i class="ti ti-list"></i></button>';
-    html += '<button class="notes-tb-focus"><i class="ti ti-arrows-maximize"></i> Focus</button>';
+    html += tbBtn('bold', 'ti-bold', 'Bold');
+    html += tbBtn('italic', 'ti-italic', 'Italic');
+    html += '<span class="notes-tb-div"></span>';
+    html += tbBtn('heading', 'ti-heading', 'Large text');
+    html += tbBtn('insertUnorderedList', 'ti-list', 'Bulleted list');
+    html += tbBtn('insertOrderedList', 'ti-list-numbers', 'Numbered list');
+    html += '<span class="notes-tb-div"></span>';
+    html += tbBtn('outdent', 'ti-indent-decrease', 'Outdent');
+    html += tbBtn('indent', 'ti-indent-increase', 'Indent');
     html += '</div>';
 
     var actPeriod = actKey.slice(scope.length + 1);
@@ -204,9 +211,17 @@
     return h;
   }
 
+  function tbBtn(cmd, icon, title) {
+    return '<button class="notes-tb-btn" data-tbcmd="' + cmd + '" title="' + title + '" aria-label="' + title + '"><i class="ti ' + icon + '"></i></button>';
+  }
+  function richDiv(b, val, extra) {
+    return '<div class="notes-block-input notes-rich ' + (extra || '') + '" contenteditable="true" role="textbox" aria-multiline="true" data-field="' + b.field + '" data-ph="' + escAttr(b.ph) + '">' + (val || '') + '</div>';
+  }
+
   function renderBlock(b, note) {
     var val = note[b.field] || '';
     if (b.variant === 'plain') {
+      if (b.rich) return richDiv(b, val, 'notes-freetext-input');
       return '<textarea class="notes-block-input notes-freetext-input" data-field="' + b.field + '" placeholder="' + escAttr(b.ph) + '">' + esc(val) + '</textarea>';
     }
     var html = '<div class="notes-block ' + b.variant + '">';
@@ -215,6 +230,8 @@
     html += '</div>';
     if (b.input === 'text') {
       html += '<input class="notes-block-input notes-block-title-input' + (b.serif ? ' serif' : '') + '" type="text" data-field="' + b.field + '" value="' + escAttr(val) + '" placeholder="' + escAttr(b.ph) + '">';
+    } else if (b.rich) {
+      html += richDiv(b, val, '');
     } else {
       html += '<textarea class="notes-block-input" data-field="' + b.field + '" placeholder="' + escAttr(b.ph) + '">' + esc(val) + '</textarea>';
     }
@@ -231,29 +248,70 @@
   function attachEditor() {
     var scope = LC.get('notesScope');
     var actKey = activeKey(scope);
-    [].forEach.call(document.querySelectorAll('.notes-block-input'), function (elm) {
+    activeRich = null;
+
+    function saveField(field, value) {
+      var notes = loadNotes();
+      notes[actKey] = notes[actKey] || {};
+      notes[actKey][field] = value;
+      notes[actKey]._saved = Date.now();
+      saveNotes(notes);
+      var meta = document.querySelector('.notes-ed-meta');
+      if (meta) meta.textContent = (scope.charAt(0).toUpperCase() + scope.slice(1)) + ' note · saving…';
+    }
+
+    // textareas + single-line text inputs (morning, theme)
+    [].forEach.call(document.querySelectorAll('.notes-block-input:not(.notes-rich)'), function (elm) {
       autosize(elm);
-      elm.addEventListener('input', function () {
-        autosize(elm);
-        var notes = loadNotes();
-        notes[actKey] = notes[actKey] || {};
-        notes[actKey][elm.dataset.field] = elm.value;
-        notes[actKey]._saved = Date.now();
-        saveNotes(notes);
-        var meta = document.querySelector('.notes-ed-meta');
-        if (meta) meta.textContent = (scope.charAt(0).toUpperCase() + scope.slice(1)) + ' note · saving…';
-      });
+      elm.addEventListener('input', function () { autosize(elm); saveField(elm.dataset.field, elm.value); });
     });
+
+    // rich contenteditable blocks
+    [].forEach.call(document.querySelectorAll('.notes-rich'), function (elm) {
+      elm.addEventListener('input', function () { saveField(elm.dataset.field, elm.innerHTML); });
+      elm.addEventListener('focus', function () { activeRich = elm; });
+    });
+
     if (focusField) {
       var f = focusField;
       focusField = null;
       // defer: the screen isn't marked .active (visible) until main.render runs after this listener
       setTimeout(function () {
         var tgt = document.querySelector('.notes-block-input[data-field="' + f + '"]');
-        if (tgt) { tgt.focus(); if (tgt.setSelectionRange) tgt.setSelectionRange(tgt.value.length, tgt.value.length); tgt.scrollIntoView({ block: 'center' }); }
+        if (!tgt) return;
+        tgt.focus();
+        if (tgt.setSelectionRange) tgt.setSelectionRange(tgt.value.length, tgt.value.length);
+        else caretToEnd(tgt);   // contenteditable
+        tgt.scrollIntoView({ block: 'center' });
       }, 0);
     }
   }
+
+  function caretToEnd(el) {
+    try {
+      var r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    } catch (e) {}
+  }
+
+  /* Toolbar formatting — mousedown so the editable keeps its selection/focus. */
+  document.addEventListener('mousedown', function (e) {
+    var btn = e.target.closest('[data-tbcmd]');
+    if (!btn) return;
+    e.preventDefault();
+    if (!activeRich) { var first = document.querySelector('.notes-rich'); if (first) { first.focus(); activeRich = first; } }
+    if (!activeRich) return;
+    var cmd = btn.dataset.tbcmd;
+    try {
+      if (cmd === 'heading') {
+        var cur = (document.queryCommandValue('formatBlock') || '').toLowerCase();
+        document.execCommand('formatBlock', false, (cur === 'h3' || cur === '<h3>') ? 'div' : 'h3');
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+    } catch (e2) {}
+    activeRich.dispatchEvent(new Event('input', { bubbles: true }));   // persist the change
+  });
 
   /* ── Trash actions ── */
   function deleteNote(key) {
@@ -274,7 +332,16 @@
     var entry = trash.find(function (t) { return t.id === id; });
     if (!entry) return;
     var notes = loadNotes();
-    notes[entry.key] = entry.data;               // restore snapshot (overwrites if recreated)
+    var cur = notes[entry.key];
+    if (cur && Object.keys(cur).some(function (k) { return k.charAt(0) !== '_' && cur[k]; })) {
+      // a note was recreated at this key — merge (keep current fields, fill blanks from the snapshot) so nothing is lost
+      var merged = {}, snap = entry.data || {};
+      Object.keys(snap).forEach(function (k) { merged[k] = snap[k]; });
+      Object.keys(cur).forEach(function (k) { if (cur[k]) merged[k] = cur[k]; });
+      notes[entry.key] = merged;
+    } else {
+      notes[entry.key] = entry.data;
+    }
     saveNotes(notes);
     saveTrash(trash.filter(function (t) { return t.id !== id; }));
     render();
@@ -339,10 +406,19 @@
   /* Deep-link entry from Today's cards (⑤): open today's daily note, focus a block. */
   function openDaily(field) {
     selKey = null;
+    showTrash = false;
     focusField = field || null;
     LC.set({ screen: 'notes', notesScope: 'daily', editor: null, sessionOpen: null, projOpen: null });
   }
 
+  /* Open a specific note by "scope:period" key (used by search). */
+  function openKey(key) {
+    if (!key) return;
+    selKey = key; showTrash = false;
+    var scope = key.split(':')[0];
+    LC.set({ screen: 'notes', notesScope: scope, editor: null, sessionOpen: null, projOpen: null });
+  }
+
   LC.on(render);
-  window.LC_Notes = { render: render, openDaily: openDaily };
+  window.LC_Notes = { render: render, openDaily: openDaily, openKey: openKey };
 })();

@@ -12,14 +12,7 @@
   var KEY_WNOTE = 'weeknote';
 
   function loadTasks() { return LC.loadData(KEY_TASKS) || []; }
-  function loadWGoals() {
-    var g = LC.loadData(KEY_WGOALS);
-    return g || [
-      { t: 'Finish the portfolio draft', done: false },
-      { t: 'Two gym sessions', done: false },
-      { t: 'Call mom back', done: true }
-    ];
-  }
+  function loadWGoals() { return LC.loadData(KEY_WGOALS) || []; }
   function saveWGoals(arr) { LC.saveData(KEY_WGOALS, arr); }
   function loadWNote() { return LC.loadData(KEY_WNOTE) || ''; }
   function saveWNote(v) { LC.saveData(KEY_WNOTE, v); }
@@ -29,14 +22,7 @@
   var KEY_MNOTE = 'monthnote';
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  function loadMGoals() {
-    var g = LC.loadData(KEY_MGOALS);
-    return g || [
-      { t: 'Ship the portfolio', done: false },
-      { t: 'Read two books', done: false },
-      { t: 'Submit the tax return', done: true }
-    ];
-  }
+  function loadMGoals() { return LC.loadData(KEY_MGOALS) || []; }
   function saveMGoals(arr) { LC.saveData(KEY_MGOALS, arr); }
   function loadMReflect() { return LC.loadData(KEY_MREFLECT) || {}; }
   function saveMReflect(o) { LC.saveData(KEY_MREFLECT, o); }
@@ -50,17 +36,7 @@
   var KEY_YNOTE = 'yearnote';
   var KEY_YTHEME = 'yeartheme';
 
-  function loadYGoals() {
-    var g = LC.loadData(KEY_YGOALS);
-    return g || [
-      { t: 'Launch the side project', done: true },
-      { t: 'Save $10k', done: false },
-      { t: 'Read 24 books', done: false },
-      { t: 'Learn Spanish', done: false },
-      { t: 'Run a 10k', done: true },
-      { t: 'Ship the portfolio', done: false }
-    ];
-  }
+  function loadYGoals() { return LC.loadData(KEY_YGOALS) || []; }
   function saveYGoals(arr) { LC.saveData(KEY_YGOALS, arr); }
   function loadYNote() { return LC.loadData(KEY_YNOTE) || ''; }
   function saveYNote(v) { LC.saveData(KEY_YNOTE, v); }
@@ -97,17 +73,48 @@
   function sessionsForDate(date) {
     var out = [];
     loadProjects().forEach(function (p) {
-      (p.sessions || []).forEach(function (s) {
+      (p.sessions || []).forEach(function (s, idx) {
         if (s.date === date && s.startMin != null) {
-          out.push({ startMin: s.startMin, duration: s.durationMin || 60, title: p.title, label: s.label, done: !!s.done, isSession: true });
+          out.push({ startMin: s.startMin, duration: s.durationMin || 60, title: p.title, label: s.label, done: !!s.done, isSession: true, projectId: p.id, sessionIdx: idx });
         }
       });
     });
     return out;
   }
 
+  /* ── Holidays (custom + optional US federal presets) ── */
+  function loadHolidays() { return LC.loadData('holidays') || []; }
+  function saveHolidays(a) { LC.saveData('holidays', a); }
+  function iso(y, m, d) { return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+  function nthWeekday(y, m, wd, n) { var first = new Date(y, m, 1).getDay(); var day = 1 + ((wd - first + 7) % 7) + (n - 1) * 7; return iso(y, m, day); }
+  function lastWeekday(y, m, wd) { var last = new Date(y, m + 1, 0); var day = last.getDate() - ((last.getDay() - wd + 7) % 7); return iso(y, m, day); }
+  function federalHolidays(y) {
+    return [
+      { date: iso(y, 0, 1), name: "New Year's Day" },
+      { date: nthWeekday(y, 0, 1, 3), name: 'MLK Jr. Day' },
+      { date: nthWeekday(y, 1, 1, 3), name: "Presidents' Day" },
+      { date: lastWeekday(y, 4, 1), name: 'Memorial Day' },
+      { date: iso(y, 5, 19), name: 'Juneteenth' },
+      { date: iso(y, 6, 4), name: 'Independence Day' },
+      { date: nthWeekday(y, 8, 1, 1), name: 'Labor Day' },
+      { date: nthWeekday(y, 9, 1, 2), name: 'Columbus Day' },
+      { date: iso(y, 10, 11), name: 'Veterans Day' },
+      { date: nthWeekday(y, 10, 4, 4), name: 'Thanksgiving' },
+      { date: iso(y, 11, 25), name: 'Christmas Day' }
+    ];
+  }
+  /* All holidays (custom + federal-if-enabled) for a year → sorted list. */
+  function holidaysForYear(y) {
+    var out = loadHolidays().filter(function (h) { return h.date && h.date.slice(0, 4) === String(y); })
+      .map(function (h) { return { date: h.date, name: h.name, kind: h.kind || 'holiday', id: h.id }; });
+    if (LC.get('federalHolidays')) federalHolidays(y).forEach(function (h) { out.push({ date: h.date, name: h.name, kind: 'federal' }); });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function holidayMap(y) { var m = {}; holidaysForYear(y).forEach(function (h) { (m[h.date] = m[h.date] || []).push(h); }); return m; }
+
   var wgEditIdx = -1;
   var wgDraft = '';
+  var hAdding = false;   // holiday add-form open
 
   function weekInfo() {
     var d = anchorDate();
@@ -159,11 +166,16 @@
 
     /* Goals strip */
     html += '<div class="wk-goals-strip">';
+    html += '<div class="wk-goals-head">';
     html += '<span class="wk-goals-toggle" data-action="toggle-week-goals"><i class="ti ti-target wk-goals-icon"></i> Goals ' + goalsDone + '/' + goals.length + ' <i class="ti ' + (open ? 'ti-chevron-up' : 'ti-chevron-down') + '"></i></span>';
+    if (open && goals.length < 3) {
+      html += '<button class="wk-goals-add-btn" data-action="add-week-goal"><i class="ti ti-plus"></i> Add goal</button>';
+    }
+    html += '</div>';
     if (open) {
       html += '<div class="wk-goals-chips">';
       goals.forEach(function (g, i) { html += renderGoalChip(g, i); });
-      if (goals.length < 3) html += '<span class="wk-goal-add" data-action="add-week-goal"><i class="ti ti-plus"></i> Add a goal</span>';
+      if (goals.length === 0) html += '<span class="wk-goals-empty">Set up to 3 goals for the week.</span>';
       html += '</div>';
     }
     html += '</div>';
@@ -203,12 +215,19 @@
     var ds = dstr(dt);
     var items = tasks.filter(function (t) { return t.date === ds && t.startMin != null; })
       .map(function (t) {
-        return { startMin: t.startMin, duration: t.duration || 30, title: t.title || 'Untitled', kind: t.type === 'event' ? 'event' : 'task', done: !!t.done };
+        return { id: t.id, startMin: t.startMin, duration: t.duration || 30, title: t.title || 'Untitled', kind: t.type === 'event' ? 'event' : 'task', done: !!t.done };
       });
     sessionsForDate(ds).forEach(function (s) {
-      items.push({ startMin: s.startMin, duration: s.duration, title: s.title, kind: 'session', label: s.label, done: s.done });
+      items.push({ startMin: s.startMin, duration: s.duration, title: s.title, kind: 'session', label: s.label, done: s.done, projectId: s.projectId, sessionIdx: s.sessionIdx });
     });
     return items.sort(function (a, b) { return a.startMin - b.startMin; });
+  }
+
+  /* data-attrs to make a week item open its editor (task) or session drawer (session) */
+  function itemAttrs(t) {
+    if (t.kind === 'session') return ' data-cal-open="session" data-project-id="' + esc(t.projectId) + '" data-session-idx="' + t.sessionIdx + '"';
+    if (t.id) return ' data-cal-open="task" data-task-id="' + esc(t.id) + '"';
+    return '';
   }
 
   function renderDayCol(dt, i, isSel, isToday, tasks) {
@@ -227,7 +246,7 @@
         var end = t.startMin + t.duration;
         var typeLabel = t.kind === 'event' ? 'Event' : (t.kind === 'session' ? 'Session' : 'Task');
         var tag = t.kind === 'session' ? '<i class="ti ti-target wk-item-tag"></i> ' : '';
-        html += '<div class="wk-item' + (t.done ? ' done' : '') + '">';
+        html += '<div class="wk-item' + (t.done ? ' done' : '') + '"' + itemAttrs(t) + '>';
         html += '<div class="wk-chip" style="background:var(--' + c + '-soft);color:var(--' + c + ')">' + LC.fmtTime(t.startMin) + '</div>';
         html += '<div class="wk-item-main"><div class="wk-item-name">' + tag + esc(t.title) + (t.kind === 'session' && t.label ? ' <span class="wk-item-sub">· ' + esc(t.label) + '</span>' : '') + '</div>';
         html += '<div class="wk-item-range">' + LC.fmtTime(t.startMin) + ' – ' + LC.fmtTime(end) + ' · ' + typeLabel + '</div></div>';
@@ -239,7 +258,7 @@
       items.forEach(function (t) {
         var c = t.kind === 'event' ? 'blue' : 'accent';
         var tag = t.kind === 'session' ? '<i class="ti ti-target wk-compact-tag"></i>' : '';
-        html += '<div class="wk-compact-item">';
+        html += '<div class="wk-compact-item"' + itemAttrs(t) + '>';
         html += '<span class="wk-compact-bar" style="background:var(--' + c + ')"></span>';
         html += '<div class="wk-compact-main"><div class="wk-compact-start" style="color:var(--' + c + ')">' + LC.fmtTime(t.startMin) + '</div>';
         html += '<div class="wk-compact-name">' + tag + esc(t.title) + '</div></div>';
@@ -330,8 +349,10 @@
     for (var n = 1; n <= daysInMonth; n++) cells.push({ date: new Date(year, month, n), muted: false });
     while (cells.length % 7 !== 0) { var last = cells[cells.length - 1].date; cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), muted: true }); }
 
+    // merge adjacent years so lead/trailing cells (prev Dec / next Jan) show their holidays too
+    var hmap = Object.assign({}, holidayMap(year - 1), holidayMap(year), holidayMap(year + 1));
     html += '<div class="mo-grid">';
-    cells.forEach(function (c) { html += renderMonthCell(c, tasks); });
+    cells.forEach(function (c) { html += renderMonthCell(c, tasks, hmap); });
     html += '</div>';
 
     /* Legend */
@@ -351,17 +372,21 @@
     return html;
   }
 
-  function renderMonthCell(c, tasks) {
+  function renderMonthCell(c, tasks, hmap) {
     var dt = c.date;
     var isToday = !c.muted && dstr(dt) === dstr(new Date());
+    var hols = (hmap && hmap[dstr(dt)]) || [];
     var dayTasks = dayItems(dt, tasks);
-    var shown = dayTasks.slice(0, 2);
+    var shown = dayTasks.slice(0, hols.length ? 1 : 2);
     var more = dayTasks.length - shown.length;
 
-    var html = '<div class="mo-cell' + (isToday ? ' today' : '') + '">';
+    var html = '<div class="mo-cell' + (isToday ? ' today' : '') + (hols.length ? ' has-holiday' : '') + '">';
     html += '<div class="mo-cell-top"><span class="mo-num' + (isToday ? ' today' : (c.muted ? ' muted' : '')) + '">' + dt.getDate() + '</span></div>';
-    if (shown.length || more > 0) {
+    if (hols.length || shown.length || more > 0) {
       html += '<div class="mo-previews">';
+      hols.forEach(function (ho) {
+        html += '<div class="mo-preview mo-holiday"><i class="ti ti-confetti mo-holiday-icon"></i><span class="mo-preview-text">' + esc(ho.name) + '</span></div>';
+      });
       shown.forEach(function (t) {
         var col = t.kind === 'event' ? 'blue' : 'accent';
         var tag = t.kind === 'session' ? '<i class="ti ti-target mo-preview-tag"></i>' : '<span class="mo-dot" style="background:var(--' + col + ')"></span>';
@@ -425,6 +450,7 @@
     loadProjects().forEach(function (p) {
       (p.sessions || []).forEach(function (s) { if (s.date) taskDays[s.date] = true; });
     });
+    var hmap = holidayMap(year);
     var now = new Date();
     var months = [];
     for (var mi = 0; mi < 12; mi++) {
@@ -440,7 +466,8 @@
           day: dd,
           isToday: now.getFullYear() === year && now.getMonth() === mi && now.getDate() === dd,
           weekend: dow >= 5,
-          hasTask: !!taskDays[ds]
+          hasTask: !!taskDays[ds],
+          holiday: !!hmap[ds]
         });
       }
       months.push({ name: MONTHS[mi], isCurMonth: now.getFullYear() === year && now.getMonth() === mi, cells: cells });
@@ -483,9 +510,10 @@
     html += '</div>';
 
     /* 12 mini-month grids */
+    var sel = LC.get('yearSelMonth');
     html += '<div class="yr-months">';
-    yd.months.forEach(function (m) {
-      html += '<div class="yr-month">';
+    yd.months.forEach(function (m, mi) {
+      html += '<div class="yr-month' + (mi === sel ? ' sel' : '') + '" data-action="select-year-month" data-month="' + mi + '">';
       html += '<div class="yr-month-name serif' + (m.isCurMonth ? ' accent' : '') + '">' + m.name + '</div>';
       html += '<div class="yr-mini-heads">';
       yd.heads.forEach(function (h) { html += '<div class="yr-mini-head">' + h + '</div>'; });
@@ -495,14 +523,19 @@
         if (c.empty) { html += '<div class="yr-mini-cell empty"></div>'; return; }
         var cls = 'yr-mini-cell';
         if (c.isToday) cls += ' today';
+        else if (c.holiday) cls += ' holiday';
         else if (c.hasTask) cls += ' task';
         else if (c.weekend) cls += ' weekend';
         html += '<div class="' + cls + '">' + c.day + '</div>';
       });
       html += '</div>';
+      if (mi === sel) html += renderYearPreview(year, mi);
       html += '</div>';
     });
     html += '</div>';
+
+    /* Holidays & time off */
+    html += renderHolidaysSection(year);
 
     /* Year note */
     html += '<div class="yr-note wk-note">';
@@ -512,6 +545,67 @@
 
     html += '</div>';
     return html;
+  }
+
+  /* Expanding preview under a selected mini-month. */
+  function renderYearPreview(year, mi) {
+    var mk = year + '-' + String(mi + 1).padStart(2, '0');
+    var tasks = loadTasks().filter(function (t) { return t.date && t.date.slice(0, 7) === mk; });
+    var taskN = tasks.filter(function (t) { return t.type !== 'event'; }).length;
+    var eventN = tasks.filter(function (t) { return t.type === 'event'; }).length;
+    var sessN = 0;
+    loadProjects().forEach(function (p) { (p.sessions || []).forEach(function (s) { if (s.date && s.date.slice(0, 7) === mk) sessN++; }); });
+    var hols = holidaysForYear(year).filter(function (h) { return h.date.slice(0, 7) === mk; });
+
+    var h = '<div class="yr-preview" data-action="ignore">';
+    h += '<div class="yr-preview-counts">';
+    h += '<span><b>' + taskN + '</b> task' + (taskN !== 1 ? 's' : '') + '</span>';
+    h += '<span><b>' + eventN + '</b> event' + (eventN !== 1 ? 's' : '') + '</span>';
+    h += '<span><b>' + sessN + '</b> session' + (sessN !== 1 ? 's' : '') + '</span>';
+    h += '</div>';
+    if (hols.length) {
+      h += '<div class="yr-preview-hols">';
+      hols.forEach(function (x) { h += '<div class="yr-preview-hol"><i class="ti ti-confetti"></i> ' + (+x.date.slice(8)) + ' · ' + esc(x.name) + '</div>'; });
+      h += '</div>';
+    }
+    h += '<button class="yr-preview-open" data-action="open-year-month" data-month="' + mi + '">Open ' + MONTHS[mi] + ' <i class="ti ti-arrow-right"></i></button>';
+    return h;
+  }
+
+  /* Holidays & time off manager (year view). */
+  function renderHolidaysSection(year) {
+    var hols = holidaysForYear(year);
+    var h = '<div class="yr-holidays">';
+    h += '<div class="yr-hol-head"><span class="wk-note-label"><i class="ti ti-confetti"></i> Holidays & time off</span>';
+    h += '<button class="yr-hol-add-btn" data-action="add-holiday"><i class="ti ti-plus"></i> Add</button></div>';
+
+    if (hAdding) {
+      h += '<div class="yr-hol-form">';
+      h += '<input type="date" class="yr-hol-date" id="yr-hol-date" value="' + year + '-01-01">';
+      h += '<input type="text" class="yr-hol-name" id="yr-hol-name" placeholder="Name (e.g. Vacation)">';
+      h += '<select class="yr-hol-kind" id="yr-hol-kind"><option value="holiday">Holiday</option><option value="timeoff">Time off</option></select>';
+      h += '<button class="yr-hol-save" data-action="save-holiday">Add</button>';
+      h += '<button class="yr-hol-cancel" data-action="cancel-holiday">Cancel</button>';
+      h += '</div>';
+    }
+
+    if (hols.length === 0) {
+      h += '<div class="yr-hol-empty">No holidays yet.' + (LC.get('federalHolidays') ? '' : ' Turn on US federal holidays in Settings, or add your own.') + '</div>';
+    } else {
+      h += '<div class="yr-hol-list">';
+      hols.forEach(function (x) {
+        var p = x.date.split('-'); var lbl = MONTHS[+p[1] - 1].slice(0, 3) + ' ' + (+p[2]);
+        h += '<div class="yr-hol-row">';
+        h += '<span class="yr-hol-badge ' + x.kind + '">' + (x.kind === 'timeoff' ? 'Time off' : (x.kind === 'federal' ? 'Federal' : 'Holiday')) + '</span>';
+        h += '<span class="yr-hol-date-lbl">' + lbl + '</span>';
+        h += '<span class="yr-hol-name-lbl">' + esc(x.name) + '</span>';
+        if (x.kind !== 'federal') h += '<button class="yr-hol-del" data-action="del-holiday" data-id="' + esc(x.id) + '" aria-label="Remove"><i class="ti ti-x"></i></button>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
   }
 
   function renderYearGoal(g, i) {
@@ -566,6 +660,18 @@
 
   /* ── Events ── */
   document.addEventListener('click', function (e) {
+    // Week item → open editor (task) or session drawer. Checked first: items sit inside
+    // a .wk-col that carries select-week-day, so this must win over day selection.
+    var open = e.target.closest('[data-cal-open]');
+    if (open) {
+      if (open.dataset.calOpen === 'task') {
+        LC.set({ screen: 'today', calAnchor: null, editor: open.dataset.taskId, sessionOpen: null });
+      } else if (open.dataset.calOpen === 'session') {
+        LC.set({ screen: 'today', calAnchor: null, projOpen: open.dataset.projectId, sessionOpen: parseInt(open.dataset.sessionIdx, 10) });
+      }
+      return;
+    }
+
     var action = e.target.closest('[data-action]');
     if (!action) return;
     var a = action.dataset.action;
@@ -653,6 +759,48 @@
       render();
       return;
     }
+
+    /* Year view: month select / drill-in / holidays */
+    if (a === 'select-year-month') {
+      var smi = parseInt(action.dataset.month, 10);
+      LC.set({ yearSelMonth: LC.get('yearSelMonth') === smi ? null : smi });
+      return;
+    }
+    if (a === 'open-year-month') {
+      var omi = parseInt(action.dataset.month, 10);
+      var y = anchorDate().getFullYear();
+      LC.set({ cal: 'month', calAnchor: iso(y, omi, 1), yearSelMonth: null, weekSel: null });
+      return;
+    }
+    if (a === 'add-holiday') { hAdding = true; render(); return; }
+    if (a === 'cancel-holiday') { hAdding = false; render(); return; }
+    if (a === 'save-holiday') {
+      var dv = (document.getElementById('yr-hol-date') || {}).value;
+      var nv = ((document.getElementById('yr-hol-name') || {}).value || '').trim();
+      var kv = (document.getElementById('yr-hol-kind') || {}).value || 'holiday';
+      if (dv && nv) {
+        var arr = loadHolidays();
+        arr.push({ id: 'h' + Date.now(), date: dv, name: nv, kind: kv });
+        saveHolidays(arr);
+        hAdding = false;
+        render();
+      }
+      return;
+    }
+    if (a === 'del-holiday') {
+      saveHolidays(loadHolidays().filter(function (x) { return x.id !== action.dataset.id; }));
+      render();
+      return;
+    }
+  });
+
+  /* Double-click a mini-month → drill into its Month view. */
+  document.addEventListener('dblclick', function (e) {
+    var mo = e.target.closest('[data-action="select-year-month"]');
+    if (!mo || LC.get('screen') !== 'calendar' || LC.get('cal') !== 'year') return;
+    var mi = parseInt(mo.dataset.month, 10);
+    var y = anchorDate().getFullYear();
+    LC.set({ cal: 'month', calAnchor: iso(y, mi, 1), yearSelMonth: null, weekSel: null });
   });
 
   /* One-time migration: fold old calendar-only month/year note storage into clarity_notes. */

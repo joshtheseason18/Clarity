@@ -8,13 +8,18 @@
   var KEY = 'braindump';
   var KEY_PROJ = 'projects';
   var subAdding = false;
+  var dumpType = 'task';   // selected type for the inline add bar
+  var dumpDraft = '';      // preserves typed text across re-render (e.g. switching type pill)
+  var completedOpen = false; // Completed projects section expanded
+  var dumpSort = 'oldest';   // brain-dump sort: 'oldest' | 'newest'
 
   function loadDump() { return LC.loadData(KEY) || []; }
   function saveDump(arr) { LC.saveData(KEY, arr); }
   function loadProjects() { return LC.loadData(KEY_PROJ) || []; }
   function saveProjects(arr) { LC.saveData(KEY_PROJ, arr); }
 
-  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
   function two(n) { return String(n).padStart(2, '0'); }
   function clockParts(min) {
@@ -66,8 +71,10 @@
 
       if (lens === 'dump') {
         el.innerHTML = renderDumpView();
+        attachDumpInput();
       } else if (LC.get('projOpen')) {
         el.innerHTML = renderProjectDetail(LC.get('projOpen'));
+        attachProjectDetail();
       } else {
         el.innerHTML = renderProjectsView();
       }
@@ -75,11 +82,94 @@
     renderDrawer();
   }
 
+  function attachDumpInput() {
+    var inp = document.getElementById('bd-input-field');
+    if (!inp) return;
+    inp.addEventListener('input', function () { dumpDraft = inp.value; });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); addDumpFromInput(); }
+    });
+  }
+
+  function fmtDue(iso) {
+    if (!iso) return '';
+    var p = iso.split('-'); var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+    var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return DOW[dt.getDay()] + ', ' + MO[dt.getMonth()] + ' ' + dt.getDate();
+  }
+  function daysUntil(iso) {
+    var p = iso.split('-'); var due = new Date(+p[0], +p[1] - 1, +p[2]);
+    var today = new Date(); today.setHours(0, 0, 0, 0); due.setHours(0, 0, 0, 0);
+    return Math.round((due - today) / (24 * 60 * 60 * 1000));
+  }
+
+  function attachProjectDetail() {
+    var id = LC.get('projOpen');
+    var title = document.getElementById('pd-title-input');
+    if (title) {
+      // save without re-render so focus/caret are preserved while typing
+      title.addEventListener('input', function () {
+        var arr = loadProjects(); var p = arr.find(function (x) { return x.id === id; });
+        if (p) { p.title = title.value; saveProjects(arr); }
+      });
+    }
+    var desc = document.getElementById('pd-desc-input');
+    if (desc) {
+      var grow = function () { desc.style.height = 'auto'; desc.style.height = Math.max(desc.scrollHeight, 40) + 'px'; };
+      grow();
+      desc.addEventListener('input', function () {
+        grow();
+        var arr = loadProjects(); var p = arr.find(function (x) { return x.id === id; });
+        if (p) { p.desc = desc.value; saveProjects(arr); }
+      });
+    }
+    var due = document.getElementById('pd-due-input');
+    if (due) {
+      due.addEventListener('change', function () {
+        updateProject(id, function (p) {
+          p.dueISO = due.value;
+          p.dueFull = fmtDue(due.value);
+          if (due.value) { var dg = daysUntil(due.value); p.daysToGo = dg; p.urgent = dg <= 7; }
+          else { p.daysToGo = 999; p.urgent = false; }   // cleared date → no urgency
+        });
+      });
+    }
+  }
+
+  function addDumpFromInput() {
+    var inp = document.getElementById('bd-input-field');
+    var val = (inp ? inp.value : dumpDraft).trim();
+    if (!val) { if (inp) inp.focus(); return; }
+    dumpDraft = '';
+    if (dumpType === 'project') {
+      var projects = loadProjects();
+      var np = { id: 'p' + Date.now(), title: val, total: 4, done: 0, daysToGo: 7, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
+      projects.push(np);
+      saveProjects(projects);
+      LC.set({ lens: 'projects', projOpen: np.id });   // jump into the new project to add details
+      return;
+    }
+    var items = loadDump();
+    items.push({ id: Date.now().toString(), title: val, type: dumpType === 'event' ? 'event' : 'task', created: Date.now(), date: null });
+    saveDump(items);
+    render();
+    var again = document.getElementById('bd-input-field');
+    if (again) again.focus();
+  }
+
   /* ══════════════════════════════════════════
      Brain Dump View
      ══════════════════════════════════════════ */
   function renderDumpView() {
     var items = loadDump();
+    // Reconcile orphans: if a scheduled item's linked task was deleted, return it to the unplanned list.
+    var taskIds = {};
+    (LC.loadData('tasks') || []).forEach(function (t) { taskIds[t.id] = true; });
+    var changed = false;
+    items.forEach(function (it) {
+      if (it.taskId && !taskIds[it.taskId]) { delete it.taskId; it.date = null; changed = true; }
+    });
+    if (changed) saveDump(items);
     var d = new Date();
     var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -97,20 +187,24 @@
     html += '</div>';
 
     // Input bar
-    html += '<div class="bd-input" data-action="add-dump">';
-    html += '<i class="ti ti-plus bd-input-icon"></i>';
-    html += '<span class="bd-input-placeholder">Add a task or thought…</span>';
+    var ph = dumpType === 'project' ? 'Name a project…' : (dumpType === 'event' ? 'Add an event…' : 'Add a task or thought…');
+    html += '<div class="bd-input">';
+    html += '<i class="ti ti-plus bd-input-icon" data-action="add-dump-go"></i>';
+    html += '<input class="bd-input-field" id="bd-input-field" placeholder="' + ph + '" value="' + escAttr(dumpDraft) + '" autocomplete="off">';
     html += '<span class="bd-input-spacer"></span>';
     html += '<div class="bd-input-types">';
-    html += '<span class="bd-type-pill active"><i class="ti ti-circle"></i> Task</span>';
-    html += '<span class="bd-type-pill"><i class="ti ti-calendar"></i> Event</span>';
-    html += '<span class="bd-type-pill"><i class="ti ti-target"></i> Project</span>';
+    html += '<span class="bd-type-pill' + (dumpType === 'task' ? ' active' : '') + '" data-action="dump-type" data-type="task"><i class="ti ti-circle"></i> Task</span>';
+    html += '<span class="bd-type-pill' + (dumpType === 'event' ? ' active' : '') + '" data-action="dump-type" data-type="event"><i class="ti ti-calendar"></i> Event</span>';
+    html += '<span class="bd-type-pill' + (dumpType === 'project' ? ' active' : '') + '" data-action="dump-type" data-type="project"><i class="ti ti-target"></i> Project</span>';
     html += '</div>';
     html += '</div>';
 
+    // Sort (oldest ↔ newest — confirmed-decision #1)
+    items = items.slice().sort(function (a, b) { return dumpSort === 'newest' ? (b.created || 0) - (a.created || 0) : (a.created || 0) - (b.created || 0); });
+
     // Section label
     var unplanned = items.filter(function (i) { return !i.date; });
-    html += '<div class="bd-section-label"><i class="ti ti-stack-2"></i><span class="bd-section-count">Unplanned · ' + unplanned.length + '</span><span class="bd-section-sort">oldest first</span></div>';
+    html += '<div class="bd-section-label"><i class="ti ti-stack-2"></i><span class="bd-section-count">Unplanned · ' + unplanned.length + '</span><span class="bd-section-sort" data-action="toggle-dump-sort"><i class="ti ti-arrows-sort"></i> ' + (dumpSort === 'newest' ? 'newest first' : 'oldest first') + '</span></div>';
 
     // Items
     html += '<div class="bd-items">';
@@ -137,10 +231,11 @@
       html += '</div>';
 
       if (hasDate) {
-        html += '<span class="bd-item-check done"><i class="ti ti-check"></i></span>';
+        html += '<span class="bd-item-check done" title="Scheduled"><i class="ti ti-check"></i></span>';
       } else {
-        html += '<span class="bd-item-date-btn" data-action="schedule-dump" data-dump-id="' + item.id + '"><i class="ti ti-calendar-plus"></i> Date & time</span>';
+        html += '<span class="bd-item-date-btn" data-action="schedule-dump" data-dump-id="' + item.id + '"><i class="ti ti-calendar-plus"></i> Schedule</span>';
       }
+      html += '<button class="bd-item-del" data-action="delete-dump" data-dump-id="' + item.id + '" aria-label="Delete" title="Delete"><i class="ti ti-x"></i></button>';
       html += '</div>';
     });
     html += '</div>';
@@ -155,8 +250,9 @@
     html += '<div class="bd-carried-empty">Nothing carried over. Nice work!</div>';
     html += '</div>';
 
-    // History
-    html += '<div class="bd-history"><i class="ti ti-chevron-right"></i><span>History</span><span class="bd-history-count">· 0 scheduled</span></div>';
+    // History (honest count of items already turned into scheduled tasks)
+    var scheduledN = items.filter(function (i) { return i.date; }).length;
+    html += '<div class="bd-history"><i class="ti ti-history"></i><span>History</span><span class="bd-history-count">· ' + scheduledN + ' scheduled</span></div>';
 
     html += '</div>';
     html += '</div>'; // bd-grid
@@ -198,15 +294,31 @@
     }
 
     /* Completed footer */
-    if (active.length > 0) {
+    if (active.length > 0 || completedCount > 0) {
       html += '<div class="pj-completed" data-action="open-completed">';
-      html += '<i class="ti ti-chevron-right"></i>';
+      html += '<i class="ti ti-chevron-' + (completedOpen ? 'down' : 'right') + '"></i>';
       html += '<i class="ti ti-circle-check-filled pj-completed-check"></i>';
       html += '<span class="pj-completed-label">Completed</span>';
       if (completedCount > 0) {
         html += '<span class="pj-completed-count">· ' + completedCount + ' project' + (completedCount !== 1 ? 's' : '') + '</span>';
       }
       html += '</div>';
+      if (completedOpen) {
+        html += '<div class="pj-completed-list">';
+        var done = projects.filter(function (p) { return p.completed; });
+        if (done.length === 0) {
+          html += '<div class="pj-completed-empty">No completed projects yet.</div>';
+        } else {
+          done.forEach(function (p) {
+            html += '<div class="pj-completed-row">';
+            html += '<i class="ti ti-circle-check-filled pj-completed-row-check"></i>';
+            html += '<span class="pj-completed-row-title">' + esc(p.title) + '</span>';
+            html += '<button class="pj-reopen-btn" data-action="proj-reopen" data-project-id="' + esc(p.id) + '">Reopen</button>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+      }
     }
 
     html += '</div></div>';
@@ -358,11 +470,14 @@
     /* Header */
     html += '<div class="pd-head">';
     html += '<div class="pd-head-main">';
-    html += '<div class="pd-title serif">' + esc(p.title) + '</div>';
+    html += '<input class="pd-title-input serif" id="pd-title-input" value="' + escAttr(p.title) + '" placeholder="Project name">';
     html += '<div class="pd-subtitle">' + esc(kind) + ' · ' + total + ' session' + (total !== 1 ? 's' : '') + ' planned</div>';
     html += '</div>';
-    html += '<span class="pd-due"><i class="ti ti-calendar-event"></i> Due ' + esc(dueFull) + ' <i class="ti ti-pencil pd-due-edit"></i></span>';
+    html += '<label class="pd-due"><i class="ti ti-calendar-event"></i> Due <input type="date" class="pd-due-input" id="pd-due-input" value="' + escAttr(p.dueISO || '') + '"></label>';
     html += '</div>';
+
+    /* Description */
+    html += '<textarea class="pd-desc-input" id="pd-desc-input" placeholder="Add a description or notes for this project…">' + esc(p.desc || '') + '</textarea>';
 
     /* Status row */
     html += '<div class="pd-status">';
@@ -409,6 +524,10 @@
       html += '<button class="pd-approve-btn" data-action="proj-approve">Approve ' + cleanPending + ' clean session' + (cleanPending !== 1 ? 's' : '') + ' <i class="ti ti-arrow-right"></i></button>';
       html += '</div>';
     }
+
+    /* Mark complete */
+    html += '<button class="pd-complete-btn" data-action="proj-complete"><i class="ti ti-circle-check"></i> Mark project complete</button>';
+    html += '<div class="pd-complete-hint">Marks it done and clears any remaining sessions from your schedule.</div>';
 
     html += '</div></div>';
     return html;
@@ -497,6 +616,19 @@
         if (e.key === 'Escape') { subAdding = false; render(); }
       });
       subInp.addEventListener('blur', function () { commitSubtask(subInp.value); });
+    }
+
+    // Persist session notes on input (no re-render) so an external re-render never drops unsaved text.
+    var notesTa = overlay.querySelector('.ls-notes-input');
+    if (notesTa) {
+      notesTa.addEventListener('input', function () {
+        var projects = loadProjects();
+        var pp = projects.find(function (x) { return x.id === LC.get('projOpen'); });
+        if (!pp) return;
+        var ss = getSessions(pp); pp.sessions = ss;
+        var sess = ss[LC.get('sessionOpen')];
+        if (sess) { sess.notes = notesTa.value; saveProjects(projects); }
+      });
     }
   }
 
@@ -625,10 +757,32 @@
 
     if (a === 'new-project') {
       var projects = loadProjects();
-      var np = { id: 'p' + Date.now(), title: 'New project', total: 4, done: 0, daysToGo: 7, urgent: false, due: '', plan: defaultPlan({ total: 4 }), sessions: [] };
+      var np = { id: 'p' + Date.now(), title: 'New project', total: 4, done: 0, daysToGo: 7, urgent: false, due: '', desc: '', plan: defaultPlan({ total: 4 }), sessions: [] };
       projects.push(np);
       saveProjects(projects);
       LC.set({ projOpen: np.id });
+      return;
+    }
+
+    if (a === 'open-completed') { completedOpen = !completedOpen; render(); return; }
+
+    if (a === 'proj-complete') {
+      updateProject(LC.get('projOpen'), function (p) {
+        var sessions = getSessions(p);
+        // cascade: keep the done sessions, clear the rest off the schedule (confirmed-decision #4)
+        p.sessions = sessions.filter(function (s) { return s.done; });
+        p.total = p.sessions.length;
+        p.done = p.sessions.length;
+        p.completed = true;
+        p.completedAt = Date.now();
+      });
+      LC.set({ projOpen: null });   // back to the list; it moves under Completed
+      return;
+    }
+
+    if (a === 'proj-reopen') {
+      var rid = action.dataset.projectId;
+      updateProject(rid, function (p) { p.completed = false; delete p.completedAt; });
       return;
     }
 
@@ -659,7 +813,13 @@
       updateProject(LC.get('projOpen'), function (p) {
         var sessions = getSessions(p);
         p.sessions = sessions;
-        if (sessions.length > 1) sessions.pop();
+        if (sessions.length > 1) {
+          // don't silently destroy a session that carries real data — remove the last EMPTY one instead
+          var hasData = function (s) { return s.done || s.date || (s.notes && s.notes.trim()) || (s.subtasks && s.subtasks.length); };
+          var removeIdx = -1;
+          for (var i = sessions.length - 1; i >= 0; i--) { if (!hasData(sessions[i])) { removeIdx = i; break; } }
+          if (removeIdx >= 0) sessions.splice(removeIdx, 1);   // else: all sessions have content → leave them (open a session to delete it)
+        }
         p.total = sessions.length;
         p.done = sessions.filter(function (s) { return s.done; }).length;
       });
@@ -721,7 +881,7 @@
               if (s.durationMin == null) s.durationMin = durMin;
             }
           }
-          s.confirmed = true;
+          if (s.date) s.confirmed = true;               // only confirm sessions that actually got a date
         });
       });
       return;
@@ -752,13 +912,19 @@
 
     if (a === 'session-dur-minus' || a === 'session-dur-plus') {
       var dd = a === 'session-dur-plus' ? 15 : -15;
-      updateSession(function (s) { s.durationMin = Math.max(15, (s.durationMin || 60) + dd); });
+      updateSession(function (s) {
+        var start = s.startMin != null ? s.startMin : 960;
+        s.durationMin = Math.max(15, Math.min(19 * 60 - start, (s.durationMin || 60) + dd));  // keep end within the grid
+      });
       return;
     }
 
     if (a === 'session-start-minus' || a === 'session-start-plus') {
       var st = a === 'session-start-plus' ? 15 : -15;
-      updateSession(function (s) { s.startMin = Math.max(0, Math.min(1425, (s.startMin != null ? s.startMin : 960) + st)); });
+      updateSession(function (s) {
+        var d = s.durationMin || 60;
+        s.startMin = Math.max(7 * 60, Math.min(19 * 60 - d, (s.startMin != null ? s.startMin : 960) + st));  // keep within the 7–19 grid so it stays visible
+      });
       return;
     }
 
@@ -785,25 +951,27 @@
     }
 
     if (a === 'session-unschedule') {
-      updateSession(function (s) { s.dateLabel = ''; s.startMin = null; s.timeLabel = ''; });
+      updateSession(function (s) { delete s.date; s.dateLabel = ''; s.startMin = null; s.timeLabel = ''; delete s.confirmed; });  // clear date too so Year view stops counting it
       LC.set({ sessionOpen: null });
       return;
     }
 
     if (a === 'session-start-focus') {
       saveSessionNotes();
-      LC.set({ sessionOpen: null, screen: 'focus' });
+      LC.set({ sessionOpen: null, screen: 'focus', focusMode: 'sprint' });  // honor the "· Sprint" label
       return;
     }
 
-    if (a === 'add-dump') {
-      var val = prompt('Add a task or thought:');
-      if (val && val.trim()) {
-        var items = loadDump();
-        items.push({ id: Date.now().toString(), title: val.trim(), type: 'task', created: Date.now(), date: null });
-        saveDump(items);
-        render();
-      }
+    if (a === 'add-dump-go') { addDumpFromInput(); return; }
+
+    if (a === 'dump-type') {
+      var inp = document.getElementById('bd-input-field');
+      if (inp) dumpDraft = inp.value;            // preserve typed text across the re-render
+      dumpType = action.dataset.type;
+      render();
+      var f = document.getElementById('bd-input-field');
+      if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+      return;
     }
 
     if (a === 'schedule-dump') {
@@ -819,6 +987,19 @@
         }
         // if scheduling was blocked (slot full), LC_Today toasts and returns null — leave item as-is
       }
+    }
+
+    if (a === 'delete-dump') {
+      var did = action.dataset.dumpId;
+      saveDump(loadDump().filter(function (i) { return i.id !== did; }));
+      render();
+      return;
+    }
+
+    if (a === 'toggle-dump-sort') {
+      dumpSort = dumpSort === 'newest' ? 'oldest' : 'newest';
+      render();
+      return;
     }
   });
 

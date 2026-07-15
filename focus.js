@@ -8,6 +8,7 @@
   var timerInterval = null;
   var remainingSec = 0;
   var totalSec = 0;
+  var started = false;   // true once a timer has begun and not yet reset/completed (distinguishes paused from fresh)
 
   var MODES = {
     sprint: { label: 'Sprint', duration: 25 },
@@ -68,17 +69,18 @@
       timerInterval = null;
     }
 
+    // Only reset to full when the timer is fresh (not running, not done, not paused-mid-run).
+    if (!running && !done && !started) remainingSec = totalSec;
     var pct = totalSec > 0 ? ((totalSec - remainingSec) / totalSec) : 0;
-    if (!running && !done) { remainingSec = totalSec; pct = 0; }
     if (done) pct = 1;
     var deg = Math.round(pct * 360);
 
     var displayMin = Math.floor(remainingSec / 60);
     var displaySec = remainingSec % 60;
     var timeStr = displayMin + ':' + String(displaySec).padStart(2, '0');
-    if (mode === 'task' && !running) timeStr = '∞';
+    if (mode === 'task') timeStr = '∞';           // task mode is open-ended, always ∞
     if (done) timeStr = '✓';
-    var subText = done ? 'complete' : (running ? 'remaining' : MODES[mode].label + ' timer');
+    var subText = done ? 'complete' : (running ? (mode === 'task' ? 'focusing' : 'remaining') : (started ? 'paused' : MODES[mode].label + ' timer'));
 
     var ringBg = 'conic-gradient(var(--accent) ' + deg + 'deg, var(--line) ' + deg + 'deg)';
 
@@ -109,7 +111,7 @@
     html += '</div>';
 
     // Play/pause
-    var icon = running ? 'ti-player-pause-filled' : 'ti-player-play-filled';
+    var icon = running ? 'ti-player-pause' : 'ti-player-play';
     html += '<button class="focus-play" data-action="focus-toggle"><i class="ti ' + icon + '"></i></button>';
     html += '</div>';
 
@@ -197,15 +199,21 @@
   }
 
   function startTimer() {
-    var mode = LC.get('focusMode');
-    if (mode === 'task') { remainingSec = 999999; totalSec = 999999; }
     timerInterval = setInterval(function () {
+      // Navigated away → pause cleanly (stops the interval leak + background chime).
+      if (LC.get('screen') !== 'focus') {
+        clearInterval(timerInterval); timerInterval = null;
+        LC.set({ focusRunning: false });
+        return;
+      }
+      var m = LC.get('focusMode');
+      if (m === 'task') { render(); return; }   // open-ended, never counts down
       if (remainingSec <= 0) {
         clearInterval(timerInterval);
         timerInterval = null;
-        var m = LC.get('focusMode');
-        if (m === 'sprint' || m === 'custom') { chime(); LC.set({ focusRunning: false, focusDone: true }); }
-        else { LC.set({ focusRunning: false }); }
+        started = false;
+        chime();
+        LC.set({ focusRunning: false, focusDone: true });
         return;
       }
       remainingSec--;
@@ -224,13 +232,15 @@
       if (running) {
         clearInterval(timerInterval);
         timerInterval = null;
-        LC.set({ focusRunning: false });
+        LC.set({ focusRunning: false });   // pause: `started` stays true, remainingSec preserved
       } else {
         var mode = LC.get('focusMode');
         var customMin = LC.get('focusCustomMin') || 25;
-        if (mode === 'sprint') { totalSec = 25 * 60; remainingSec = totalSec; }
-        else if (mode === 'custom') { totalSec = customMin * 60; remainingSec = totalSec; }
-        else { totalSec = 999999; remainingSec = totalSec; }
+        var full = mode === 'sprint' ? 25 * 60 : (mode === 'custom' ? customMin * 60 : 0);
+        totalSec = full;
+        // resume a paused timer (keep remainingSec); otherwise start fresh at full
+        if (!(started && remainingSec > 0 && remainingSec < full)) remainingSec = full;
+        started = true;
         LC.set({ focusRunning: true, focusDone: false });
         startTimer();
       }
@@ -239,6 +249,7 @@
 
     if (a === 'focus-mode') {
       if (LC.get('focusRunning')) return;
+      started = false; remainingSec = 0;   // switching mode starts a fresh timer
       LC.set({ focusMode: action.dataset.mode, focusDone: false });
       return;
     }
@@ -287,7 +298,7 @@
     }
 
     if (a === 'focus-reset') {
-      remainingSec = 0;
+      remainingSec = 0; started = false;
       LC.set({ focusDone: false, focusRunning: false });
       return;
     }
