@@ -847,7 +847,7 @@
       ch += '<div class="pd-session-meta">' + meta + (s.secondSameDay ? ' <span class="pd-amber">· second session that day</span>' : '') + '</div></div>';
       ch += '<i class="ti ti-pencil pd-session-pencil"></i>';
       ch += '</button>';
-      ch += '<div class="pd-conflict-note"><span class="pd-conflict-text">' + s.conflict.note + '</span><span class="pd-conflict-spacer"></span><span class="pd-conflict-assign" data-action="proj-assign-anyway" data-session="' + i + '">Assign anyway</span><span class="pd-conflict-pick" data-action="proj-pick-time" data-session="' + i + '">Pick a date &amp; time</span></div>';
+      ch += '<div class="pd-conflict-note"><span class="pd-conflict-text">' + esc(s.conflict.note) + '</span><span class="pd-conflict-spacer"></span><span class="pd-conflict-assign" data-action="proj-assign-anyway" data-session="' + i + '">Assign anyway</span><span class="pd-conflict-pick" data-action="proj-pick-time" data-session="' + i + '">Pick a date &amp; time</span></div>';
       ch += '</div>';
       return ch;
     }
@@ -978,7 +978,7 @@
     }
 
     /* Start focus */
-    h += '<button class="ls-focus-btn" data-action="session-start-focus"><i class="ti ti-player-play"></i> Start focus · Sprint</button>';
+    h += '<button class="ls-focus-btn" data-action="session-start-focus"><i class="ti ti-player-play"></i> Start focus · ' + fmtDurShort(durMin) + '</button>';
 
     /* Subtasks */
     h += '<div class="ls-section-label">Subtasks · ' + subDone + '/' + subtasks.length + '</div>';
@@ -1289,7 +1289,12 @@
 
     if (a === 'session-start-focus') {
       saveSessionNotes();
-      LC.set({ sessionOpen: null, screen: 'focus', focusMode: 'sprint' });  // honor the "· Sprint" label
+      // the session's length IS the timer length; hard-reset so an abandoned paused run
+      // with the same duration can't leak through
+      if (window.LC_Focus && LC_Focus.reset) LC_Focus.reset();
+      var sfP = loadProjects().find(function (x) { return x.id === LC.get('projOpen'); });
+      var sfS = sfP ? getSessions(sfP)[LC.get('sessionOpen')] : null;
+      LC.set({ sessionOpen: null, screen: 'focus', focusCustomMin: (sfS && sfS.durationMin) || 60, focusTaskId: null, focusDone: false, focusRunning: false });
       return;
     }
 

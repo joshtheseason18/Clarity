@@ -36,7 +36,6 @@
     projOpen: null,
     sessionOpen: null,
     editor: null,
-    focusMode: 'task',
     focusCustomMin: 25,
     focusRunning: false,
     focusTaskId: null,

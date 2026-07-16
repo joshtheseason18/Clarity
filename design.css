@@ -2686,34 +2686,8 @@ body.tg-dragging .tg-card { cursor: grabbing; }
   text-align: center;
 }
 
-.focus-modes {
-  display: inline-flex;
-  gap: 5px;
-  margin: 22px 0 18px;
-  padding: 3px;
-  border: .5px solid var(--line1);
-  border-radius: 999px;
-  background: var(--panel);
-}
-
-.focus-mode-tab {
-  height: 30px;
-  padding: 0 14px;
-  border: none;
-  background: transparent;
-  color: var(--mist);
-  font-family: inherit;
-  font-size: 12px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.focus-mode-tab.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 500;
-}
-
 .focus-play {
+  margin-top: 22px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -2798,6 +2772,31 @@ body.tg-dragging .tg-card { cursor: grabbing; }
 }
 .focus-pick-btn i { font-size: 14px; }
 .focus-pick-btn:hover { background: var(--wash); }
+
+/* Focus — duration presets + ad-hoc naming */
+.focus-presets { display: flex; gap: 7px; margin-top: 18px; }
+.focus-preset {
+  height: 30px; padding: 0 13px; border-radius: 999px;
+  border: .5px solid var(--line2); background: transparent; color: var(--mist);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.focus-preset:hover { background: var(--wash); color: var(--text); }
+.focus-preset.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+
+.focus-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: var(--haze); font-size: 11px; }
+.focus-divider::before, .focus-divider::after { content: ''; flex: 1; height: .5px; background: var(--line); }
+
+.focus-adhoc-row {
+  display: flex; align-items: center; gap: 10px;
+  height: 44px; padding: 0 14px;
+  border: .5px dashed var(--line2); border-radius: 12px;
+}
+.focus-adhoc-row i { font-size: 15px; color: var(--haze); }
+.focus-adhoc-name {
+  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
+  color: var(--text); font-family: inherit; font-size: 13.5px;
+}
+.focus-adhoc-name::placeholder { color: var(--haze); }
 
 /* Focus — attached-task header + change link */
 .focus-task-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }

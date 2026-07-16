@@ -18,30 +18,20 @@
   function saveWNote(v) { LC.saveData(KEY_WNOTE, v); }
 
   var KEY_MGOALS = 'monthgoals';
-  var KEY_MREFLECT = 'monthreflect';
-  var KEY_MNOTE = 'monthnote';
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   function loadMGoals() { return LC.loadData(KEY_MGOALS) || []; }
   function saveMGoals(arr) { LC.saveData(KEY_MGOALS, arr); }
-  function loadMReflect() { return LC.loadData(KEY_MREFLECT) || {}; }
-  function saveMReflect(o) { LC.saveData(KEY_MREFLECT, o); }
-  function loadMNote() { return LC.loadData(KEY_MNOTE) || ''; }
-  function saveMNote(v) { LC.saveData(KEY_MNOTE, v); }
+  // (legacy monthreflect/monthnote/yearnote/yeartheme keys are read only by the one-time
+  // migration at the bottom of this file; their helpers were dead and removed)
 
   var mgEditIdx = -1;
   var mgDraft = '';
 
   var KEY_YGOALS = 'yeargoals';
-  var KEY_YNOTE = 'yearnote';
-  var KEY_YTHEME = 'yeartheme';
 
   function loadYGoals() { return LC.loadData(KEY_YGOALS) || []; }
   function saveYGoals(arr) { LC.saveData(KEY_YGOALS, arr); }
-  function loadYNote() { return LC.loadData(KEY_YNOTE) || ''; }
-  function saveYNote(v) { LC.saveData(KEY_YNOTE, v); }
-  function loadYTheme() { return LC.loadData(KEY_YTHEME) || ''; }
-  function saveYTheme(v) { LC.saveData(KEY_YTHEME, v); }
 
   var ygEditIdx = -1;
   var ygDraft = '';
