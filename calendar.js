@@ -63,6 +63,7 @@
   function sessionsForDate(date) {
     var out = [];
     loadProjects().forEach(function (p) {
+      if (p.sample) return;   // sample sessions never appear on the calendar
       (p.sessions || []).forEach(function (s, idx) {
         if (s.date === date && s.startMin != null) {
           out.push({ startMin: s.startMin, duration: s.durationMin || 60, title: p.title, label: s.label, done: !!s.done, isSession: true, projectId: p.id, sessionIdx: idx });
@@ -471,6 +472,7 @@
     var taskDays = {};
     tasks.forEach(function (t) { if (t.date) taskDays[t.date] = true; });
     loadProjects().forEach(function (p) {
+      if (p.sample) return;
       (p.sessions || []).forEach(function (s) { if (s.date) taskDays[s.date] = true; });
     });
     var hmap = holidayMap(year);
@@ -577,7 +579,7 @@
     var taskN = tasks.filter(function (t) { return t.type !== 'event'; }).length;
     var eventN = tasks.filter(function (t) { return t.type === 'event'; }).length;
     var sessN = 0;
-    loadProjects().forEach(function (p) { (p.sessions || []).forEach(function (s) { if (s.date && s.date.slice(0, 7) === mk) sessN++; }); });
+    loadProjects().forEach(function (p) { if (p.sample) return; (p.sessions || []).forEach(function (s) { if (s.date && s.date.slice(0, 7) === mk) sessN++; }); });
     var hols = holidaysForYear(year).filter(function (h) { return h.date.slice(0, 7) === mk; });
 
     var h = '<div class="yr-preview" data-action="ignore">';

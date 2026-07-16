@@ -20,6 +20,7 @@
   function sessionsForDate(date) {
     var out = [];
     loadProjects().forEach(function (p) {
+      if (p.sample) return;   // sample project sessions never appear on the calendar
       (p.sessions || []).forEach(function (s, idx) {
         if (s.date === date && s.startMin != null) {
           out.push({
@@ -971,7 +972,10 @@
         sp.sessions[ssi].done = !sp.sessions[ssi].done;
         sp.done = sp.sessions.filter(function (s) { return s.done; }).length;
         saveProjects(sprojects);
+        var sessBecameDone = sp.sessions[ssi].done;
         render();
+        // completing a session on the grid offers the "session done / complete project" fork
+        if (sessBecameDone && window.LC_BrainDump && LC_BrainDump.sessionPill) LC_BrainDump.sessionPill(sp.id);
       }
       return;
     }
