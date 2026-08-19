@@ -10,7 +10,7 @@
   'use strict';
 
   var SUPABASE_URL = 'https://owvevphwezdqzsiywrwm.supabase.co';
-  var SUPABASE_ANON_KEY = ''; // ← paste your Supabase anon key here to turn on Google / email sign-in
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93dmV2cGh3ZXpkcXpzaXl3cndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNzEzMDUsImV4cCI6MjA5MTg0NzMwNX0.QAYElYBPc3dcbJvPAvHJo6hTifQcVNHJC8KyM6hZsUE';
 
   var client = null;
   var enabled = false;
