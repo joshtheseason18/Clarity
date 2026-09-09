@@ -5,6 +5,10 @@
 (function () {
   'use strict';
 
+  /* The visible day window — mirrors today.js (Settings → "Your day"). */
+  function dayStartH() { var v = parseInt(LC.get('dayStart'), 10); return (v >= 4 && v <= 12) ? v : 6; }
+  function dayEndH()   { var v = parseInt(LC.get('dayEnd'), 10);   return (v >= 16 && v <= 24) ? v : 22; }
+
   var KEY = 'braindump';
   var KEY_PROJ = 'projects';
   var subAdding = false;
@@ -225,7 +229,7 @@
     // Clamp to the grid HERE and write back, so the chips and the toast always show the
     // time that is actually scheduled (never a silently-moved one).
     var cDur = Math.max(15, item.pDur);
-    var cStart = Math.max(7 * 60, Math.min(19 * 60 - cDur, Math.round(item.pStart / 15) * 15));
+    var cStart = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - cDur, Math.round(item.pStart / 15) * 15));
     if (cStart !== item.pStart) item.pStart = cStart;
     if (cDur !== item.pDur) item.pDur = cDur;
     var id = LC_Today.createTaskOn(item.pDate, item.pStart, item.pDur, item.title, item.type);
@@ -278,6 +282,8 @@
     var toast = document.getElementById('bd-undo-toast');
     if (toast) toast.remove();
     render();
+    // the braindump screen is retired — the Undo usually fires from Today, so refresh it too
+    if (window.LC_Today && LC.get('screen') === 'today') LC_Today.render();
   }
 
   function addDumpFromInput() {
@@ -676,7 +682,7 @@
     var locked = routines.filter(function (r) {
       return r.protected && r.days && r.days.indexOf(dow) >= 0 && start < r.endMin && end > r.startMin;
     })[0];
-    if (locked) return '“' + locked.name + '” is locked — nothing can be scheduled then';
+    if (locked) return '“' + locked.name + '” is reserved — nothing can be scheduled then';
 
     var spans = [];
     (LC.loadData('tasks') || []).forEach(function (t) {
@@ -1228,7 +1234,7 @@
       var dd = a === 'session-dur-plus' ? 15 : -15;
       updateSession(function (s, p) {
         var start = s.startMin != null ? s.startMin : 960;
-        var nd = Math.max(15, Math.min(19 * 60 - start, (s.durationMin || 60) + dd));  // keep end within the grid
+        var nd = Math.max(15, Math.min(dayEndH() * 60 - start, (s.durationMin || 60) + dd));  // keep end within the grid
         var err = dd > 0 ? sessionBlock(s.date, start, nd, p.id, LC.get('sessionOpen')) : null;  // growing can collide; shrinking can't
         if (err) { sessToast(err); return; }
         s.durationMin = nd;
@@ -1240,7 +1246,7 @@
       var st = a === 'session-start-plus' ? 15 : -15;
       updateSession(function (s, p) {
         var d = s.durationMin || 60;
-        var ns = Math.max(7 * 60, Math.min(19 * 60 - d, (s.startMin != null ? s.startMin : 960) + st));  // keep within the 7–19 grid so it stays visible
+        var ns = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - d, (s.startMin != null ? s.startMin : 960) + st));  // keep within the day window so it stays visible
         var err = sessionBlock(s.date, ns, d, p.id, LC.get('sessionOpen'));
         if (err) { sessToast(err); return; }
         s.startMin = ns;
@@ -1355,7 +1361,7 @@
     if (a === 'chip-time' || a === 'chip-time-set') {
       var ct = chipItem(); if (!ct) return;
       if (a === 'chip-time-set') ct.it.pStart = 9 * 60;   // "Add time" starts at 9 AM
-      else ct.it.pStart = Math.max(7 * 60, Math.min(19 * 60 - 15, ct.it.pStart + 15 * parseInt(action.dataset.dir, 10)));
+      else ct.it.pStart = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - 15, ct.it.pStart + 15 * parseInt(action.dataset.dir, 10)));
       delete ct.it.pBlocked;
       maybeAutoSchedule(ct.it, ct.items);
       saveDump(ct.items); render();
@@ -1410,5 +1416,61 @@
   });
 
   LC.on(render);
-  window.LC_BrainDump = { render: render };
+  /* ══ Public API for the Today column (the braindump screen itself is retired) ══ */
+  function reconcileOrphans(items) {
+    var taskIds = {};
+    (LC.loadData('tasks') || []).forEach(function (t) { taskIds[t.id] = true; });
+    var changed = false;
+    items.forEach(function (it) {
+      if (it.taskId && !taskIds[it.taskId]) { delete it.taskId; it.date = null; changed = true; }
+    });
+    if (changed) saveDump(items);
+    return items;
+  }
+
+  /* Capture free text: smart-parse date/time/duration/type; auto-schedules (with the
+     Undo toast) when fully specified, otherwise lands in Unplanned. Returns true if scheduled. */
+  function captureQuick(text) {
+    var val = (text || '').trim();
+    if (!val) return false;
+    var parsed = parseCapture(val);
+    var items = loadDump();
+    var item = {
+      id: 'd' + Date.now() + '_' + (++dumpIdSeq), title: parsed.title,
+      type: parsed.type || 'task',
+      created: Date.now(), date: null,
+      pDate: parsed.dateISO, pStart: parsed.startMin, pDur: parsed.durationMin
+    };
+    items.push(item);
+    var scheduled = maybeAutoSchedule(item, items);
+    saveDump(items);
+    return scheduled;
+  }
+
+  /* Unscheduled captures, newest first, orphan-reconciled. */
+  function unplannedList() {
+    var items = reconcileOrphans(loadDump());
+    return items.filter(function (it) { return !it.date; })
+                .sort(function (a, b) { return (b.created || 0) - (a.created || 0); });
+  }
+
+  /* Place a captured item onto a specific slot (drag / tap-to-place from the Today column).
+     createTaskOn toasts and returns null when the slot is hard-blocked. */
+  function placeFromColumn(itemId, dateISO, startMin) {
+    var items = loadDump();
+    var item = items.find(function (i) { return i.id === itemId; });
+    if (!item || item.date) return false;
+    var dur = item.pDur != null ? Math.max(15, item.pDur) : 30;
+    var id = LC_Today.createTaskOn(dateISO, startMin, dur, item.title, item.type);
+    if (!id) { item.pBlocked = true; saveDump(items); return false; }
+    delete item.pBlocked;
+    item.taskId = id; item.date = dateISO;
+    item.pDate = dateISO; item.pStart = Math.round(startMin / 15) * 15; item.pDur = dur;
+    item.scheduledAt = Date.now();
+    saveDump(items);
+    showDumpUndo(item.id, item.title, dateISO, item.pStart);
+    return true;
+  }
+
+  window.LC_BrainDump = { render: render, capture: captureQuick, unplanned: unplannedList, place: placeFromColumn, unschedule: unscheduleDumpItem, itemDur: function (id) { var it = loadDump().find(function (i) { return i.id === id; }); return it && it.pDur != null ? Math.max(15, it.pDur) : 30; } };
 })();

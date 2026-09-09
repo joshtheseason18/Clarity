@@ -54,7 +54,7 @@
     html += '<button class="rt-add-btn" data-action="routine-add"><i class="ti ti-plus"></i> Add routine</button>';
     html += '</div>';
 
-    html += '<div class="rt-legend"><span><i class="ti ti-lock"></i> locked — no tasks scheduled</span><span><i class="ti ti-arrow-down-to-arc"></i> open — tasks can fill it</span></div>';
+    html += '<div class="rt-legend"><span><i class="ti ti-lock"></i> reserved — no tasks scheduled</span><span><i class="ti ti-arrow-down-to-arc"></i> open — tasks can fill it</span></div>';
 
     if (routines.length === 0) {
       html += '<div class="rt-empty">No routines yet. Add one to give your days a repeatable shape.</div>';
@@ -73,7 +73,7 @@
       html += '</div>';
       html += '<span class="rt-spacer"></span>';
       if (r.protected) {
-        html += '<span class="rt-mark protected"><i class="ti ti-lock"></i> locked</span>';
+        html += '<span class="rt-mark protected"><i class="ti ti-lock"></i> reserved</span>';
       } else {
         html += '<span class="rt-mark open"><i class="ti ti-arrow-down-to-arc"></i> open</span>';
       }
@@ -119,7 +119,7 @@
     html += '</div>';
     html += '<div class="rt-days-label">' + daysLabel(d.days) + '</div>';
 
-    html += '<div class="rt-protect-row"><i class="ti ti-checkbox rt-protect-icon"></i><div class="rt-protect-text"><div>Can tasks be scheduled during this?</div><div class="rt-protect-sub">' + (d.protected ? 'Off — this block stays locked' : 'On — your to-dos can land inside it') + '</div></div><button class="rt-switch' + (!d.protected ? ' on' : '') + '" data-action="routine-protect"><span class="rt-switch-knob"></span></button></div>';
+    html += '<div class="rt-protect-row"><i class="ti ti-checkbox rt-protect-icon"></i><div class="rt-protect-text"><div>Can tasks be scheduled during this?</div><div class="rt-protect-sub">' + (d.protected ? 'Off — this time stays reserved' : 'On — your to-dos can land inside it') + '</div></div><button class="rt-switch' + (!d.protected ? ' on' : '') + '" data-action="routine-protect"><span class="rt-switch-knob"></span></button></div>';
 
     html += '<div class="rt-editor-foot">';
     if (!isNew) html += '<button class="rt-editor-delete" data-action="routine-delete-editing"><i class="ti ti-trash"></i> Delete</button>';

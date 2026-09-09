@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════
-   Luclaro — Search (tasks · events · notes · projects)
+   Luclaro — Search (tasks · events · notes)
    ══════════════════════════════════════════
    Command-palette style overlay. Open via the Notes search bar or ⌘K / Ctrl+K.
 */
@@ -43,12 +43,6 @@
       }
     });
 
-    (LC.loadData('projects') || []).forEach(function (p) {
-      var hay = (p.title || '') + ' ' + (p.desc || '');
-      if (hay.toLowerCase().indexOf(q) >= 0) {
-        out.push({ type: 'project', title: p.title || 'Untitled project', sub: (p.desc || '').slice(0, 60), go: 'project', id: p.id });
-      }
-    });
 
     var notes = LC.loadData('notes') || {};
     Object.keys(notes).forEach(function (key) {
@@ -66,7 +60,6 @@
   var TYPE_META = {
     task: { icon: 'ti-circle', label: 'Task' },
     event: { icon: 'ti-calendar', label: 'Event' },
-    project: { icon: 'ti-target', label: 'Project' },
     note: { icon: 'ti-notebook', label: 'Note' }
   };
 
@@ -80,7 +73,7 @@
     var h = '<div class="search-backdrop" data-action="search-close"></div>';
     h += '<div class="search-modal" role="dialog" aria-modal="true" aria-label="Search">';
     h += '<div class="search-bar"><i class="ti ti-search"></i>';
-    h += '<input class="search-input" id="search-input" placeholder="Search tasks, events, notes, projects…" value="' + escAttr(query) + '" autocomplete="off">';
+    h += '<input class="search-input" id="search-input" placeholder="Search tasks, events, notes…" value="' + escAttr(query) + '" autocomplete="off">';
     h += '<span class="search-esc">esc</span></div>';
 
     h += '<div class="search-results">';
@@ -146,7 +139,6 @@
       var dAnchor = (t && t.date && t.date !== todayISO()) ? t.date : null;
       LC.set({ screen: 'today', dayAnchor: dAnchor, editor: el.dataset.id, sessionOpen: null, projOpen: null });
     }
-    else if (g === 'project') LC.set({ screen: 'braindump', lens: 'projects', projOpen: el.dataset.id, editor: null });
     else if (g === 'note' && window.LC_Notes) LC_Notes.openKey(el.dataset.key);
   }
 
