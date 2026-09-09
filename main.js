@@ -7,7 +7,6 @@
 
   /* ── Nav items (matches reference rail order exactly) ── */
   const NAV = [
-    { id: 'braindump', icon: 'ti-inbox',            label: 'Brain dump' },
     { id: 'today',     icon: 'ti-sun',              label: 'Today' },
     { id: 'calendar',  icon: 'ti-calendar',         label: 'Calendar' },
     { id: 'notes',     icon: 'ti-notebook',         label: 'Notes' },
@@ -22,7 +21,6 @@
   const HEADERS = {
     today: { type: 'cal' },
     calendar: { type: 'cal' },
-    braindump: { type: 'lens', tabs: ['Brain dump', 'Projects'], stateKey: 'lens', map: { 'Brain dump': 'dump', 'Projects': 'projects' } },
     notes: { type: 'plain', title: 'Notes' },
     focus: { type: 'plain', title: 'Focus' },
     settings: { type: 'plain', title: 'Settings' },
@@ -210,8 +208,6 @@
       if (id === 'calendar') {
         var cur = LC.get('cal');
         LC.set({ screen: 'calendar', cal: cur === 'day' ? 'week' : cur, editor: null, sessionOpen: null, projOpen: null, calAnchor: null, weekSel: null, yearSelMonth: null, monthSelDay: null });
-      } else if (id === 'braindump') {
-        LC.set({ screen: 'braindump', projOpen: null, sessionOpen: null, editor: null });
       } else if (id === 'today') {
         LC.set({ screen: 'today', editor: null, sessionOpen: null, projOpen: null, dayAnchor: null });   // rail Today always returns to the real today
       } else {

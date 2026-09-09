@@ -24,18 +24,22 @@
   const DEFAULTS = {
     screen: 'today',
     cal: 'day',
-    theme: 'night',
+    theme: 'day',
     accent: 'green',
     dayBg: 'cream',
     nightBg: 'ink',
     dayLayout: 'grid',
     weekStart: 1,
     clockFmt: '12',
+    dayStart: 6,
+    dayEnd: 22,
+    bdOpen: true,
     lens: 'dump',
     projView: 'urgency',
     projOpen: null,
     sessionOpen: null,
     editor: null,
+    focusMode: 'task',
     focusCustomMin: 25,
     focusRunning: false,
     focusTaskId: null,
@@ -56,7 +60,7 @@
   };
 
   /* ── Persisted keys (preferences) ── */
-  const PREF_KEYS = ['theme', 'accent', 'dayBg', 'nightBg', 'dayLayout', 'weekStart', 'clockFmt', 'projView', 'federalHolidays'];
+  const PREF_KEYS = ['theme', 'accent', 'dayBg', 'nightBg', 'dayLayout', 'weekStart', 'clockFmt', 'projView', 'federalHolidays', 'dayStart', 'dayEnd', 'bdOpen'];
 
   /* ── State ── */
   let state = {};

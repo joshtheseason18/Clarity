@@ -20,7 +20,6 @@
   function sessionsForDate(date) {
     var out = [];
     loadProjects().forEach(function (p) {
-      if (p.sample) return;   // sample project sessions never appear on the calendar
       (p.sessions || []).forEach(function (s, idx) {
         if (s.date === date && s.startMin != null) {
           out.push({
@@ -172,6 +171,10 @@
   }
 
   /* Locked routine active on `date` that [start,start+dur) would overlap, if any. */
+  /* The visible day window — user-set in Settings → "Your day", read live. */
+  function dayStartH() { var v = parseInt(LC.get('dayStart'), 10); return (v >= 4 && v <= 12) ? v : 6; }
+  function dayEndH()   { var v = parseInt(LC.get('dayEnd'), 10);   return (v >= 16 && v <= 24) ? v : 22; }
+
   function protectedConflict(start, dur, date) {
     var end = start + dur;
     var dow = parseISO(date || viewStr()).getDay();
@@ -185,7 +188,7 @@
   /* Combined placement gate → message string if blocked, else null. */
   function placementBlock(taskId, start, dur, date) {
     var pc = protectedConflict(start, dur, date);
-    if (pc) return '“' + pc + '” is locked — nothing can be scheduled then';
+    if (pc) return '“' + pc + '” is reserved — nothing can be scheduled then';
     if (!canPlace(taskId, start, dur, date)) return 'Only ' + MAX_OVERLAP + ' items can overlap in one slot';
     return null;
   }
@@ -339,6 +342,7 @@
 
   /* ── Render ── */
   function render() {
+    if (LC.get('screen') !== 'today' || LC.get('editor') != null) { colArmed = null; }
     // Safety net: if navigation (rail, search, deep link) closed the editor around a
     // pending accidental task, discard it here too.
     if (pendingNewId && LC.get('editor') !== pendingNewId) discardIfUntouched(pendingNewId);
@@ -403,8 +407,19 @@
 
     html += '</div>';
 
-    /* ── Main area: grid + sidebar ── */
+    /* ── Main area: Brain Dump column (left) + grid + verse footer ── */
     html += '<div class="today-body">';
+
+    var edId = LC.get('editor');
+    var edTask = edId != null ? tasks.find(function (t) { return t.id === edId; }) : null;
+    var bdOpen = LC.get('bdOpen') !== false;
+    html += '<aside class="today-sidebar' + (!edTask && !bdOpen ? ' bd-collapsed' : '') + '">';
+    if (edTask) {
+      html += '<div class="ep-aside">' + renderEditor(edTask) + '</div>';
+    } else {
+      html += renderBrainDumpColumn(tasks, viewingToday);
+    }
+    html += '</aside>';
 
     html += '<div class="today-grid-area">';
     if (layout === 'grid') {
@@ -413,23 +428,35 @@
       html += renderAgenda(dayTasks, now);
     }
     html += '<button class="today-addtask" data-action="add-task"><i class="ti ti-plus"></i> Add task</button>';
+    html += renderVerseFooter();
     html += '</div>';
-
-    var edId = LC.get('editor');
-    var edTask = edId != null ? tasks.find(function (t) { return t.id === edId; }) : null;
-    html += '<aside class="today-sidebar">';
-    if (edTask) {
-      html += '<div class="ep-aside">' + renderEditor(edTask) + '</div>';
-    } else {
-      html += renderSidebarCards();
-    }
-    html += '</aside>';
 
     html += '</div>';
     html += '</div>';
 
     el.innerHTML = html;
     attachEditorInputs();
+
+    /* Brain Dump column wiring: capture on Enter (no re-render mid-typing), grid hover hint. */
+    var capIn = document.getElementById('bd-col-input');
+    if (capIn) {
+      capIn.addEventListener('input', function () { bdColDraft = capIn.value; });   // survive the 60s heartbeat re-render
+      capIn.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter') return;
+        var v = capIn.value.trim();
+        if (!v || !window.LC_BrainDump || !LC_BrainDump.capture) return;
+        bdColDraft = '';
+        LC_BrainDump.capture(v);
+        render();
+        var again = document.getElementById('bd-col-input');
+        if (again) again.focus();
+      });
+    }
+    var tgHover = el.querySelector('.tg');
+    if (tgHover) {
+      tgHover.addEventListener('mousemove', function (ev) { colHintUpdate(ev, tgHover); });
+      tgHover.addEventListener('mouseleave', hideColHint);
+    }
   }
 
   function renderSessionBlock(s, pos) {
@@ -447,8 +474,8 @@
 
   /* ── Time Grid ── */
   function renderTimeGrid(tasks, now) {
-    var startHour = 7;
-    var endHour = 19;
+    var startHour = dayStartH();
+    var endHour = dayEndH();
     var hourH = 56;
     var totalH = (endHour - startHour) * hourH;
     var html = '<div class="tg" style="height:' + totalH + 'px">';
@@ -456,13 +483,15 @@
     for (var h = startHour; h <= endHour; h++) {
       var top = (h - startHour) * hourH;
       html += '<div class="tg-line" style="top:' + top + 'px"></div>';
-      html += '<div class="tg-label" style="top:' + (top - 7) + 'px">' + LC.fmtTime(h * 60) + '</div>';
+      var lt = Math.max(3, Math.min(top - 7, totalH - 16));   // keep 1st/last labels inside the frame
+      html += '<div class="tg-label" style="top:' + lt + 'px">' + LC.fmtTime(h * 60) + '</div>';
     }
 
     /* ── Routine bands (behind tasks) ── */
     var routines = (window.LC_Routines ? window.LC_Routines.loadRoutines() : []);
     var viewDow = parseISO(viewStr()).getDay();
     html += '<div class="tg-routines">';
+    var zoneChips = '';
     routines.forEach(function (r) {
       if (r.days.indexOf(viewDow) === -1) return;
       var rs = Math.max(r.startMin, startHour * 60);
@@ -470,34 +499,36 @@
       if (re <= rs) return;
       var rtop = ((rs / 60) - startHour) * hourH;
       var rh = ((re - rs) / 60) * hourH;
-      html += '<div class="tg-routine ' + (r.protected ? 'protected' : 'open') + '" style="top:' + rtop + 'px;height:' + rh + 'px">';
       if (r.protected) {
-        html += '<span class="tg-routine-tag"><i class="ti ti-lock"></i> ' + esc(r.name) + ' · locked</span>';
+        /* breathe: inset reserved bands from the frame edges */
+        var bt = Math.max(rtop + 2, 4), bb = Math.min(rtop + rh - 2, totalH - 4), bh = Math.max(bb - bt, 18);
+        html += '<div class="tg-routine protected" data-rname="' + escAttr(r.name) + '" style="top:' + bt + 'px;height:' + bh + 'px">';
+        html += '<span class="tg-routine-tag"><i class="ti ti-lock"></i> ' + esc(r.name) + ' · reserved</span>';
+        html += '</div>';
       } else {
-        html += '<span class="tg-routine-tag"><i class="ti ' + r.icon + '"></i> ' + esc(r.name) + '</span>';
+        /* open routines are a quiet zone; the label is a pinned chip that floats above cards */
+        html += '<div class="tg-routine open" style="top:' + rtop + 'px;height:' + rh + 'px"></div>';
+        zoneChips += '<span class="tg-zone-chip" style="top:' + (rtop + 5) + 'px"><i class="ti ' + r.icon + '"></i> ' + esc(r.name) + ' · ' + LC.fmtTime(r.startMin) + '–' + LC.fmtTime(r.endMin) + '</span>';
       }
-      html += '</div>';
     });
     html += '</div>';
 
     html += '<div class="tg-cards">';
 
     var placed = tasks.filter(function (t) { return t.startMin != null; });
-    placed.forEach(function (t) { t._kind = 'task'; });
-    var allItems = placed.concat(sessionsForDate(viewStr()));
+    var allItems = placed;   // project sessions no longer render here (Projects retired in v0)
     layoutColumns(allItems);
 
     allItems.forEach(function (t) {
       var top = ((t.startMin / 60) - startHour) * hourH;
       var dur = t.duration || 30;
       var height = Math.max((dur / 60) * hourH, 38);
+      var compactCard = height < 46;   // short cards go one-line so the time never clips
 
       var n = t._cols || 1, c = t._col || 0, gap = 6;
       var colW = '(100% - 24px - ' + ((n - 1) * gap) + 'px) / ' + n;
       var leftExpr = '16px + ' + c + ' * ((' + colW + ') + ' + gap + 'px)';
       var pos = 'top:' + top + 'px;height:' + height + 'px;left:calc(' + leftExpr + ');width:calc(' + colW + ');right:auto;';
-
-      if (t._kind === 'session') { html += renderSessionBlock(t, pos); return; }
 
       var color = t.type === 'event' ? 'var(--blue)' : 'var(--accent)';
       var doneClass = t.done ? ' tg-card-done' : '';
@@ -506,17 +537,21 @@
       var subDone = subs.filter(function (s) { return s.done; }).length;
       var meta = LC.fmtTime(t.startMin) + ' · ' + (isTask ? 'Task' : 'Event') + ' · ' + LC.fmtDur(dur);
 
-      html += '<div class="tg-card' + doneClass + '" style="' + pos + '" data-action="open-editor" data-task-id="' + t.id + '">';
+      html += '<div class="tg-card' + doneClass + (compactCard ? ' tg-card-compact' : '') + '" style="' + pos + '" data-action="open-editor" data-task-id="' + t.id + '" data-smin="' + t.startMin + '" data-dur="' + dur + '">';
       html += '<span class="tg-card-bar" style="background:' + color + '"></span>';
 
       if (isTask && t.done) {
         html += '<div class="tg-card-row"><button class="tg-check done" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle-check-filled"></i></button><span class="tg-card-title strike">' + esc(t.title || 'Untitled') + '</span></div>';
+      } else if (isTask && compactCard) {
+        html += '<div class="tg-card-row"><button class="tg-check" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle"></i></button><span class="tg-card-title">' + esc(t.title || 'Untitled') + '</span><span class="tg-card-sub-inline">' + meta + '</span></div>';
       } else if (isTask) {
         html += '<div class="tg-card-row tg-card-row-top">';
         html += '<button class="tg-check" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle"></i></button>';
         html += '<div class="tg-card-main"><div class="tg-card-title">' + esc(t.title || 'Untitled') + '</div><div class="tg-card-sub">' + meta + '</div></div>';
         if (subs.length) html += '<span class="tg-card-pill"><i class="ti ti-check"></i> ' + subDone + '/' + subs.length + '</span>';
         html += '</div>';
+      } else if (compactCard) {
+        html += '<div class="tg-card-row"><span class="tg-card-title">' + esc(t.title || 'Untitled') + '</span><span class="tg-card-sub-inline">' + meta + '</span></div>';
       } else {
         html += '<div class="tg-card-title">' + esc(t.title || 'Untitled') + '</div>';
         html += '<div class="tg-card-sub">' + meta + '</div>';
@@ -525,6 +560,9 @@
     });
 
     html += '</div>';
+
+    html += zoneChips;
+    html += '<div class="tg-hint" id="tg-hint"></div>';
 
     var nowTop = ((now / 60) - startHour) * hourH;
     if (isViewingToday() && nowTop >= 0 && nowTop <= totalH) {   // the now-line only makes sense on the real today
@@ -599,16 +637,87 @@
   var verseEditDate = null;   // day the edit was opened on — nav to another day closes it
   var verseDraft = null;      // typed-but-unsaved text, so re-renders (heartbeat/sync) can't wipe it
 
-  function renderSidebarCards() {
+  /* ══ Brain Dump column — capture, Unplanned, Carried over, evening nudge ══
+     Replaces the retired Brain dump screen; the note-preview and reflection cards
+     from the old sidebar are folded into the evening nudge at the column's foot. */
+  function renderBrainDumpColumn(tasks, viewingToday) {
+    var bdOpen = LC.get('bdOpen') !== false;
+    var unplanned = (window.LC_BrainDump && LC_BrainDump.unplanned) ? LC_BrainDump.unplanned() : [];
+    var carried = tasks.filter(function (t) { return !t.done && t.date && t.date < todayStr(); })
+                       .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    var count = unplanned.length + carried.length;
+
+    if (!bdOpen) {
+      return '<button class="bdc-strip" data-action="bd-toggle" title="Open brain dump"><i class="ti ti-brain"></i><b>Brain dump · ' + count + '</b></button>';
+    }
+
+    var html = '<div class="bdc">';
+    html += '<div class="bdc-head"><i class="ti ti-brain"></i> Brain dump <span class="bdc-count">· ' + count + '</span><button class="bdc-collapse" data-action="bd-toggle" title="Collapse"><i class="ti ti-chevron-left"></i></button></div>';
+    html += '<div class="bdc-cap"><i class="ti ti-plus"></i><input type="text" id="bd-col-input" placeholder="Add a task or thought…" autocomplete="off" value="' + escAttr(bdColDraft) + '"></div>';
+    html += '<div class="bdc-caphint">Try "call mom 4pm" — a time schedules it instantly. No time? It waits below.</div>';
+
+    if (colArmed) html += '<div class="bdc-armbar"><i class="ti ti-hand-click"></i> Tap an open slot to place <button data-action="bd-cancel-arm">cancel</button></div>';
+
+    html += '<div class="bdc-group"><i class="ti ti-stack-2"></i> Unplanned <span class="bdc-count">· ' + unplanned.length + '</span></div>';
+    if (unplanned.length) {
+      unplanned.forEach(function (it) {
+        var armed = colArmed && colArmed.kind === 'dump' && colArmed.id === it.id;
+        var dur = it.pDur != null ? Math.max(15, it.pDur) : 30;
+        html += '<div class="bdc-row' + (armed ? ' armed' : '') + '" data-action="bd-arm" data-kind="dump" data-id="' + escAttr(it.id) + '" data-dur="' + dur + '">';
+        html += '<i class="ti ti-grip-vertical bdc-grip"></i><div class="bdc-rowmain">';
+        html += '<div class="bdc-title">' + esc(it.title) + '</div>';
+        html += '<div class="bdc-meta">' + relTime(it.created) + '</div>';
+        html += '<span class="bdc-chip"><i class="ti ti-hourglass"></i> ' + LC.fmtDur(dur) + '</span>';
+        if (it.pBlocked) html += '<span class="bdc-chip warn"><i class="ti ti-alert-triangle"></i> pick another time</span>';
+        else html += '<span class="bdc-chip mut">' + (armed ? 'tap a slot…' : 'tap or drag') + '</span>';
+        html += '</div></div>';
+      });
+    } else {
+      html += '<div class="bdc-empty">All clear. Anything on your mind?</div>';
+    }
+
+    html += '<div class="bdc-group"><i class="ti ti-history"></i> Carried over <span class="bdc-count">· ' + carried.length + '</span></div>';
+    if (carried.length) {
+      carried.forEach(function (t) {
+        var armed = colArmed && colArmed.kind === 'carry' && colArmed.id === t.id;
+        var p = t.date.split('-');
+        var from = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + ' ' + (+p[2]);
+        html += '<div class="bdc-row' + (armed ? ' armed' : '') + '" data-action="bd-arm" data-kind="carry" data-id="' + escAttr(t.id) + '" data-dur="' + (t.duration || 30) + '">';
+        html += '<i class="ti ti-grip-vertical bdc-grip"></i><div class="bdc-rowmain">';
+        html += '<div class="bdc-title">' + esc(t.title || 'Untitled') + '</div>';
+        html += '<div class="bdc-meta">from ' + from + (t.startMin != null ? ' · ' + LC.fmtTime(t.startMin) : '') + '</div>';
+        html += '<span class="bdc-chip"><i class="ti ti-hourglass"></i> ' + LC.fmtDur(t.duration || 30) + '</span>';
+        html += '<span class="bdc-chip mut">' + (armed ? 'tap a slot…' : 'tap or drag') + '</span>';
+        html += '</div></div>';
+      });
+    } else {
+      html += '<div class="bdc-empty">Nothing carried over.</div>';
+    }
+
+    if (viewingToday && new Date().getHours() >= 17) {
+      html += '<button class="bdc-eve" data-action="open-reflection"><i class="ti ti-moon-stars"></i> Evening — how did it go?</button>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function relTime(ts) {
+    if (!ts) return '';
+    var sec = (Date.now() - ts) / 1000;
+    if (sec < 90) return 'just now';
+    if (sec < 5400) return Math.round(sec / 60) + 'm ago';
+    if (sec < 129600) return Math.round(sec / 3600) + 'h ago';
+    return Math.round(sec / 86400) + ' days ago';
+  }
+
+  /* ══ Verse footer — the same editable verse card, now a quiet line under the grid ══ */
+  function renderVerseFooter() {
     var vDate = viewStr();
     var verse = verseFor(vDate);
-
-    // editing is per-day: navigating to a different day cancels the edit cleanly
     if (verseEditing && verseEditDate !== vDate) { verseEditing = false; verseDraft = null; }
 
-    var html = '<div class="today-cards">';
-
-    html += '<div class="today-card today-card-verse">';
+    var html = '<div class="today-versefoot"><div class="today-card today-card-verse">';
     html += '<div class="today-card-label accent"><i class="ti ti-sunrise"></i> ' + (isViewingToday() ? 'Today\'s verse' : 'Verse of the day') + '<button class="verse-edit-btn" data-action="verse-edit" aria-label="Edit verse" title="Edit verse"><i class="ti ti-pencil"></i></button></div>';
     if (verseEditing) {
       var draftT = verseDraft ? verseDraft.t : verse.t;
@@ -624,23 +733,7 @@
       html += '<p class="today-card-quote serif">"' + esc(verse.t) + '"</p>';
       html += '<span class="today-card-ref">' + esc(verse.r || '') + (verse.custom ? ' · yours' : '') + '</span>';
     }
-    html += '</div>';
-
-    html += '<div class="today-card today-card-note">';
-    html += '<div class="today-card-label"><i class="ti ti-pencil"></i> Today\'s note</div>';
-    html += '<div class="today-card-note-body" data-action="open-note">Click to write today\'s note…</div>';
-    html += '</div>';
-
-    html += '<button class="today-card today-card-reflect" data-action="open-reflection">';
-    html += '<span class="today-reflect-icon"><i class="ti ti-moon"></i></span>';
-    html += '<span class="today-reflect-text">';
-    html += '<span class="today-reflect-label">Evening Reflection</span>';
-    html += '<span class="today-reflect-sub">How did it go? Wins, challenges, gratitude.</span>';
-    html += '</span>';
-    html += '<i class="ti ti-arrow-up-right today-reflect-arrow"></i>';
-    html += '</button>';
-
-    html += '</div>';
+    html += '</div></div>';
     return html;
   }
 
@@ -829,7 +922,7 @@
   function createTask(min, title, type, date) {
     date = date || viewStr();
     min = Math.round(min / 15) * 15;
-    min = Math.max(7 * 60, Math.min(19 * 60 - 60, min));
+    min = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - 60, min));
     var newErr = placementBlock('__new__', min, 60, date); if (newErr) { showToast(newErr); return null; }
     var task = { id: 't' + Date.now() + '_' + (++idSeq), title: title || '', startMin: min, duration: 60, type: type === 'event' ? 'event' : 'task', done: false, date: date, priority: 'med' };
     var tasks = loadTasks();
@@ -850,7 +943,7 @@
      Returns the new id, or null (with toast) when the slot is hard-blocked. */
   function createTaskOn(dateISO, startMin, durationMin, title, type) {
     var dur = Math.max(15, durationMin || 60);
-    var start = Math.max(7 * 60, Math.min(19 * 60 - dur, Math.round(startMin / 15) * 15));
+    var start = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - dur, Math.round(startMin / 15) * 15));
     var err = placementBlock('__new__', start, dur, dateISO);
     if (err) { showToast(err); return null; }
     var task = { id: 't' + Date.now() + '_' + (++idSeq), title: (title || '').trim(), startMin: start, duration: dur, type: type === 'event' ? 'event' : 'task', done: false, date: dateISO, priority: 'med' };
@@ -862,11 +955,99 @@
 
   /* ── Drag-to-reschedule on the time grid ── */
   var dragState = null;
+  var colArmed = null;       // {kind:'dump'|'carry', id, dur} — tap-to-place armed item
+  var trayDrag = null;       // drag-from-column state
+  var trayDragJustEnded = false;
+  var carryUndo = null;      // {id, prev:{date,startMin}} for the carried-over Undo toast
+  var bdColDraft = '';       // preserves mid-typed capture text across heartbeat/sync re-renders
   var dragJustEnded = false;
+
+  /* ══ Column placement: tap-to-place + drag, shared guards, deny flashes ══ */
+  function gridMinFromY(tgEl, clientY) {
+    var rect = tgEl.getBoundingClientRect();
+    return Math.round((dayStartH() * 60 + ((clientY - rect.top) / 56) * 60) / 15) * 15;
+  }
+  function windowBlock(start, dur) {
+    if (start < dayStartH() * 60 || start + dur > dayEndH() * 60) {
+      return 'Outside your day (' + LC.fmtTime(dayStartH() * 60) + '–' + LC.fmtTime(dayEndH() * 60) + ') — adjust it in Settings';
+    }
+    return null;
+  }
+  function flashDeny(start, dur) {
+    var name = protectedConflict(start, dur, viewStr());
+    if (name) {
+      var band = document.querySelector('.tg-routine.protected[data-rname="' + (window.CSS && CSS.escape ? CSS.escape(name) : name) + '"]');
+      if (band) { band.classList.remove('tg-deny'); void band.offsetWidth; band.classList.add('tg-deny'); }
+      return;
+    }
+    document.querySelectorAll('.tg-card[data-smin]').forEach(function (el) {
+      var cs = parseInt(el.dataset.smin, 10), ce = cs + parseInt(el.dataset.dur, 10);
+      if (cs < start + dur && ce > start) { el.classList.remove('tg-deny'); void el.offsetWidth; el.classList.add('tg-deny'); }
+    });
+  }
+  function placeArmedAt(min) {
+    var a = colArmed; colArmed = null;
+    if (!a) return;
+    if (a.kind === 'dump') {
+      var wb = windowBlock(min, a.dur);   // refuse instead of letting createTaskOn silently clamp
+      if (wb) { showToast(wb); render(); return; }
+      var ok = window.LC_BrainDump && LC_BrainDump.place && LC_BrainDump.place(a.id, viewStr(), min);
+      if (!ok) flashDeny(min, a.dur);   // createTaskOn already toasted
+      render();
+    } else {
+      moveCarriedTo(a.id, min);
+    }
+  }
+  function moveCarriedTo(taskId, min) {
+    var tasks = loadTasks();
+    var t = tasks.find(function (x) { return x.id === taskId; });
+    if (!t) { render(); return; }
+    var dur = t.duration || 30;
+    var err = windowBlock(min, dur) || placementBlock(taskId, min, dur, viewStr());
+    if (err) { showToast(err); flashDeny(min, dur); render(); return; }
+    carryUndo = { id: t.id, prev: { date: t.date, startMin: t.startMin } };
+    t.date = viewStr(); t.startMin = min;
+    saveTasks(tasks);
+    render();
+    var old = document.getElementById('bd-carry-toast');
+    if (old) old.remove();
+    var el = document.createElement('div');
+    el.id = 'bd-carry-toast';
+    el.className = 'notes-undo-toast';
+    el.setAttribute('role', 'status');
+    el.innerHTML = '<span>✓ Moved here · ' + LC.fmtTime(min) + '</span><button data-action="carry-undo">Undo</button>';
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 10000);
+  }
+  function colHintUpdate(e, tgEl) {
+    var hint = document.getElementById('tg-hint');
+    if (!hint) return;
+    var active = colArmed || (trayDrag && trayDrag.moved);
+    if (!active) { hint.classList.remove('on'); return; }
+    var min = gridMinFromY(tgEl, e.clientY);
+    var dur = colArmed ? colArmed.dur : trayDrag.dur;
+    var exId = (colArmed && colArmed.kind === 'carry') ? colArmed.id : ((trayDrag && trayDrag.kind === 'carry') ? trayDrag.id : '__new__');
+    var bad = windowBlock(min, dur) || placementBlock(exId, min, dur, viewStr());
+    hint.style.top = (((min / 60) - dayStartH()) * 56) + 'px';
+    hint.setAttribute('data-t', LC.fmtTime(min) + (bad ? ' · blocked' : ''));
+    hint.classList.toggle('bad', !!bad);
+    hint.classList.add('on');
+  }
+  function hideColHint() {
+    var hint = document.getElementById('tg-hint');
+    if (hint) hint.classList.remove('on');
+  }
 
   document.addEventListener('mousedown', function (e) {
     if (e.button !== 0) return;
     if (LC.get('screen') !== 'today' || LC.get('editor') != null) return;
+    var bdRow = e.target.closest('.bdc-row');
+    if (bdRow) {
+      trayDrag = { kind: bdRow.dataset.kind, id: bdRow.dataset.id, dur: parseInt(bdRow.dataset.dur, 10) || 30,
+                   title: bdRow.querySelector('.bdc-title').textContent,
+                   startX: e.clientX, startY: e.clientY, moved: false, ghost: null };
+      return;
+    }
     if (e.target.closest('.tg-check, .tg-card-pill')) return;   // let the check/pill get a clean click
     var card = e.target.closest('.tg-card');
     if (!card) return;
@@ -876,20 +1057,59 @@
   });
 
   document.addEventListener('mousemove', function (e) {
+    if (trayDrag) {
+      if (!trayDrag.moved && Math.abs(e.clientX - trayDrag.startX) + Math.abs(e.clientY - trayDrag.startY) < 5) return;
+      if (!trayDrag.moved) {
+        trayDrag.moved = true;
+        colArmed = null;
+        trayDrag.ghost = document.createElement('div');
+        trayDrag.ghost.className = 'bdc-ghost';
+        trayDrag.ghost.textContent = trayDrag.title;
+        document.body.appendChild(trayDrag.ghost);
+      }
+      trayDrag.ghost.style.left = (e.clientX + 12) + 'px';
+      trayDrag.ghost.style.top = (e.clientY + 8) + 'px';
+      var tgEl = document.querySelector('#screen-today .tg');
+      if (tgEl) {
+        var r = tgEl.getBoundingClientRect();
+        if (e.clientY >= r.top && e.clientY <= r.bottom && e.clientX >= r.left && e.clientX <= r.right) colHintUpdate(e, tgEl);
+        else hideColHint();
+      }
+      return;
+    }
     if (!dragState) return;
     var dy = e.clientY - dragState.startY;
     if (!dragState.moved && Math.abs(dy) < 4) return;
     dragState.moved = true;
     document.body.classList.add('tg-dragging');
     var snapped = Math.round((dragState.origMin + (dy / 56) * 60) / 15) * 15;
-    snapped = Math.max(7 * 60, Math.min(19 * 60 - dragState.dur, snapped));
+    snapped = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - dragState.dur, snapped));
     dragState.newMin = snapped;
-    dragState.el.style.top = (((snapped / 60) - 7) * 56) + 'px';
+    dragState.el.style.top = (((snapped / 60) - dayStartH()) * 56) + 'px';
     dragState.el.classList.add('tg-card-drag');
     dragState.el.classList.toggle('tg-card-invalid', !!placementBlock(dragState.id, snapped, dragState.dur, dragState.date));
   });
 
-  document.addEventListener('mouseup', function () {
+  document.addEventListener('mouseup', function (e) {
+    if (trayDrag) {
+      var td = trayDrag; trayDrag = null;
+      if (td.ghost) td.ghost.remove();
+      hideColHint();
+      if (!td.moved) return;   // plain click → the click handler arms it
+      trayDragJustEnded = true;
+      setTimeout(function () { trayDragJustEnded = false; }, 60);
+      var tgEl = document.querySelector('#screen-today .tg');
+      if (tgEl) {
+        var r = tgEl.getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+          colArmed = { kind: td.kind, id: td.id, dur: td.dur };
+          placeArmedAt(gridMinFromY(tgEl, e.clientY));
+          return;
+        }
+      }
+      render();
+      return;
+    }
     if (!dragState) return;
     var d = dragState; dragState = null;
     document.body.classList.remove('tg-dragging');
@@ -907,6 +1127,16 @@
   /* ── Events ── */
   document.addEventListener('click', function (e) {
     if (dragJustEnded) { dragJustEnded = false; return; }
+    if (trayDragJustEnded) { trayDragJustEnded = false; return; }
+
+    /* Armed tap-to-place: with an item armed, any grid tap places it there. */
+    if (colArmed && LC.get('screen') === 'today') {
+      var tgHit = e.target.closest('#screen-today .tg');
+      if (tgHit && !e.target.closest('.bdc-row')) {
+        placeArmedAt(gridMinFromY(tgHit, e.clientY));
+        return;
+      }
+    }
 
     // Click-away: with the editor open, a click outside the aside closes it (discarding an
     // untouched accidental task). That closing click never creates a new task itself.
@@ -930,7 +1160,7 @@
       var grid = e.target.closest('.tg');
       if (grid && LC.get('screen') === 'today' && LC.get('editor') == null && !e.target.closest('.tg-card')) {
         var rect = grid.getBoundingClientRect();
-        createTaskAt(7 * 60 + ((e.clientY - rect.top) / 56) * 60);
+        createTaskAt(dayStartH() * 60 + ((e.clientY - rect.top) / 56) * 60);
       }
       return;
     }
@@ -949,6 +1179,30 @@
 
     if (a === 'open-note') { if (window.LC_Notes) LC_Notes.openDaily('todaysNotes'); return; }
     if (a === 'open-reflection') { if (window.LC_Notes) LC_Notes.openDaily('evening'); return; }
+
+    /* ── Brain Dump column ── */
+    if (a === 'bd-toggle') { LC.set({ bdOpen: LC.get('bdOpen') === false }); return; }
+    if (a === 'bd-cancel-arm') { colArmed = null; render(); return; }
+    if (a === 'bd-arm') {
+      var rowEl = action;
+      var kind = rowEl.dataset.kind, rid = rowEl.dataset.id;
+      if (colArmed && colArmed.kind === kind && colArmed.id === rid) colArmed = null;
+      else colArmed = { kind: kind, id: rid, dur: parseInt(rowEl.dataset.dur, 10) || 30 };
+      render();
+      return;
+    }
+    if (a === 'carry-undo') {
+      if (carryUndo) {
+        var cuTasks = loadTasks();
+        var cuT = cuTasks.find(function (x) { return x.id === carryUndo.id; });
+        if (cuT) { cuT.date = carryUndo.prev.date; cuT.startMin = carryUndo.prev.startMin; saveTasks(cuTasks); }
+        carryUndo = null;
+        var cuEl = document.getElementById('bd-carry-toast');
+        if (cuEl) cuEl.remove();
+        render();
+      }
+      return;
+    }
 
     if (a === 'add-task') {
       if (LC.get('editor') != null) return;   // double-click guard: don't stack a second Untitled task
@@ -972,10 +1226,7 @@
         sp.sessions[ssi].done = !sp.sessions[ssi].done;
         sp.done = sp.sessions.filter(function (s) { return s.done; }).length;
         saveProjects(sprojects);
-        var sessBecameDone = sp.sessions[ssi].done;
         render();
-        // completing a session on the grid offers the "session done / complete project" fork
-        if (sessBecameDone && window.LC_BrainDump && LC_BrainDump.sessionPill) LC_BrainDump.sessionPill(sp.id);
       }
       return;
     }
@@ -1031,7 +1282,7 @@
       var st0 = loadTasks().find(function (x) { return x.id === stid; });
       if (!st0) return;
       var stDur = st0.duration || 90;
-      var proposedStart = Math.max(7 * 60, Math.min(19 * 60 - stDur, (st0.startMin != null ? st0.startMin : 540) + sd));
+      var proposedStart = Math.max(dayStartH() * 60, Math.min(dayEndH() * 60 - stDur, (st0.startMin != null ? st0.startMin : 540) + sd));
       var stErr = placementBlock(stid, proposedStart, stDur, st0.date); if (stErr) { showToast(stErr); return; }
       updateEditor(function (t) { t.startMin = proposedStart; });
       return;
@@ -1043,7 +1294,7 @@
       var dt0 = loadTasks().find(function (x) { return x.id === dtid; });
       if (!dt0) return;
       var dtStart = dt0.startMin != null ? dt0.startMin : 540;
-      var proposedDur = Math.max(15, Math.min(19 * 60 - dtStart, (dt0.duration || 90) + dd));
+      var proposedDur = Math.max(15, Math.min(dayEndH() * 60 - dtStart, (dt0.duration || 90) + dd));
       var dtErr = placementBlock(dtid, dtStart, proposedDur, dt0.date); if (dtErr) { showToast(dtErr); return; }
       updateEditor(function (t) { t.duration = proposedDur; });
       return;

@@ -54,6 +54,16 @@
     html += '</div></div>';
 
     // Clock
+    var dsH = parseInt(st.dayStart, 10); if (!(dsH >= 4 && dsH <= 12)) dsH = 6;
+    var deH = parseInt(st.dayEnd, 10);   if (!(deH >= 16 && deH <= 24)) deH = 22;
+    html += '<div class="set-row set-row-border">';
+    html += '<div class="set-row-text"><div class="set-row-title">Your day</div><div class="set-row-sub">The hours your time grid covers — scheduling stays inside this window.</div></div>';
+    html += '<div class="set-day-win">';
+    html += '<span class="set-day-step"><button data-action="day-start" data-d="-1">−</button><b>' + LC.fmtTime(dsH * 60) + '</b><button data-action="day-start" data-d="1">+</button></span>';
+    html += '<span class="set-day-sep">to</span>';
+    html += '<span class="set-day-step"><button data-action="day-end" data-d="-1">−</button><b>' + LC.fmtTime(deH * 60) + '</b><button data-action="day-end" data-d="1">+</button></span>';
+    html += '</div></div>';
+
     html += '<div class="set-row set-row-border">';
     html += '<div class="set-row-text"><div class="set-row-title">Clock</div><div class="set-row-sub">12-hour (2:00 PM) or 24-hour (14:00).</div></div>';
     html += segmented([
@@ -114,7 +124,7 @@
       html += '<div class="set-routines-empty">No routines yet. Add one below.</div>';
     } else {
       var lockedN = routines.filter(function (r) { return r.protected; }).length;
-      html += '<div class="set-routines-summary">' + routines.length + ' routine' + (routines.length !== 1 ? 's' : '') + (lockedN ? ' · ' + lockedN + ' locked' : '') + '</div>';
+      html += '<div class="set-routines-summary">' + routines.length + ' routine' + (routines.length !== 1 ? 's' : '') + (lockedN ? ' · ' + lockedN + ' reserved' : '') + '</div>';
     }
     html += '</div>';
     html += '<button class="set-add-routine" data-action="open-routines"><i class="ti ti-plus"></i> ' + (routines.length ? 'Manage routines' : 'Add routine') + '</button>';
@@ -265,6 +275,14 @@
 
     if (a === 'toggle-federal') {
       LC.set({ federalHolidays: !LC.get('federalHolidays') });
+    }
+
+    if (a === 'day-start' || a === 'day-end') {
+      var dd = parseInt(action.dataset.d, 10);
+      var ds0 = parseInt(LC.get('dayStart'), 10); if (!(ds0 >= 4 && ds0 <= 12)) ds0 = 6;
+      var de0 = parseInt(LC.get('dayEnd'), 10);   if (!(de0 >= 16 && de0 <= 24)) de0 = 22;
+      if (a === 'day-start') LC.set({ dayStart: Math.max(4, Math.min(12, ds0 + dd)) });
+      else LC.set({ dayEnd: Math.max(16, Math.min(24, de0 + dd)) });
     }
   });
 
