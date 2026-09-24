@@ -524,6 +524,7 @@
       var dur = t.duration || 30;
       var height = Math.max((dur / 60) * hourH, 38);
       var compactCard = height < 46;   // short cards go one-line so the time never clips
+      var liveNow = isViewingToday() && !t.done && t.startMin != null && t.startMin <= now && now < t.startMin + dur;
 
       var n = t._cols || 1, c = t._col || 0, gap = 6;
       var colW = '(100% - 24px - ' + ((n - 1) * gap) + 'px) / ' + n;
@@ -537,14 +538,15 @@
       var subDone = subs.filter(function (s) { return s.done; }).length;
       var meta = LC.fmtTime(t.startMin) + ' · ' + (isTask ? 'Task' : 'Event') + ' · ' + LC.fmtDur(dur);
 
-      html += '<div class="tg-card' + doneClass + (compactCard ? ' tg-card-compact' : '') + '" style="' + pos + '" data-action="open-editor" data-task-id="' + t.id + '" data-smin="' + t.startMin + '" data-dur="' + dur + '">';
+      html += '<div class="tg-card' + doneClass + (compactCard ? ' tg-card-compact' : '') + (liveNow ? ' tg-card-live' : '') + '" style="' + pos + '" data-action="open-editor" data-task-id="' + t.id + '" data-smin="' + t.startMin + '" data-dur="' + dur + '">';
       html += '<span class="tg-card-bar" style="background:' + color + '"></span>';
 
       if (isTask && t.done) {
         html += '<div class="tg-card-row"><button class="tg-check done" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle-check-filled"></i></button><span class="tg-card-title strike">' + esc(t.title || 'Untitled') + '</span></div>';
       } else if (isTask && compactCard) {
-        html += '<div class="tg-card-row"><button class="tg-check" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle"></i></button><span class="tg-card-title">' + esc(t.title || 'Untitled') + '</span><span class="tg-card-sub-inline">' + meta + '</span></div>';
+        html += '<div class="tg-card-row"><button class="tg-check" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle"></i></button><span class="tg-card-title">' + esc(t.title || 'Untitled') + '</span><span class="tg-card-sub-inline">' + meta + '</span>' + (liveNow ? '<button class="tg-focus-btn" data-action="task-focus" data-task-id="' + t.id + '" title="Focus on this"><i class="ti ti-target"></i></button>' : '') + '</div>';
       } else if (isTask) {
+        html += (liveNow ? '<button class="tg-focus-btn tg-focus-btn-abs" data-action="task-focus" data-task-id="' + t.id + '" title="Focus on this"><i class="ti ti-target"></i></button>' : '');
         html += '<div class="tg-card-row tg-card-row-top">';
         html += '<button class="tg-check" data-action="toggle-done-card" data-task-id="' + t.id + '"><i class="ti ti-circle"></i></button>';
         html += '<div class="tg-card-main"><div class="tg-card-title">' + esc(t.title || 'Untitled') + '</div><div class="tg-card-sub">' + meta + '</div></div>';
@@ -1181,6 +1183,10 @@
     if (a === 'open-reflection') { if (window.LC_Notes) LC_Notes.openDaily('evening'); return; }
 
     /* ── Brain Dump column ── */
+    if (a === 'task-focus') {
+      if (window.LC_Focus && LC_Focus.startForTask) LC_Focus.startForTask(action.dataset.taskId);
+      return;
+    }
     if (a === 'bd-toggle') { LC.set({ bdOpen: LC.get('bdOpen') === false }); return; }
     if (a === 'bd-cancel-arm') { colArmed = null; render(); return; }
     if (a === 'bd-arm') {
