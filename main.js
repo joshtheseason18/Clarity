@@ -35,7 +35,11 @@
     const rail = document.getElementById('rail');
     const screen = LC.get('screen');
 
-    let html = '<button class="rail-brand" data-action="toggle-theme" aria-label="Toggle day or night" title="Toggle theme"><span class="rail-brand-dot"></span></button>';
+    /* The living mark: sunrise in day theme, the morning star at night.
+       It doubles as the theme toggle — tap the sun, get the star. */
+    var sunrise = '<svg class="rail-brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 14 a4.5 4.5 0 0 1 9 0 Z" fill="currentColor"/><line x1="4.5" y1="15.2" x2="19.5" y2="15.2" stroke="currentColor" stroke-opacity=".55" stroke-width="1.6" stroke-linecap="round"/><line x1="12" y1="4.4" x2="12" y2="6.6" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"/><line x1="6.6" y1="6.6" x2="8.1" y2="8.1" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"/><line x1="17.4" y1="6.6" x2="15.9" y2="8.1" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    var lucero = '<svg class="rail-brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 C12.6 9 14.5 10.9 20.5 12 C14.5 13.1 12.6 15 12 20.5 C11.4 15 9.5 13.1 3.5 12 C9.5 10.9 11.4 9 12 3.5 Z" fill="currentColor"/></svg>';
+    let html = '<button class="rail-brand" data-action="toggle-theme" aria-label="Toggle day or night" title="Toggle theme">' + (resolvedTheme() === 'day' ? sunrise : lucero) + '</button>';
 
     NAV.forEach(n => {
       html += '<button class="rail-btn' + (screen === n.id ? ' active' : '') + '" data-screen="' + n.id + '" title="' + n.label + '"><i class="ti ' + n.icon + '"></i></button>';

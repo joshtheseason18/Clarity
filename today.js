@@ -407,6 +407,11 @@
 
     html += '</div>';
 
+    /* Guest nudge: the door to sync, surfaced where the day lives (hides once signed in). */
+    if (!LC.get('user')) {
+      html += '<button class="today-syncnudge" data-action="open-auth"><i class="ti ti-cloud-off"></i> Signed out — your days live only on this device. <b>Sign in to sync.</b></button>';
+    }
+
     /* ── Main area: Brain Dump column (left) + grid + verse footer ── */
     html += '<div class="today-body">';
 
@@ -440,6 +445,8 @@
     /* Brain Dump column wiring: capture on Enter (no re-render mid-typing), grid hover hint. */
     var capIn = document.getElementById('bd-col-input');
     if (capIn) {
+      /* Desktop: open the app, just type. Never steals focus from another field, never pops the phone keyboard. */
+      if (window.matchMedia && window.matchMedia('(pointer: fine)').matches && document.activeElement === document.body) capIn.focus();
       capIn.addEventListener('input', function () { bdColDraft = capIn.value; });   // survive the 60s heartbeat re-render
       capIn.addEventListener('keydown', function (ev) {
         if (ev.key !== 'Enter') return;
@@ -1183,6 +1190,7 @@
     if (a === 'open-reflection') { if (window.LC_Notes) LC_Notes.openDaily('evening'); return; }
 
     /* ── Brain Dump column ── */
+    if (a === 'open-auth') { if (window.LC_Auth && LC_Auth.open) LC_Auth.open(); return; }
     if (a === 'task-focus') {
       if (window.LC_Focus && LC_Focus.startForTask) LC_Focus.startForTask(action.dataset.taskId);
       return;
